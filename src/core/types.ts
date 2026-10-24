@@ -6,7 +6,7 @@
 // セル幅 h = domain.width / nx、ny = round(domain.height / h)。
 // 2D解析は奥行き方向に厚さ project.thickness [m] を持つ板として扱う。
 
-export type AnalysisKind = 'flow' | 'heat' | 'stress' | 'scalar';
+export type AnalysisKind = 'flow' | 'heat' | 'stress' | 'scalar' | 'em';
 
 // ---------- 形状 ----------
 
@@ -61,6 +61,14 @@ export interface Material {
   yield?: number;
   /** 動粘性係数 [m²/s]（fluid） */
   viscosity?: number;
+  /** 比誘電率（電磁波）。省略時 1 */
+  epsR?: number;
+  /** 誘電正接 tanδ（電磁波の損失）。導電率は σ = 2πf·ε0·εr·tanδ として周波数から求める */
+  tanD?: number;
+  /** 金属など電気をよく通す材料。電磁波では完全導体（電場 0）として扱う */
+  conductor?: boolean;
+  /** 使用上限の目安温度 [°C]（樹脂の軟化など）。かんたんモードの判定に使う */
+  maxTempC?: number;
   /** 表示色 */
   color: string;
   note?: string;
@@ -68,12 +76,30 @@ export interface Material {
 
 // ---------- 解析条件 ----------
 
+// 各解析の advanced はプロモード用の細かい設定。省略した項目はソルバーが自動で決める。
+
+/** 反復法で解く解析（熱・強度・対流拡散）共通のプロ設定 */
+export interface IterativeAdvanced {
+  /** 収束判定の相対残差 */
+  tolerance?: number;
+  /** 最大反復回数 */
+  maxIterations?: number;
+}
+
 export interface FlowSettings {
   fluidId: string;
   /** 左端から流入する一様流速 [m/s] */
   inletVelocity: number;
   /** 上下の壁: slip = 対称（動画と同じ）、noslip = 壁面 */
   walls: 'slip' | 'noslip';
+  advanced?: {
+    /** Smagorinsky 定数（乱流の渦粘性モデル）。0 で無効 */
+    smagorinskyCs?: number;
+    /** 格子単位の流入速度（0.02〜0.15）。小さいほど正確だが遅い */
+    latticeU?: number;
+    /** 渦の発生を促す初期の揺らぎの強さ（0 で無し） */
+    perturbation?: number;
+  };
 }
 
 export type EdgeBC =
@@ -90,11 +116,13 @@ export interface HeatSettings {
   faceCooling: boolean;
   /** 解析領域の4辺の境界条件（物体が辺に接している場合だけ効く） */
   edges: { left: EdgeBC; right: EdgeBC; top: EdgeBC; bottom: EdgeBC };
+  advanced?: IterativeAdvanced;
 }
 
 export interface StressSettings {
   /** 自重を考慮するか（重力は -y 方向） */
   selfWeight: boolean;
+  advanced?: IterativeAdvanced;
 }
 
 /** レベル①: 動画と同じ対流拡散。一様流 u で運ばれるスカラー φ（物体表面で φ = phiBody） */
@@ -109,12 +137,49 @@ export interface ScalarSettings {
   phiInlet: number;
   /** 物体表面の φ */
   phiBody: number;
+  advanced?: IterativeAdvanced & {
+    /** 対流項の離散化。hybrid = 動画と同じ */
+    scheme?: 'hybrid' | 'upwind' | 'central';
+    /** SOR の緩和係数（1〜1.95）。省略時はセルペクレ数から自動 */
+    relaxation?: number;
+  };
+}
+
+/** 電磁波（レーダー・電波）。2D FDTD。物体のないセルは mediumId の材料で満たす */
+export interface EMSettings {
+  /** 周波数 [GHz] */
+  frequencyGHz: number;
+  /** plane = 平面波（遠くのレーダーから来る波）、point = 点波源（アンテナ） */
+  source: 'plane' | 'point';
+  /** 平面波の進む向き [度]。0 = 左から右へ、90 = 下から上へ */
+  angleDeg: number;
+  /** 点波源の位置 [m] */
+  pointX: number;
+  pointY: number;
+  /** TM = 電場が紙面に垂直（2D面に垂直）、TE = 磁場が紙面に垂直 */
+  polarization: 'TM' | 'TE';
+  /** 背景の材料ID（通常 air） */
+  mediumId: string;
+  advanced?: {
+    /** 1波長あたりのセル数（媒質中の最短波長に対して）。省略時 20 */
+    cellsPerWavelength?: number;
+    /** 吸収境界（PML）の厚さ [セル]。省略時 12 */
+    pmlCells?: number;
+    /** クーラン数（2D の安定限界は 1/√2 ≈ 0.707）。省略時 0.5 */
+    courant?: number;
+    /** cw = 連続波、pulse = ガウスパルス */
+    waveform?: 'cw' | 'pulse';
+  };
 }
 
 export interface Project {
   version: 1;
   name: string;
-  domain: { width: number; height: number; nx: number };
+  /**
+   * autoGrid が true（省略時も true とみなす）なら、格子数 nx は解析ごとに
+   * core/auto.ts の autoGrid() が決める。false ならここの nx をそのまま使う。
+   */
+  domain: { width: number; height: number; nx: number; autoGrid?: boolean };
   /** 2D解析の奥行き厚さ [m] */
   thickness: number;
   shapes: Shape[];
@@ -122,6 +187,7 @@ export interface Project {
   heat: HeatSettings;
   stress: StressSettings;
   scalar: ScalarSettings;
+  em: EMSettings;
 }
 
 // ---------- 格子化した形状（raster.ts が生成） ----------

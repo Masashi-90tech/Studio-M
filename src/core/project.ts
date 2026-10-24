@@ -5,7 +5,7 @@ export function defaultProject(): Project {
   return {
     version: 1,
     name: '四角柱まわりの流れ',
-    domain: { width: 2.0, height: 1.0, nx: 200 },
+    domain: { width: 2.0, height: 1.0, nx: 200, autoGrid: true },
     thickness: 0.01,
     shapes: [
       { id: 's1', name: '四角柱', role: 'solid', materialId: 'al6061', geom: { kind: 'rect', x: 0.45, y: 0.4, w: 0.2, h: 0.2 } },
@@ -24,6 +24,7 @@ export function defaultProject(): Project {
     },
     stress: { selfWeight: false },
     scalar: { u: 1, gamma: 0.1, rho: 1, phiInlet: 1, phiBody: 0 },
+    em: { frequencyGHz: 24, source: 'plane', angleDeg: 0, pointX: 0.2, pointY: 0.5, polarization: 'TM', mediumId: 'air' },
   };
 }
 

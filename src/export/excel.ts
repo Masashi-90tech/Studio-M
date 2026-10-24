@@ -38,6 +38,7 @@ const ANALYSIS_NAME: Record<AnalysisKind, string> = {
   heat: '熱',
   stress: '強度',
   scalar: '対流拡散',
+  em: '電磁波',
 };
 
 const ROLE_NAME: Record<ShapeRole, string> = {
