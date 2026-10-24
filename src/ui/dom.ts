@@ -121,7 +121,34 @@ export function toast(message: string, kind: 'info' | 'error' = 'info'): void {
   window.setTimeout(() => el.remove(), kind === 'error' ? 6400 : 3200);
 }
 
+interface ClaudeDownloads {
+  save(req: { filename: string; data: Blob }): Promise<unknown>;
+}
+interface ClaudeHost {
+  use(name: 'downloads'): Promise<ClaudeDownloads | null>;
+}
+
+/**
+ * ファイルを保存させる。claude.ai の Artifact として開かれているときは、
+ * 通常のダウンロードが禁止されているので、ビューアーの保存機能を使う。
+ */
 export function downloadBlob(blob: Blob, filename: string): void {
+  const host = (window as unknown as { claude?: ClaudeHost }).claude;
+  if (host?.use) {
+    void host.use('downloads').then(async (dl) => {
+      if (!dl) {
+        toast('この表示ではファイルを保存できません', 'error');
+        return;
+      }
+      try {
+        await dl.save({ filename, data: blob });
+      } catch (e) {
+        const code = (e as { code?: string }).code;
+        if (code !== 'declined') toast(`保存できませんでした（${code ?? '不明なエラー'}）`, 'error');
+      }
+    });
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = h('a', { href: url, download: filename });
   document.body.append(a);
