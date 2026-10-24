@@ -17,7 +17,8 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.2"
   },
   "private": true,
   "type": "module"
