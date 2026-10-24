@@ -17,7 +17,7 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
   const errorBox = h('div', { class: 'notice error', role: 'alert', hidden: true });
   const hintBox = h('div', { class: 'notice info', hidden: true });
   const warnBox = h('div', { class: 'notice warn', hidden: true });
-  const scalars = h('dl', { class: 'scalars' });
+  const scalars = h('dl', { class: 'scalars adv-only' });
 
   const play = h('button', { class: 'btn primary', type: 'button', onclick: () => { runner.setRunning(true); refreshButtons(); } }, '再生');
   const pause = h('button', { class: 'btn', type: 'button', onclick: () => { runner.setRunning(false); refreshButtons(); } }, '一時停止');
@@ -61,8 +61,8 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
       scalars,
       h('div', { class: 'btn-row' }, play, pause, reset),
       h('label', { class: 'field' }, h('span', { class: 'field-label' }, '表示する量'), fieldSel),
-      h('label', { class: 'field' }, h('span', { class: 'field-label' }, '色'), cmapSel),
-      h('div', { class: 'toggles' }, smooth.root, particles.root, deform.root),
+      h('label', { class: 'field adv-only' }, h('span', { class: 'field-label' }, '色'), cmapSel),
+      h('div', { class: 'toggles adv-only' }, smooth.root, particles.root, deform.root),
     ),
   );
 

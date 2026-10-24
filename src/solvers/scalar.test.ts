@@ -158,3 +158,129 @@ describe('scalarCoefficients', () => {
     expect(k.description.length).toBeGreaterThan(10);
   });
 });
+
+describe('スカラー解析: プロ設定（advanced）', () => {
+  const coarse = (): Project => {
+    const p = defaultProject();
+    p.domain.nx = 20; // h = 0.1、ny = 10
+    p.shapes = [{ id: 'b', name: '物体', role: 'solid', materialId: 'al6061', geom: { kind: 'rect', x: 0.8, y: 0.4, w: 0.2, h: 0.2 } }];
+    p.scalar = { u: 1, gamma: 0.1, rho: 1, phiInlet: 1, phiBody: 0 };
+    return p;
+  };
+
+  it('自動のときは緩和係数・セルペクレ数・収束判定を結果に報告する', () => {
+    const { result } = solve(defaultProject());
+    expect(scalar(result, 'relaxation')).toBe(1.9); // Pe = 0.1
+    expect(scalar(result, 'cellPeclet')).toBeCloseTo(0.1, 9);
+    expect(scalar(result, 'tolerance')).toBe(1e-8);
+    expect(scalar(result, 'maxIterations')).toBe(200000);
+  });
+
+  it('scheme: upwind / central の係数が仕様どおり（内部セルと入口）', () => {
+    const p = coarse();
+    const F = 0.1;
+    const D = 0.1;
+    const at = (r: { nx: number }, i: number, j: number) => j * r.nx + i;
+
+    p.scalar.advanced = { scheme: 'upwind' };
+    let r = rasterize(p);
+    let k = scalarCoefficients(p, r);
+    expect(k.aE[at(r, 5, 5)]).toBeCloseTo(D + Math.max(-F, 0), 12);
+    expect(k.aW[at(r, 5, 5)]).toBeCloseTo(D + Math.max(F, 0), 12);
+    expect(k.aB[at(r, 0, 5)]).toBeCloseTo(2 * D + F, 12);
+    expect(k.aP[at(r, 5, 5)]).toBeCloseTo(k.aE[at(r, 5, 5)] + k.aW[at(r, 5, 5)] + 2 * D, 12);
+
+    p.scalar.advanced = { scheme: 'central' };
+    r = rasterize(p);
+    k = scalarCoefficients(p, r);
+    expect(k.aE[at(r, 5, 5)]).toBeCloseTo(D - F / 2, 12);
+    expect(k.aW[at(r, 5, 5)]).toBeCloseTo(D + F / 2, 12);
+    expect(k.aB[at(r, 0, 5)]).toBeCloseTo(2 * D + F / 2, 12);
+
+    // scheme 省略 = hybrid
+    delete p.scalar.advanced;
+    const auto = scalarCoefficients(p, rasterize(p));
+    p.scalar.advanced = { scheme: 'hybrid' };
+    const hyb = scalarCoefficients(p, rasterize(p));
+    expect(Array.from(hyb.aE)).toEqual(Array.from(auto.aE));
+    expect(Array.from(hyb.aW)).toEqual(Array.from(auto.aW));
+  });
+
+  it('Pe が大きいと upwind と hybrid の解が異なる（物体のすぐ後ろ）', () => {
+    const base = defaultProject();
+    base.scalar.gamma = 0.001; // Pe = 10
+    const hyb = solve(base).result;
+    const up = defaultProject();
+    up.scalar.gamma = 0.001;
+    up.scalar.advanced = { scheme: 'upwind' };
+    const upRes = solve(up).result;
+    // 風上差分は流れ方向にも拡散 D を足すので、ハイブリッド法とは φ の分布が違う
+    let maxDiff = 0;
+    for (let c = 0; c < hyb.fields[0].data.length; c++) {
+      maxDiff = Math.max(maxDiff, Math.abs(hyb.fields[0].data[c] - upRes.fields[0].data[c]));
+    }
+    expect(maxDiff).toBeGreaterThan(1e-3);
+    // 風上差分も有界
+    expect(scalar(upRes, 'phiMax')).toBeLessThanOrEqual(1 + 1e-6);
+    expect(scalar(upRes, 'phiMin')).toBeGreaterThanOrEqual(-1e-6);
+  });
+
+  it('Pe が小さければ central も収束し、hybrid とほぼ同じ解になる', () => {
+    const a = defaultProject();
+    const b = defaultProject();
+    b.scalar.advanced = { scheme: 'central' };
+    const ra = solve(a).result;
+    const rb = solve(b).result;
+    expect(rb.warnings).toEqual([]);
+    expect(Math.abs(phiAt(ra, 0.7, 0.5) - phiAt(rb, 0.7, 0.5))).toBeLessThan(0.02);
+  });
+
+  it('central で Pe > 2 のときは振動の警告を出す', () => {
+    const p = defaultProject();
+    p.scalar.gamma = 0.001; // Pe = 10
+    p.scalar.advanced = { scheme: 'central' };
+    const solver = createScalarSolver(p, rasterize(p));
+    const w = solver.result().warnings;
+    expect(w.some((m) => m.includes('中心差分') && m.includes('振動'))).toBe(true);
+  });
+
+  it('tolerance を厳しくすると反復が増え、緩めると減る', () => {
+    const loose = defaultProject();
+    loose.scalar.advanced = { tolerance: 1e-4 };
+    const tight = defaultProject();
+    tight.scalar.advanced = { tolerance: 1e-11 };
+    const a = solve(loose);
+    const b = solve(defaultProject());
+    const c = solve(tight);
+    expect(a.iterations).toBeLessThan(b.iterations);
+    expect(b.iterations).toBeLessThan(c.iterations);
+    expect(scalar(c.result, 'tolerance')).toBe(1e-11);
+  });
+
+  it('maxIterations で打ち切ると警告が出る', () => {
+    const p = defaultProject();
+    p.scalar.advanced = { maxIterations: 10, tolerance: 1e-14 };
+    const { result, iterations } = solve(p);
+    expect(iterations).toBe(10);
+    expect(result.warnings.some((w) => w.includes('最大反復回数（10回）'))).toBe(true);
+  });
+
+  it('relaxation を指定するとその ω を使い（自動より遅い 1.0 など）、範囲外は丸めて警告する', () => {
+    const slow = defaultProject();
+    slow.scalar.advanced = { relaxation: 1 };
+    const a = solve(slow);
+    const b = solve(defaultProject());
+    expect(scalar(a.result, 'relaxation')).toBe(1);
+    expect(a.iterations).toBeGreaterThan(b.iterations);
+
+    const over = defaultProject();
+    over.scalar.advanced = { relaxation: 3 };
+    const w = createScalarSolver(over, rasterize(over));
+    expect(scalar(w.result(), 'relaxation')).toBe(1.95);
+    expect(w.result().warnings.some((m) => m.includes('丸めました'))).toBe(true);
+
+    const under = defaultProject();
+    under.scalar.advanced = { relaxation: 0.5 };
+    expect(scalar(createScalarSolver(under, rasterize(under)).result(), 'relaxation')).toBe(1);
+  });
+});

@@ -10,6 +10,16 @@
 // 計算は「引き込み型（pull）」の移流＋衝突を1回のループにまとめ、
 // 分布関数を方向ごとの Float32Array 2組（現在 / 次）で持ってステップごとに入れ替える。
 // ホットループの中ではメモリ確保をしない。
+//
+// プロ設定（project.flow.advanced、すべて省略可。省略時は自動）:
+// - smagorinskyCs: Smagorinsky 定数（0 で LES 無効、自動は 0.1）
+// - latticeU:      格子上の流入速度（0.01〜0.2 に丸める。自動は 0.08、τ が足りなければ 0.1）
+// - perturbation:  初期擾乱の倍率（自動は 1）。createFlowSolverWithOptions の opts が優先
+//
+// result().scalars に載せる「実際に使った値」（キーは固定）:
+// - latticeU:       '格子単位の流入速度'
+// - tau:            '緩和時間 τ'
+// - smagorinskyCs:  'Smagorinsky 定数'
 
 import { getMaterial } from '../core/materials';
 import type { Field, History, Project, Raster, ResultSet, ScalarValue, Solver, SolverFactory, SolverStatus } from '../core/types';
@@ -18,8 +28,11 @@ import type { Field, History, Project, Raster, ResultSet, ScalarValue, Solver, S
 
 /** 緩和時間 τ の下限。これより小さいと BGK は不安定になる */
 const TAU_MIN = 0.505;
-/** Smagorinsky 定数 Cs */
-const CS = 0.1;
+/** Smagorinsky 定数 Cs の自動値 */
+const CS_DEFAULT = 0.1;
+/** プロ設定で指定できる格子速度の範囲 */
+const U_LAT_MIN_USER = 0.01;
+const U_LAT_MAX_USER = 0.2;
 /** 格子上の流入速度の候補（小さい方が圧縮性誤差は小さいが、同じ τ で到達できる Re は下がる） */
 const U_LAT_PREFERRED = 0.08;
 const U_LAT_MAX = 0.1;
@@ -85,6 +98,7 @@ class FlowSolverImpl implements FlowSolver {
   private readonly thickness: number;
   private readonly rhoPhys: number;
   private readonly perturbation: number;
+  private readonly cs: number;
 
   // 物理量と格子量の換算
   readonly rePhysical: number;
@@ -157,7 +171,9 @@ class FlowSolverImpl implements FlowSolver {
     for (let c = 0; c < n; c++) this.fluidMask[c] = this.solid[c] ? 0 : 1;
     this.slip = project.flow.walls === 'slip';
     this.thickness = project.thickness;
-    this.perturbation = opts.perturbation ?? 1;
+    const adv = project.flow.advanced ?? {};
+    this.perturbation = opts.perturbation ?? adv.perturbation ?? 1;
+    this.cs = adv.smagorinskyCs !== undefined && adv.smagorinskyCs >= 0 ? adv.smagorinskyCs : CS_DEFAULT;
 
     const fluid = getMaterial(project.flow.fluidId);
     this.rhoPhys = fluid.rho;
@@ -190,7 +206,16 @@ class FlowSolverImpl implements FlowSolver {
     let uLat = U_LAT_PREFERRED;
     const reForTau = Math.max(this.rePhysical, 1e-3);
     let tau = 3 * ((uLat * this.lengthCells) / reForTau) + 0.5;
-    if (tau < TAU_MIN) {
+    if (adv.latticeU !== undefined && Number.isFinite(adv.latticeU)) {
+      // 利用者が格子速度を指定した場合は自動選択をしない（範囲外は丸めて知らせる）
+      uLat = Math.min(U_LAT_MAX_USER, Math.max(U_LAT_MIN_USER, adv.latticeU));
+      if (uLat !== adv.latticeU) {
+        this.baseWarnings.push(
+          `格子単位の流入速度 ${adv.latticeU} は範囲外のため ${uLat} に丸めました（指定できるのは ${U_LAT_MIN_USER}〜${U_LAT_MAX_USER}）。`,
+        );
+      }
+      tau = 3 * ((uLat * this.lengthCells) / reForTau) + 0.5;
+    } else if (tau < TAU_MIN) {
       uLat = U_LAT_MAX;
       tau = 3 * ((uLat * this.lengthCells) / reForTau) + 0.5;
     }
@@ -343,7 +368,7 @@ class FlowSolverImpl implements FlowSolver {
     const s0 = src[0], s1 = src[1], s2 = src[2], s3 = src[3], s4 = src[4], s5 = src[5], s6 = src[6], s7 = src[7], s8 = src[8];
     const d0 = dst[0], d1 = dst[1], d2 = dst[2], d3 = dst[3], d4 = dst[4], d5 = dst[5], d6 = dst[6], d7 = dst[7], d8 = dst[8];
     const tau = this.tau;
-    const cs2x18 = 18 * CS * CS;
+    const cs2x18 = 18 * this.cs * this.cs;
 
     // 物体が受ける力（運動量交換法）: 物体へ向かう分布 f と跳ね返る分布の和 = 2 f
     let fx = 0;
@@ -638,6 +663,9 @@ class FlowSolverImpl implements FlowSolver {
       { key: 'Cd', label: '抗力係数', unit: '', value: this.uIn > 0 && qa > 0 ? drag / qa : 0 },
       { key: 'Cl', label: '揚力係数', unit: '', value: this.uIn > 0 && qa > 0 ? lift / qa : 0 },
       { key: 'time', label: '経過時間', unit: 's', value: time },
+      { key: 'latticeU', label: '格子単位の流入速度', unit: '', value: this.uLat },
+      { key: 'tau', label: '緩和時間 τ', unit: '', value: this.tau },
+      { key: 'smagorinskyCs', label: 'Smagorinsky 定数', unit: '', value: this.cs },
     ];
     const st = this.hasObstacle && this.uIn > 0 ? this.estimateStrouhal(qa) : null;
     if (st !== null) scalars.push({ key: 'strouhal', label: 'ストローハル数', unit: '', value: st });

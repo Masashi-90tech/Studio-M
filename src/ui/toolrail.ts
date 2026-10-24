@@ -1,7 +1,7 @@
 // 左のツールレール、キャンバス上の「新しい図形」バー、解析タブ。
 import type { AnalysisKind, ShapeRole } from '../core/types';
-import { h } from './dom';
-import { ANALYSES, ANALYSIS_LABELS, ROLE_HINTS, ROLE_LABELS, ROLES, roleUsesMaterial, solidMaterials } from './project-utils';
+import { clear, h } from './dom';
+import { ANALYSES, ANALYSIS_LABELS, materialOptionLabel, ROLE_HINTS, ROLE_LABELS, ROLES, roleUsesMaterial, solidMaterials } from './project-utils';
 import type { Store, Tool } from './state';
 
 const svg = (inner: string): string =>
@@ -14,6 +14,8 @@ const ICONS: Record<string, string> = {
   polygon: svg('<path d="M5 18l3-12 9 2 3 9z"/><circle cx="5" cy="18" r="1.2"/><circle cx="8" cy="6" r="1.2"/><circle cx="17" cy="8" r="1.2"/><circle cx="20" cy="17" r="1.2"/>'),
   freehand: svg('<path d="M4 16c3-9 6-9 8-4s5 4 8-5"/>'),
   delete: svg('<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/>'),
+  probe: svg('<circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>'),
+  section: svg('<path d="M4 18L20 6"/><circle cx="4" cy="18" r="1.6"/><circle cx="20" cy="6" r="1.6"/><path d="M8 20h8" stroke-dasharray="2 2"/>'),
   undo: svg('<path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 010 8"/>'),
   redo: svg('<path d="M15 7l5 5-5 5"/><path d="M20 12H10a6 6 0 000 8"/>'),
 };
@@ -25,7 +27,12 @@ const TOOLS: { tool: Tool; label: string; key: string }[] = [
   { tool: 'polygon', label: '多角形', key: 'P' },
   { tool: 'freehand', label: 'フリーハンド', key: 'F' },
   { tool: 'delete', label: '削除', key: 'X' },
+  { tool: 'probe', label: 'プローブ', key: 'O' },
+  { tool: 'section', label: '断面', key: 'L' },
 ];
+
+/** プロモードだけで使うツール */
+const PRO_TOOLS: Tool[] = ['probe', 'section'];
 
 export function initToolRail(store: Store, rail: HTMLElement): void {
   const buttons = new Map<Tool, HTMLButtonElement>();
@@ -33,6 +40,7 @@ export function initToolRail(store: Store, rail: HTMLElement): void {
     const b = h('button', { class: 'tool', type: 'button', title: `${t.label}（${t.key}）`, 'aria-label': t.label, onclick: () => store.setTool(t.tool) });
     b.innerHTML = `${ICONS[t.tool]}<span>${t.label}</span>`;
     buttons.set(t.tool, b);
+    if (PRO_TOOLS.includes(t.tool)) b.dataset.pro = '1';
     rail.append(b);
   }
   rail.append(h('div', { class: 'rail-sep' }));
@@ -49,7 +57,9 @@ export function initToolRail(store: Store, rail: HTMLElement): void {
     }
     undo.disabled = !store.canUndo();
     redo.disabled = !store.canRedo();
+    for (const t of PRO_TOOLS) buttons.get(t)!.hidden = store.mode !== 'pro';
   };
+  store.on('mode', refresh);
   store.on('tool', refresh);
   store.on('project', refresh);
   store.on('load', refresh);
@@ -60,8 +70,14 @@ export function initToolRail(store: Store, rail: HTMLElement): void {
 export function initStageBar(store: Store, bar: HTMLElement): void {
   const role = h('select', { id: 'newRole', 'aria-label': '新しい図形の役割' }, ...ROLES.map((r) => h('option', { value: r }, ROLE_LABELS[r])));
   role.value = store.newRole;
-  const mat = h('select', { id: 'newMat', 'aria-label': '新しい図形の材料' }, ...solidMaterials().map((m) => h('option', { value: m.id }, m.name)));
-  mat.value = store.newMaterialId;
+  const mat = h('select', { id: 'newMat', 'aria-label': '新しい図形の材料' });
+  // 電磁波のときは比誘電率 εr も並べる
+  const fillMaterials = (): void => {
+    clear(mat);
+    for (const m of solidMaterials()) mat.append(h('option', { value: m.id }, materialOptionLabel(m, store.analysis)));
+    mat.value = store.newMaterialId;
+  };
+  fillMaterials();
   const matBox = h('label', { class: 'inline' }, h('span', null, '材料'), mat);
 
   role.addEventListener('change', () => {
@@ -96,6 +112,7 @@ export function initStageBar(store: Store, bar: HTMLElement): void {
     role.title = ROLE_HINTS[store.newRole];
   };
   store.on('tool', refresh);
+  store.on('analysis', fillMaterials);
   refresh();
 }
 
@@ -103,6 +120,7 @@ const TAB_HINT: Record<AnalysisKind, string> = {
   flow: '空気や水の流れ（非定常）',
   heat: '熱の伝わりと温度',
   stress: '力をかけたときの応力と変形',
+  em: '電波・レーダーの伝わり方（FDTD）',
   scalar: '動画と同じ Excel 式の対流拡散',
 };
 

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { getMaterial } from '../core/materials';
+import { autoGrid } from '../core/auto';
 import { rasterize } from '../core/raster';
 import { polygonArea } from './geometry';
-import { beamHandCalc, nacaAirfoil, PRESETS } from './presets';
+import { beamHandCalc, halfWaveThicknessMm, nacaAirfoil, PRESETS } from './presets';
 import { sanitizeProject } from './project-utils';
 
 const sum = (a: ArrayLike<number>): number => Array.from(a).reduce((s, v) => s + v, 0);
@@ -52,9 +53,9 @@ describe('nacaAirfoil', () => {
 });
 
 describe('プリセット', () => {
-  it('7 つあり、ID が重ならない', () => {
-    expect(PRESETS).toHaveLength(7);
-    expect(new Set(PRESETS.map((p) => p.id)).size).toBe(7);
+  it('10 個あり、ID が重ならない', () => {
+    expect(PRESETS).toHaveLength(10);
+    expect(new Set(PRESETS.map((p) => p.id)).size).toBe(10);
   });
 
   for (const preset of PRESETS) {
@@ -84,7 +85,7 @@ describe('プリセット', () => {
 
   it('四角柱は動画と同じ領域とスカラー設定', () => {
     const p = PRESETS[0].build();
-    expect(p.domain).toEqual({ width: 2, height: 1, nx: 200 });
+    expect(p.domain).toEqual({ width: 2, height: 1, nx: 200, autoGrid: true });
     expect(p.scalar).toMatchObject({ u: 1, gamma: 0.1, rho: 1 });
   });
 
@@ -128,6 +129,23 @@ describe('プリセット', () => {
     expect(r.solid[j * r.nx + i]).toBe(0);
   });
 
+  it('格子は片持ち梁だけ手動で固定し、ほかは自動', () => {
+    for (const pr of PRESETS) {
+      const p = pr.build();
+      expect(p.domain.autoGrid, pr.id).toBe(pr.id === 'cantilever' ? false : true);
+    }
+  });
+
+  it('電磁波の点波源は、どのプリセットでも解析範囲の中にある', () => {
+    for (const pr of PRESETS) {
+      const p = pr.build();
+      expect(p.em.pointX, pr.id).toBeGreaterThan(0);
+      expect(p.em.pointX, pr.id).toBeLessThan(p.domain.width);
+      expect(p.em.pointY, pr.id).toBeGreaterThan(0);
+      expect(p.em.pointY, pr.id).toBeLessThan(p.domain.height);
+    }
+  });
+
   it('片持ち梁の荷重は 100 N で、手計算値はアルミの教科書値', () => {
     const p = PRESETS.find((x) => x.id === 'cantilever')!.build();
     const r = rasterize(p);
@@ -136,5 +154,64 @@ describe('プリセット', () => {
     expect(hand.stressMPa).toBeCloseTo(120, 6);
     expect(hand.deflectionMm).toBeGreaterThan(4.6);
     expect(hand.deflectionMm).toBeLessThan(4.8);
+  });
+
+  describe('電磁波のプリセット', () => {
+    const get = (id: string) => PRESETS.find((x) => x.id === id)!;
+
+    it('レーダーカバー: 24 GHz・PLA・厚み 3.7 mm は半波長に近く、PML から離れている', () => {
+      const pr = get('radar-cover');
+      const p = pr.build();
+      expect(pr.analysis).toBe('em');
+      expect(p.em).toMatchObject({ frequencyGHz: 24, source: 'plane', angleDeg: 0, polarization: 'TM' });
+      expect(p.domain.width).toBeCloseTo(0.12, 9);
+      expect(p.domain.height).toBeCloseTo(0.08, 9);
+      const s = p.shapes[0];
+      expect(s.materialId).toBe('pla');
+      expect(s.geom.kind).toBe('rect');
+      if (s.geom.kind !== 'rect') return;
+      expect(s.geom.w).toBeCloseTo(0.0037, 9);
+      expect(s.geom.x + s.geom.w / 2).toBeCloseTo(0.05, 9);
+      expect(halfWaveThicknessMm(24, getMaterial('pla').epsR!)).toBeCloseTo(3.74, 1);
+      // 吸収境界（既定 12 セル）の外側に収まる
+      const g = autoGrid(p, 'em');
+      expect(s.geom.y).toBeGreaterThan(12 * g.h);
+      expect(s.geom.y + s.geom.h).toBeLessThan(p.domain.height - 12 * g.h);
+      expect(s.geom.x).toBeGreaterThan(12 * g.h);
+    });
+
+    it('金属板: アルミ板が 10 GHz の平面波を半分だけさえぎる', () => {
+      const p = get('metal-shadow').build();
+      expect(p.em.frequencyGHz).toBe(10);
+      const s = p.shapes[0];
+      expect(getMaterial(s.materialId).conductor).toBe(true);
+      if (s.geom.kind !== 'rect') throw new Error('rect expected');
+      // 板は領域の高さの一部だけ（全部は塞がない）
+      expect(s.geom.h).toBeLessThan(p.domain.height * 0.6);
+      expect(s.geom.h).toBeGreaterThan(p.domain.height * 0.3);
+    });
+
+    it('Wi-Fi の部屋: 点波源は部屋の中、格子は上限に収まる', () => {
+      const p = get('wifi-room').build();
+      expect(p.em).toMatchObject({ frequencyGHz: 2.4, source: 'point' });
+      const g = autoGrid(p, 'em');
+      expect(g.nx).toBeLessThanOrEqual(500);
+      expect(g.nx * g.ny).toBeLessThanOrEqual(200_000);
+      // 壁の中でも 1 波長あたり 10 セル以上
+      const lambdaMin = 299792458 / 2.4e9 / Math.sqrt(getMaterial('concrete').epsR!);
+      expect(lambdaMin / g.h).toBeGreaterThanOrEqual(10); // ソルバーが警告を出さない下限
+      // 点波源は内寸（壁の内側）の中
+      expect(p.em.pointX).toBeGreaterThan(0.2);
+      expect(p.em.pointX).toBeLessThan(2.4);
+      expect(p.em.pointY).toBeGreaterThan(0.2);
+      expect(p.em.pointY).toBeLessThan(1.7);
+      // 出入口がある（右の壁の上下の部分の間に隙間）
+      const lower = p.shapes.find((s) => s.name === '壁（右・下側）')!.geom;
+      const upper = p.shapes.find((s) => s.name === '壁（右・上側）')!.geom;
+      if (lower.kind !== 'rect' || upper.kind !== 'rect') throw new Error('rect expected');
+      expect(upper.y - (lower.y + lower.h)).toBeCloseTo(0.9, 6);
+      expect(p.shapes.some((s) => s.materialId === 'wood')).toBe(true);
+      expect(p.shapes.every((s) => ['concrete', 'wood'].includes(s.materialId))).toBe(true);
+    });
   });
 });

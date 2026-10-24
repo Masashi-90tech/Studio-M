@@ -34,6 +34,8 @@ const HELP: Record<Tool, string> = {
   polygon: 'クリックで点を打ち、ダブルクリックか Enter で閉じます（最初の点をクリックでも閉じます）',
   freehand: '指やマウスで囲むように描くと、なめらかな多角形になります',
   delete: '消したい図形をクリックします',
+  probe: 'クリックした点に「プローブ」を置き、その点の値を右の表に表示します',
+  section: 'ドラッグで線を引くと、その線に沿った値を右のグラフに表示します',
 };
 
 export class Editor {
@@ -43,6 +45,8 @@ export class Editor {
   touch = false;
   /** 直近のポインター位置 [m]（座標表示用） */
   lastWorld: Pt | null = null;
+  /** 計算セルの大きさ [m]（自動格子のとき実際のセル幅を教えてもらう） */
+  cellProvider: (() => number | undefined) | null = null;
   private drag: Drag | null = null;
   private canvas: HTMLCanvasElement;
 
@@ -86,7 +90,7 @@ export class Editor {
   }
 
   private cellStep(): number {
-    return this.domain.width / this.domain.nx;
+    return this.cellProvider?.() ?? this.domain.width / this.domain.nx;
   }
 
   private world(e: PointerEvent | MouseEvent): Pt {
@@ -373,9 +377,10 @@ export class Editor {
       s.geom = translateGeom(s.geom, dx, dy);
       this.store.touch('canvas');
     } else {
-      const map: Record<string, Tool> = { v: 'select', r: 'rect', c: 'circle', p: 'polygon', f: 'freehand', x: 'delete' };
+      const map: Record<string, Tool> = { v: 'select', r: 'rect', c: 'circle', p: 'polygon', f: 'freehand', x: 'delete', o: 'probe', l: 'section' };
       const tool = map[key.toLowerCase()];
-      if (tool) this.store.setTool(tool);
+      // プローブと断面はプロモードだけ
+      if (tool && (this.store.mode === 'pro' || (tool !== 'probe' && tool !== 'section'))) this.store.setTool(tool);
     }
   }
 }

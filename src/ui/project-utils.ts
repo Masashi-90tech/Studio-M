@@ -1,7 +1,7 @@
 // プロジェクトの複製・検証・UI 用の定数。純粋関数だけを置く。
 import { MATERIALS } from '../core/materials';
 import { defaultProject, newShapeId } from '../core/project';
-import type { AnalysisKind, EdgeBC, Project, Shape, ShapeGeom, ShapeRole } from '../core/types';
+import type { AnalysisKind, EdgeBC, EMSettings, FlowSettings, Material, Project, ScalarSettings, Shape, ShapeGeom, ShapeRole } from '../core/types';
 import { geomBBox, type Pt } from './geometry';
 
 export const ROLE_LABELS: Record<ShapeRole, string> = {
@@ -28,10 +28,11 @@ export const ANALYSIS_LABELS: Record<AnalysisKind, string> = {
   flow: '流れ',
   heat: '熱',
   stress: '強度',
+  em: '電磁波',
   scalar: '対流拡散',
 };
 
-export const ANALYSES: AnalysisKind[] = ['flow', 'heat', 'stress', 'scalar'];
+export const ANALYSES: AnalysisKind[] = ['flow', 'heat', 'stress', 'em', 'scalar'];
 
 export function roleUsesMaterial(role: ShapeRole): boolean {
   return role === 'solid' || role === 'heatSource';
@@ -39,6 +40,13 @@ export function roleUsesMaterial(role: ShapeRole): boolean {
 
 export function solidMaterials() {
   return MATERIALS.filter((m) => m.kind === 'solid');
+}
+
+/** 材料プルダウンの表示名。電磁波では比誘電率 εr（金属はその旨）を添える */
+export function materialOptionLabel(m: Material, analysis: AnalysisKind): string {
+  if (analysis !== 'em') return m.name;
+  if (m.conductor) return `${m.name}（金属）`;
+  return `${m.name}（εr ${m.epsR ?? 1}）`;
 }
 
 export function fluidMaterials() {
@@ -77,6 +85,7 @@ export function formulaGridNx(width: number, height: number, currentNx: number, 
 export function projectForFormula(p: Project): Project {
   const c = cloneProject(p);
   c.domain.nx = formulaGridNx(c.domain.width, c.domain.height, c.domain.nx);
+  c.domain.autoGrid = false; // 数式ブックは粗くした nx をそのまま使う
   return c;
 }
 
@@ -164,14 +173,20 @@ export function sanitizeProject(raw: unknown): Project | null {
   const edges = isObj(heat.edges) ? heat.edges : {};
   const stress = isObj(raw.stress) ? raw.stress : {};
   const scalar = isObj(raw.scalar) ? raw.scalar : {};
+  const em = isObj(raw.em) ? raw.em : {};
 
   const fluidIds = fluidMaterials().map((m) => m.id);
   const shapes = raw.shapes.map((s, i) => sanitizeShape(s, i)).filter((s): s is Shape => s !== null);
 
-  return {
+  const out: Project = {
     version: 1,
     name: typeof raw.name === 'string' && raw.name ? raw.name : '無題',
-    domain: { width: w, height: hh, nx: Math.round(Math.min(800, Math.max(20, numOr(raw.domain.nx, base.domain.nx)))) },
+    domain: {
+      width: w,
+      height: hh,
+      nx: Math.round(Math.min(800, Math.max(20, numOr(raw.domain.nx, base.domain.nx)))),
+      autoGrid: boolOr(raw.domain.autoGrid, true),
+    },
     thickness: isNum(raw.thickness) && raw.thickness > 0 ? raw.thickness : base.thickness,
     shapes,
     flow: {
@@ -198,5 +213,51 @@ export function sanitizeProject(raw: unknown): Project | null {
       phiInlet: numOr(scalar.phiInlet, base.scalar.phiInlet),
       phiBody: numOr(scalar.phiBody, base.scalar.phiBody),
     },
+    em: {
+      frequencyGHz: Math.min(1000, Math.max(0.01, numOr(em.frequencyGHz, base.em.frequencyGHz))),
+      source: em.source === 'point' ? 'point' : 'plane',
+      angleDeg: numOr(em.angleDeg, base.em.angleDeg),
+      pointX: numOr(em.pointX, w * 0.25),
+      pointY: numOr(em.pointY, hh * 0.5),
+      polarization: em.polarization === 'TE' ? 'TE' : 'TM',
+      mediumId: fluidIds.includes(em.mediumId as string) ? (em.mediumId as string) : base.em.mediumId,
+    },
   };
+
+  // プロ用の詳細設定（省略した項目はソルバーが自動で決める）
+  const flowAdv = sanitizeAdvanced(flow.advanced, { smagorinskyCs: [0, 1], latticeU: [0.005, 0.2], perturbation: [0, 1] });
+  if (flowAdv) out.flow.advanced = flowAdv as FlowSettings['advanced'];
+  const iter = { tolerance: [1e-12, 0.1], maxIterations: [10, 1e7] } as const;
+  const heatAdv = sanitizeAdvanced(heat.advanced, iter);
+  if (heatAdv) out.heat.advanced = heatAdv;
+  const stressAdv = sanitizeAdvanced(stress.advanced, iter);
+  if (stressAdv) out.stress.advanced = stressAdv;
+  const scalarAdv = sanitizeAdvanced(scalar.advanced, { ...iter, relaxation: [1, 1.95] }, { scheme: ['hybrid', 'upwind', 'central'] });
+  if (scalarAdv) out.scalar.advanced = scalarAdv as ScalarSettings['advanced'];
+  const emAdv = sanitizeAdvanced(
+    em.advanced,
+    { cellsPerWavelength: [4, 200], pmlCells: [4, 60], courant: [0.05, 0.7071] },
+    { waveform: ['cw', 'pulse'] },
+  );
+  if (emAdv) out.em.advanced = emAdv as EMSettings['advanced'];
+  return out;
+}
+
+/** 数値の範囲と文字列の選択肢を検査して、有効な項目だけ残す。1 つも無ければ undefined */
+function sanitizeAdvanced(
+  v: unknown,
+  nums: Record<string, readonly [number, number]>,
+  enums: Record<string, readonly string[]> = {},
+): Record<string, number | string> | undefined {
+  if (!isObj(v)) return undefined;
+  const out: Record<string, number | string> = {};
+  for (const [k, [lo, hi]] of Object.entries(nums)) {
+    const x = v[k];
+    if (isNum(x)) out[k] = Math.min(hi, Math.max(lo, x));
+  }
+  for (const [k, options] of Object.entries(enums)) {
+    const x = v[k];
+    if (typeof x === 'string' && options.includes(x)) out[k] = x;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }

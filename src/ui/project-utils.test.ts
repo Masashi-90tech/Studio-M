@@ -89,3 +89,40 @@ describe('その他', () => {
     expect(characteristicLength(p)).toBeCloseTo(0.2);
   });
 });
+
+describe('sanitizeProject: 電磁波・自動格子・詳細設定', () => {
+  it('電磁波の設定と advanced が往復できる', () => {
+    const p = defaultProject();
+    p.em = { frequencyGHz: 5, source: 'point', angleDeg: 10, pointX: 0.1, pointY: 0.3, polarization: 'TE', mediumId: 'water', advanced: { pmlCells: 20, waveform: 'pulse' } };
+    p.flow.advanced = { smagorinskyCs: 0.12, latticeU: 0.05 };
+    p.scalar.advanced = { scheme: 'central', relaxation: 1.4, tolerance: 1e-8 };
+    p.heat.advanced = { maxIterations: 5000 };
+    p.domain.autoGrid = false;
+    expect(sanitizeProject(JSON.parse(JSON.stringify(p)))).toEqual(p);
+  });
+  it('古い保存データ（em も autoGrid もない）は、既定の電磁波設定と自動格子で読める', () => {
+    const old = JSON.parse(JSON.stringify(defaultProject()));
+    delete old.em;
+    delete old.domain.autoGrid;
+    const p = sanitizeProject(old)!;
+    expect(p.domain.autoGrid).toBe(true);
+    expect(p.em.source).toBe('plane');
+    expect(p.em.frequencyGHz).toBe(24);
+  });
+  it('範囲外の advanced は範囲内に丸め、不正な値は捨てる', () => {
+    const raw = JSON.parse(JSON.stringify(defaultProject()));
+    raw.em.advanced = { courant: 5, pmlCells: 'x', waveform: 'square', cellsPerWavelength: 1000 };
+    raw.heat.advanced = { tolerance: 'tiny' };
+    const p = sanitizeProject(raw)!;
+    expect(p.em.advanced).toEqual({ courant: 0.7071, cellsPerWavelength: 200 });
+    expect(p.heat.advanced).toBeUndefined();
+  });
+  it('数式ブック用の複製は格子を手動（粗くした nx）にする', () => {
+    const p = defaultProject();
+    p.domain.nx = 400;
+    const c = projectForFormula(p);
+    expect(c.domain.autoGrid).toBe(false);
+    expect(p.domain.autoGrid).toBe(true);
+  });
+});
+

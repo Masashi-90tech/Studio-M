@@ -20,12 +20,15 @@ export interface Preset {
 
 const mm = (v: number): number => v / 1000;
 
+/** 空のプロジェクト。格子は自動（autoGrid）。nx は手動に切り替えたときの初期値 */
 function blank(name: string, wMm: number, hMm: number, nx: number, thicknessMm: number): Project {
   const p = defaultProject();
   p.name = name;
-  p.domain = { width: mm(wMm), height: mm(hMm), nx };
+  p.domain = { width: mm(wMm), height: mm(hMm), nx, autoGrid: true };
   p.thickness = mm(thicknessMm);
   p.shapes = [];
+  // 電磁波の点波源は、領域の左 1/4・中央の高さに置いておく
+  p.em = { ...p.em, pointX: mm(wMm) * 0.25, pointY: mm(hMm) * 0.5 };
   return p;
 }
 
@@ -154,11 +157,60 @@ export function beamHandCalc(): { deflectionMm: number; stressMPa: number } {
 
 function cantilever(): Project {
   const p = blank('片持ち梁（アルミ）', 240, 60, 360, BEAM.b);
+  // 手計算との比較用に、格子は手動で固定する（梁の高さを 15 セルで切る）
+  p.domain.autoGrid = false;
   p.shapes = [
     shape('solid', '梁 (A6061)', rectMm(30, 25, BEAM.L, BEAM.h), 'al6061'),
     shape('support', '固定端', rectMm(28, 20, 3, 20), 'al6061'),
     shape('load', `先端荷重 ${BEAM.P} N`, rectMm(229, 25, 3, BEAM.h), 'al6061', { force: { fx: 0, fy: -BEAM.P } }),
   ];
+  return p;
+}
+
+
+// ---------- 8. レーダーカバー（24GHz・PLA） ----------
+
+/** 垂直入射の平板がいちばん電波を通す厚みの目安: 媒質中の半波長 d = λ / (2√εr) [mm] */
+export function halfWaveThicknessMm(ghz: number, epsR: number): number {
+  return (299792458 / (ghz * 1e9) / (2 * Math.sqrt(epsR))) * 1000;
+}
+
+function radarCover(): Project {
+  const p = blank('レーダーカバー（24GHz・PLA）', 120, 80, 320, 10);
+  // PLA（εr 2.8）の半波長は約 3.7 mm。外周の吸収境界（PML）から離して、上下に余白を残す
+  const t = 3.7;
+  p.shapes = [shape('solid', 'PLA カバー (3.7 mm)', rectMm(50 - t / 2, 8, t, 64), 'pla')];
+  p.em = { ...p.em, frequencyGHz: 24, source: 'plane', angleDeg: 0, polarization: 'TM', mediumId: 'air' };
+  return p;
+}
+
+// ---------- 9. 金属板の反射とかげ ----------
+
+function metalShadow(): Project {
+  const p = blank('金属板の反射とかげ（10GHz）', 240, 160, 240, 10);
+  // 高さ 70 mm のアルミ板が、左から来る電波の上半分を遮る。板の後ろに「かげ」、縁で回り込み（回折）が見える
+  p.shapes = [shape('solid', 'アルミ板', rectMm(100, 45, 4, 70), 'al6061')];
+  p.em = { ...p.em, frequencyGHz: 10, source: 'plane', angleDeg: 0, polarization: 'TM', mediumId: 'air' };
+  return p;
+}
+
+// ---------- 10. Wi-Fi と部屋の壁 ----------
+
+function wifiRoom(): Project {
+  // 2.4 GHz の波長は空気中 125 mm、コンクリートの中では 53 mm。格子数には上限（横 500 セル）があるので、
+  // 壁の中を 1 波長あたり 10 セル以上で切れる大きさ（領域の幅 2.6 m 以下）の小さめの部屋にしてある
+  const p = blank('Wi-Fiと部屋の壁（2.4GHz）', 2600, 1900, 500, 10);
+  const wall = 100;
+  p.shapes = [
+    shape('solid', '壁（下）', rectMm(100, 100, 2400, wall), 'concrete'),
+    shape('solid', '壁（上）', rectMm(100, 1800 - wall, 2400, wall), 'concrete'),
+    shape('solid', '壁（左）', rectMm(100, 100, wall, 1700), 'concrete'),
+    // 右の壁には幅 900 mm の出入口があり、木のドアが半分だけ閉まっている
+    shape('solid', '壁（右・下側）', rectMm(2400, 100, wall, 200), 'concrete'),
+    shape('solid', '壁（右・上側）', rectMm(2400, 1200, wall, 600), 'concrete'),
+    shape('solid', '木のドア', rectMm(2430, 300, 40, 450), 'wood'),
+  ];
+  p.em = { ...p.em, frequencyGHz: 2.4, source: 'point', pointX: mm(700), pointY: mm(950), polarization: 'TM', mediumId: 'air' };
   return p;
 }
 
@@ -208,9 +260,30 @@ export const PRESETS: Preset[] = [
   {
     id: 'cantilever',
     title: '片持ち梁（アルミ）',
-    description: '長さ200mmの梁に先端100 N。手計算（たわみ約4.7mm、応力120MPa）と比べます',
+    description: '長さ200mmの梁に先端100 N。手計算（たわみ約4.7mm、応力120MPa）と比べます（格子は手動で固定）',
     analysis: 'stress',
     build: cantilever,
+  },
+  {
+    id: 'radar-cover',
+    title: 'レーダーカバー（24GHz・PLA）',
+    description: '3Dプリントのカバー越しに 24GHz の電波を当てます。厚み 3.7 mm はよく通り、1.9 mm にすると弱くなります',
+    analysis: 'em',
+    build: radarCover,
+  },
+  {
+    id: 'metal-shadow',
+    title: '金属板の反射とかげ',
+    description: '10GHz の平面波をアルミ板が半分さえぎります。板の後ろの「かげ」と、縁での回り込みを見ます',
+    analysis: 'em',
+    build: metalShadow,
+  },
+  {
+    id: 'wifi-room',
+    title: 'Wi-Fiと部屋の壁',
+    description: '2.4GHz の点波源（ルーター）をコンクリートの部屋に置きます。出入口と木のドアから電波が漏れる様子。小さめの部屋（内寸 2.2×1.5 m）で、壁の中は1波長あたり約10セルです',
+    analysis: 'em',
+    build: wifiRoom,
   },
 ];
 

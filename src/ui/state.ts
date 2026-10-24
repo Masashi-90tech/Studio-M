@@ -3,9 +3,10 @@
 import { defaultProject, newShapeId } from '../core/project';
 import type { AnalysisKind, Project, Shape, ShapeGeom, ShapeRole } from '../core/types';
 import type { ColormapName } from './colormap';
+import { DEFAULT_PREFS, saveUiState, type Prefs, type UiMode } from './modes';
 import { ensureRoleDefaults, nextShapeName } from './project-utils';
 
-export type Tool = 'select' | 'rect' | 'circle' | 'polygon' | 'freehand' | 'delete';
+export type Tool = 'select' | 'rect' | 'circle' | 'polygon' | 'freehand' | 'delete' | 'probe' | 'section';
 
 /**
  * - project:   形状や条件が変わった（再計算が必要）。source は変更元（'canvas' | 'props' | 'settings' ...）
@@ -14,8 +15,9 @@ export type Tool = 'select' | 'rect' | 'circle' | 'polygon' | 'freehand' | 'dele
  * - selection: 選択が変わった
  * - tool:      ツール・新規図形の役割/材料が変わった
  * - view:      表示設定だけが変わった（再計算は不要）
+ * - mode:      表示モード（かんたん / 標準 / プロ）が変わった。見せ方だけが変わる
  */
-export type StoreEvent = 'project' | 'load' | 'analysis' | 'selection' | 'tool' | 'view';
+export type StoreEvent = 'project' | 'load' | 'analysis' | 'selection' | 'tool' | 'view' | 'mode';
 
 export interface ViewOptions {
   smooth: boolean;
@@ -40,6 +42,10 @@ export class Store {
   view: ViewOptions = { smooth: false, grid: true, snap: false, particles: true, deform: true, colormap: 'turbo' };
   /** 解析ごとに選んでいる表示フィールド */
   fieldKeys: Partial<Record<AnalysisKind, string>> = {};
+  /** 表示モード。プロジェクトのデータは変えず、見せるものだけを切り替える */
+  mode: UiMode = 'standard';
+  /** かんたんモードの質問の答え（閲覧者ごと） */
+  prefs: Prefs = { ...DEFAULT_PREFS };
 
   private listeners = new Map<StoreEvent, Set<Listener>>();
   private undoStack: string[] = [];
@@ -129,6 +135,25 @@ export class Store {
     this.loadProject(p);
   }
 
+  setMode(mode: UiMode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    // プロ専用のツールはプロ以外では使えない
+    if (mode !== 'pro' && (this.tool === 'probe' || this.tool === 'section')) {
+      this.tool = 'select';
+      this.emit('tool');
+    }
+    saveUiState(this.mode, this.prefs);
+    this.emit('mode');
+  }
+
+  /** かんたんモードの答えを変える（再計算は不要、判定の見え方だけが変わる） */
+  setPrefs(patch: Partial<Prefs>): void {
+    this.prefs = { ...this.prefs, ...patch };
+    saveUiState(this.mode, this.prefs);
+    this.emit('view');
+  }
+
   setAnalysis(kind: AnalysisKind): void {
     if (kind === this.analysis) return;
     this.analysis = kind;
@@ -172,6 +197,16 @@ export class Store {
     this.emit('selection');
     this.emit('tool');
     return s;
+  }
+
+  /** できあがった図形をまとめて追加する（画像からの取り込みなど）。元に戻すは1回で全部戻る */
+  addShapes(shapes: Shape[]): void {
+    if (shapes.length === 0) return;
+    this.checkpoint();
+    this.project.shapes.push(...shapes);
+    this.selectedId = shapes[0].id;
+    this.emit('project', 'canvas');
+    this.emit('selection');
   }
 
   deleteShape(id: string): void {

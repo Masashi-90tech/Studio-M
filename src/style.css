@@ -740,3 +740,325 @@ label.inline select {
     padding: 9px 0;
   }
 }
+
+/* =====================================================================
+   表示モード（かんたん / 標準 / プロ）
+   ===================================================================== */
+.mode-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  background: #fff;
+  padding: 2px;
+  gap: 2px;
+}
+.seg-btn {
+  border: 0;
+  background: transparent;
+  border-radius: 99px;
+  padding: 4px 13px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.seg-btn:hover {
+  color: var(--ink);
+}
+.seg-btn.active {
+  background: var(--ink);
+  color: #fff;
+}
+.seg-btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+.badge-btn {
+  border: 1px solid var(--warn-line);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  border-radius: 99px;
+  padding: 3px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.badge-btn:hover {
+  filter: brightness(0.97);
+}
+.badge-btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* 小さな 自動 ⇄ 手動 スイッチ */
+.seg.mini {
+  padding: 1px;
+}
+.seg.mini label {
+  position: relative;
+  display: inline-flex;
+}
+.seg.mini input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+.seg.mini span {
+  padding: 2px 11px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.seg.mini input:checked + span {
+  background: var(--ink);
+  color: #fff;
+}
+.seg.mini input:focus-visible + span {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* モードごとの出し分け: データは同じで、見せるものだけを変える */
+body[data-mode='easy'] .adv-only,
+body[data-mode='easy'] #props .card.empty {
+  display: none;
+}
+
+/* ---------- かんたんモードの質問 ---------- */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  border-radius: 99px;
+  padding: 6px 13px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.3;
+  min-height: 34px;
+  text-align: left;
+}
+.chip:hover {
+  background: #f7f3ea;
+}
+.chip.on,
+.chip[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: #8a3604;
+  font-weight: 700;
+}
+.chip:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* ---------- 判定カード ---------- */
+.verdict {
+  border-left: 6px solid var(--line-strong);
+  gap: 6px;
+}
+.verdict-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 2px 12px;
+  border-radius: 99px;
+  background: #eee;
+  color: #444;
+}
+.vtitle {
+  font-size: 12px;
+  color: var(--muted);
+}
+.verdict-head {
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.verdict-lines {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 12.5px;
+  color: #4a443a;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.verdict-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.verdict.ok {
+  border-left-color: #16a34a;
+  background: #f1fbf4;
+}
+.verdict.ok .vchip {
+  background: #16a34a;
+  color: #fff;
+}
+.verdict.warn {
+  border-left-color: #d99a00;
+  background: #fffbea;
+}
+.verdict.warn .vchip {
+  background: #f5c542;
+  color: #4a3500;
+}
+.verdict.ng {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+.verdict.ng .vchip {
+  background: #dc2626;
+  color: #fff;
+}
+.verdict.info {
+  border-left-color: var(--blue);
+  background: var(--blue-soft);
+}
+.verdict.info .vchip {
+  background: var(--blue);
+  color: #fff;
+}
+.verdict.pending {
+  border-left-color: var(--line-strong);
+}
+body[data-mode='easy'] .verdict-head {
+  font-size: 19px;
+}
+body[data-mode='easy'] .verdict {
+  padding: 16px 16px 16px;
+}
+
+/* ---------- プロ: 詳細設定・測定 ---------- */
+.pro-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line);
+}
+.pro-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.auto-note {
+  color: #4a443a;
+}
+.manual-slot {
+  margin-top: 2px;
+}
+.probe-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.probe-table th {
+  text-align: left;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 2px 4px;
+}
+.probe-table td {
+  padding: 3px 4px;
+  vertical-align: middle;
+  border-top: 1px solid var(--line);
+}
+.probe-xy {
+  display: flex;
+  gap: 4px;
+}
+.probe-xy input {
+  min-width: 0;
+  min-height: 30px;
+  padding: 3px 5px;
+}
+.probe-val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.coord-add {
+  align-items: end;
+}
+canvas.chart {
+  width: 100%;
+  height: 160px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+pre.log {
+  margin: 4px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 11.5px;
+  line-height: 1.45;
+  background: #faf6ec;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  white-space: pre;
+}
+.log-box summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .mode-wrap {
+    width: 100%;
+  }
+  .seg-btn {
+    padding: 5px 12px;
+  }
+}
+@media (max-width: 420px) {
+  .seg-btn {
+    padding: 5px 10px;
+    font-size: 12.5px;
+  }
+  .brand .tagline {
+    display: none;
+  }
+}

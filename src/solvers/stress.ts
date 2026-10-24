@@ -6,12 +6,20 @@
 //   1 回だけ作り、E·t を掛けて使う。
 // - K u = f は行列を組み立てず、要素ごとに掛け算する前処理付き共役勾配法（Jacobi）で解く。
 //   step(budgetMs) で少しずつ反復し、UI を固めない。
+//
+// プロ設定（project.stress.advanced、省略時は自動）:
+// - tolerance:     収束判定の相対残差（自動は 1e-8）
+// - maxIterations: 最大反復回数（自動は max(2000, 20·(nx+ny))）
+//
+// result().scalars に載せる「実際に使った値」（キーは固定）:
+// - tolerance:      '収束判定（相対残差）'
+// - maxIterations:  '最大反復回数'
 
 import type { Field, History, Project, Raster, ResultSet, ScalarValue, Solver, SolverFactory, SolverStatus } from '../core/types';
 import { getMaterial } from '../core/materials';
 
 const GRAVITY = 9.80665; // [m/s²]
-const TOLERANCE = 1e-8; // 収束判定: 相対残差
+const DEFAULT_TOLERANCE = 1e-8; // 収束判定: 相対残差（自動）
 const SAFETY_CAP = 100; // 表示用の安全率の上限
 const HISTORY_STRIDE = 10; // 残差履歴を記録する反復間隔
 
@@ -280,7 +288,10 @@ export function createStressSolverDetailed(project: Project, raster: Raster): St
   let residual = state === 'cg' ? 1 : 0;
   let done = state !== 'cg';
   let hitMaxIter = false;
-  const maxIter = Math.max(2000, 20 * (nx + ny));
+  const adv = project.stress.advanced;
+  const tolerance = adv?.tolerance !== undefined && adv.tolerance > 0 ? adv.tolerance : DEFAULT_TOLERANCE;
+  const maxIter =
+    adv?.maxIterations !== undefined && adv.maxIterations >= 1 ? Math.floor(adv.maxIterations) : Math.max(2000, 20 * (nx + ny));
   const history: History = { key: 'residual', label: '残差', unit: '', t: [], values: [] };
 
   if (state === 'cg') {
@@ -337,7 +348,7 @@ export function createStressSolverDetailed(project: Project, raster: Raster): St
       history.t.push(iteration);
       history.values.push(residual);
     }
-    return residual < TOLERANCE;
+    return residual < tolerance;
   }
 
   // ----- 結果の組み立て -----
@@ -438,6 +449,8 @@ export function createStressSolverDetailed(project: Project, raster: Raster): St
       { key: 'minSafety', label: '最小安全率', unit: '', value: minSafety },
       { key: 'mass', label: '質量', unit: 'kg', value: totalMass },
       { key: 'reaction', label: '反力合計', unit: 'N', value: Math.hypot(rx, ry) },
+      { key: 'tolerance', label: '収束判定（相対残差）', unit: '', value: tolerance },
+      { key: 'maxIterations', label: '最大反復回数', unit: '回', value: maxIter },
     ];
 
     const out: string[] = [...warnings];
@@ -487,7 +500,7 @@ export function createStressSolverDetailed(project: Project, raster: Raster): St
           }
         }
       }
-      const progress = done ? 1 : Math.min(0.99, Math.max(0, -Math.log10(Math.max(residual, 1e-300)) / -Math.log10(TOLERANCE)));
+      const progress = done ? 1 : Math.min(0.99, Math.max(0, -Math.log10(Math.max(residual, 1e-300)) / -Math.log10(tolerance)));
       return {
         done,
         progress,

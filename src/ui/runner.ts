@@ -1,4 +1,5 @@
 // 計算ループの管理。プロジェクトを格子化してソルバーを作り、requestAnimationFrame ごとに少しずつ進める。
+import { resolveProject, type AutoGrid } from '../core/auto';
 import { rasterize } from '../core/raster';
 import type { AnalysisKind, Field, Project, Raster, ResultSet, Solver, SolverStatus } from '../core/types';
 import { createSolver } from '../solvers';
@@ -7,8 +8,17 @@ import type { Store } from './state';
 
 /** 1 フレームで計算に使う時間 [ms] */
 const STEP_BUDGET_MS = 12;
+/** ソルバーログに残す最大行数 */
+const LOG_LIMIT = 4000;
 /** 変更から再計算までの待ち時間 [ms] */
 const REBUILD_DELAY_MS = 200;
+
+export interface LogEntry {
+  iteration: number;
+  residual?: number;
+  progress: number;
+  message?: string;
+}
 
 export class Runner {
   solver: Solver | null = null;
@@ -19,6 +29,12 @@ export class Runner {
   error: string | null = null;
   /** UI 側で気づいた注意（支持がない、など） */
   hints: string[] = [];
+  /** 計算に使った格子（自動 / 手動と、その理由） */
+  grid: AutoGrid | null = null;
+  /** 格子を決め終えた計算用のプロジェクト（編集中のプロジェクトとは別の複製） */
+  resolved: Project | null = null;
+  /** 反復ごとの残差の記録（プロの「ソルバーログ」用） */
+  log: LogEntry[] = [];
   running = true;
   /** result が更新されるたびに増える */
   resultVersion = 0;
@@ -69,9 +85,16 @@ export class Runner {
     this.status = null;
     this.result = null;
     this.solver = null;
+    this.log = [];
+    this.grid = null;
+    this.resolved = null;
     try {
-      this.raster = rasterize(project);
-      this.hints = collectHints(this.kind, project, this.raster);
+      // 格子の細かさは解析ごとに自動で決める（手動設定なら project.domain.nx のまま）
+      const { project: resolved, grid } = resolveProject(project, this.kind);
+      this.grid = grid;
+      this.resolved = resolved;
+      this.raster = rasterize(resolved);
+      this.hints = collectHints(this.kind, resolved, this.raster);
     } catch (e) {
       this.raster = null;
       this.hints = [];
@@ -80,7 +103,7 @@ export class Runner {
       return;
     }
     try {
-      this.solver = createSolver(this.kind, project, this.raster);
+      this.solver = createSolver(this.kind, this.resolved ?? project, this.raster);
       this.result = this.solver.result();
     } catch (e) {
       this.solver = null;
@@ -105,6 +128,7 @@ export class Runner {
     try {
       this.status = this.solver.step(STEP_BUDGET_MS);
       this.result = this.solver.result();
+      this.record(this.status);
       this.resultVersion++;
       return true;
     } catch (e) {
@@ -113,6 +137,14 @@ export class Runner {
       this.resultVersion++;
       return true;
     }
+  }
+
+  /** ソルバーログに 1 行足す（多くなりすぎたら間引く） */
+  private record(st: SolverStatus): void {
+    const last = this.log[this.log.length - 1];
+    if (last && last.iteration === st.iteration) return;
+    this.log.push({ iteration: st.iteration, residual: st.residual, progress: st.progress, message: st.message });
+    if (this.log.length > LOG_LIMIT) this.log = this.log.filter((_, i) => i % 2 === 0 || i === this.log.length - 1);
   }
 
   /** いまの形状・条件で計算済みの結果すべて（現在のタブ + 退避済みのもの） */

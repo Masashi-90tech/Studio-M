@@ -1,37 +1,71 @@
 // 右パネルの「解析の設定」。選んでいる解析ごとに project.flow / heat / stress / scalar を編集する。
 import { getMaterial } from '../core/materials';
-import { gridSize } from '../core/raster';
 import type { AnalysisKind, EdgeBC, HeatSettings } from '../core/types';
 import { checkField, clear, fieldRow, h, numField, section, selectField } from './dom';
 import { formatNumber, formatQuantity } from './format';
+import { makeCtx, type PanelCtx } from './panel-kit';
+import { proCard } from './pro-panel';
 import { characteristicLength, fluidMaterials } from './project-utils';
+import { emCard } from './settings-em';
+import type { Runner } from './runner';
 import type { Store } from './state';
 
 const MM = 1000;
 
-export function initSettings(store: Store, host: HTMLElement): void {
-  let derived: (() => void)[] = [];
+export function initSettings(store: Store, runner: Runner, host: HTMLElement): { update: () => void } {
+  const derived: (() => void)[] = [];
+  const ctx: PanelCtx = makeCtx(store, runner, derived);
+  const change = ctx.change;
 
-  /** 値を書き換えて通知する。同じ欄の連続入力は 1 回の「元に戻す」にまとめる */
-  const change = (key: string, apply: () => void): void => {
-    store.checkpoint(`set:${key}`, 800);
-    apply();
-    store.touch('settings');
-  };
-
+  /** 格子の細かさ。自動のときは理由を見せ、プロでは自動 ⇄ 手動を切り替えられる */
   function domainCard(): HTMLElement {
     const p = store.project;
+    const pro = store.mode === 'pro';
     const gridText = h('div', { class: 'readout' });
     const nxOut = h('output', null, String(p.domain.nx));
-    const slider = h('input', { type: 'range', min: 50, max: 400, step: 10, value: p.domain.nx });
+    const slider = h('input', { type: 'range', min: 40, max: 600, step: 10, value: p.domain.nx, 'aria-label': '横のセル数' });
     slider.addEventListener('input', () => {
       change('nx', () => (store.project.domain.nx = Number(slider.value)));
       nxOut.textContent = slider.value;
     });
+    const autoRadio = h('input', { type: 'radio', name: 'grid-mode', value: 'auto' });
+    const manualRadio = h('input', { type: 'radio', name: 'grid-mode', value: 'manual' });
+    const setAuto = (auto: boolean): void => {
+      change('autoGrid', () => {
+        const d = store.project.domain;
+        if (!auto) d.nx = runner.grid?.nx ?? d.nx; // 手動にしたら、いま自動で使っている値から始める
+        d.autoGrid = auto;
+      });
+      updateGrid();
+    };
+    autoRadio.addEventListener('change', () => autoRadio.checked && setAuto(true));
+    manualRadio.addEventListener('change', () => manualRadio.checked && setAuto(false));
+    const sliderRow = fieldRow('格子の細かさ（横のセル数）', h('div', { class: 'slider' }, slider, nxOut), undefined);
+    const gridMode = h(
+      'div',
+      { class: 'pro-row' },
+      h(
+        'div',
+        { class: 'pro-head' },
+        h('span', { class: 'field-label' }, '格子の細かさ'),
+        h('div', { class: 'seg mini', role: 'radiogroup', 'aria-label': '格子の自動・手動' }, h('label', null, autoRadio, h('span', null, '自動')), h('label', null, manualRadio, h('span', null, '手動'))),
+      ),
+    );
+    gridMode.hidden = !pro;
+
     const updateGrid = (): void => {
-      const g = gridSize(store.project);
-      gridText.textContent = `格子 ${g.nx} × ${g.ny}（1セル ${formatQuantity(g.h, 'm')}）。細かいほどきれいですが、計算は重くなります`;
-      slider.value = String(store.project.domain.nx);
+      const d = store.project.domain;
+      const auto = d.autoGrid !== false;
+      const g = runner.grid;
+      autoRadio.checked = auto;
+      manualRadio.checked = !auto;
+      // 手動のときは標準モードでもスライダーを見せる（隠れた設定にならないように）
+      sliderRow.hidden = auto;
+      const cells = g ? `格子 ${g.nx} × ${g.ny}（1セル ${formatQuantity(g.h, 'm')}）` : '格子を準備中';
+      gridText.textContent = auto
+        ? `自動: nx=${g?.nx ?? '…'}（${g?.reason ?? '準備中'}）。${g ? `${cells}。` : ''}${pro ? '' : '細かさを自分で決めるには「プロ」モードで手動にします'}`
+        : `手動: ${cells}。細かいほどきれいですが、計算は重くなります${pro ? '' : '（プロモードで設定した値です）'}`;
+      slider.value = String(d.nx);
       nxOut.textContent = slider.value;
     };
     derived.push(updateGrid);
@@ -45,7 +79,8 @@ export function initSettings(store: Store, host: HTMLElement): void {
         numField({ label: '幅', unit: 'mm', value: p.domain.width * MM, min: 1, digits: 1, onChange: (v) => change('dw', () => (store.project.domain.width = v / MM)) }).root,
         numField({ label: '高さ', unit: 'mm', value: p.domain.height * MM, min: 1, digits: 1, onChange: (v) => change('dh', () => (store.project.domain.height = v / MM)) }).root,
       ),
-      fieldRow('格子の細かさ（横のセル数）', h('div', { class: 'slider' }, slider, nxOut), undefined),
+      gridMode,
+      sliderRow,
       gridText,
       numField({
         label: '厚さ（奥行き）',
@@ -193,7 +228,7 @@ export function initSettings(store: Store, host: HTMLElement): void {
     const pe = h('div', { class: 'readout' });
     const updatePe = (): void => {
       const p = store.project;
-      const cell = p.domain.width / p.domain.nx;
+      const cell = runner.grid?.h ?? p.domain.width / p.domain.nx;
       const Pe = (p.scalar.rho * Math.abs(p.scalar.u) * cell) / p.scalar.gamma;
       pe.textContent = `セルペクレ数 Pe = ρ·u·h/Γ ≈ ${formatNumber(Pe, 2)}。2 を超えると上流差分の数値拡散が目立ちます`;
     };
@@ -220,15 +255,34 @@ export function initSettings(store: Store, host: HTMLElement): void {
     );
   }
 
+  let lastGridKey = '';
+
   function build(): void {
     clear(host);
-    derived = [];
+    derived.length = 0;
     const k: AnalysisKind = store.analysis;
-    host.append(k === 'flow' ? flowCard() : k === 'heat' ? heatCard() : k === 'stress' ? stressCard() : scalarCard(), domainCard());
+    // かんたんモードの質問パネルは easy-panel.ts が受け持つ
+    host.hidden = store.mode === 'easy';
+    if (store.mode === 'easy') return;
+    const kindCard = k === 'flow' ? flowCard() : k === 'heat' ? heatCard() : k === 'stress' ? stressCard() : k === 'em' ? emCard(ctx) : scalarCard();
+    host.append(kindCard, domainCard());
+    if (store.mode === 'pro') host.append(proCard(ctx));
   }
 
   store.on('analysis', build);
   store.on('load', build);
+  store.on('mode', build);
   store.on('project', () => derived.forEach((fn) => fn()));
   build();
+
+  return {
+    /** 毎フレーム呼ぶ。計算を作り直したとき・自動値が変わったときに表示を更新する */
+    update(): void {
+      const g = runner.grid;
+      const key = `${runner.generation}|${g?.nx}|${runner.result?.scalars.length ?? 0}`;
+      if (key === lastGridKey) return;
+      lastGridKey = key;
+      derived.forEach((fn) => fn());
+    },
+  };
 }

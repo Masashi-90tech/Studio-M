@@ -19,6 +19,10 @@
           <span class="tagline">DIYのための工房</span>
         </div>
         <input id="projectName" class="project-name" type="text" aria-label="プロジェクト名" maxlength="60" placeholder="プロジェクト名" />
+        <div class="mode-wrap">
+          <div class="seg" id="modeSwitch"></div>
+          <button id="modeBadge" class="badge-btn" type="button" hidden title="プロ用の詳細設定が使われています。クリックでプロモードに切り替えます">詳細設定を変更済み</button>
+        </div>
         <div class="actions">
           <button id="btnNew" class="btn" type="button">新規</button>
           <div class="menu-wrap">
@@ -53,9 +57,12 @@
         </section>
 
         <aside class="side" id="side">
+          <div id="verdict" hidden></div>
           <div id="results"></div>
+          <div id="easy" hidden></div>
           <div id="props"></div>
           <div id="settings"></div>
+          <div id="proTools" hidden></div>
         </aside>
       </main>
       <div id="toasts" aria-live="polite"></div>

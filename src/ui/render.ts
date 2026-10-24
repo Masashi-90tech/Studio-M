@@ -88,6 +88,8 @@ export class CanvasView {
   private layoutDirty = true;
   private layoutKey = '';
   private lastGen = -1;
+  /** 図形の上に重ねて描く追加の部品（プローブ・断面線・電波の波源など） */
+  overlays: ((p: Paint) => void)[] = [];
   /** 再描画が必要か */
   invalid = true;
   lastRange: Range | null = null;
@@ -227,6 +229,8 @@ export class CanvasView {
     const sel: Shape | undefined = inp.selectedId ? inp.project.shapes.find((s) => s.id === inp.selectedId) : undefined;
     if (sel) drawHandles(paint, sel.geom, inp.touch);
     if (inp.draft) drawDraft(paint, inp.draft, inp.draftCloseNear);
+
+    for (const draw of this.overlays) draw(paint);
 
     if (showField && field && this.lastRange) drawLegend(paint, field, this.lastRange, cmap);
     drawScaleBar(paint);

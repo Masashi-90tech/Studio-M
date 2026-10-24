@@ -181,3 +181,43 @@ describe('熱解析: 特殊ケース', () => {
     expect(Math.abs(scalar(result, 'heatOut') - 10) / 10).toBeLessThan(0.01);
   });
 });
+
+describe('熱解析: プロ設定（advanced）', () => {
+  const rodWithEnds = (): Project => {
+    const p = rodProject();
+    p.shapes = [
+      { id: 'rod', name: '棒', role: 'solid', materialId: 'al6061', geom: { kind: 'rect', x: 0, y: 0.04, w: 1, h: 0.02 } },
+      { id: 'tl', name: '高温端', role: 'fixedTemp', materialId: '', tempC: 100, geom: { kind: 'rect', x: 0, y: 0.04, w: 0.01, h: 0.02 } },
+      { id: 'tr', name: '低温端', role: 'fixedTemp', materialId: '', tempC: 20, geom: { kind: 'rect', x: 0.99, y: 0.04, w: 0.01, h: 0.02 } },
+    ];
+    return p;
+  };
+
+  it('自動のときは既定の収束判定と反復上限を結果に報告する', () => {
+    const { result } = solve(rodWithEnds());
+    expect(scalar(result, 'tolerance')).toBe(1e-7);
+    expect(scalar(result, 'maxIterations')).toBe(20000);
+  });
+
+  it('tolerance を厳しくすると反復回数が増え、緩めると減る', () => {
+    const loose = rodWithEnds();
+    loose.heat.advanced = { tolerance: 1e-2 };
+    const tight = rodWithEnds();
+    tight.heat.advanced = { tolerance: 1e-12 };
+    const a = solve(loose);
+    const b = solve(rodWithEnds());
+    const c = solve(tight);
+    expect(a.iterations).toBeLessThan(b.iterations);
+    expect(b.iterations).toBeLessThan(c.iterations);
+    expect(scalar(c.result, 'tolerance')).toBe(1e-12);
+  });
+
+  it('maxIterations で打ち切ると警告が出る', () => {
+    const p = rodWithEnds();
+    p.heat.advanced = { tolerance: 1e-14, maxIterations: 3 };
+    const { result, iterations } = solve(p);
+    expect(iterations).toBe(3);
+    expect(scalar(result, 'maxIterations')).toBe(3);
+    expect(result.warnings.some((w) => w.includes('最大反復回数（3回）'))).toBe(true);
+  });
+});

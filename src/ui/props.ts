@@ -2,7 +2,7 @@
 import type { Shape, ShapeGeom, ShapeRole } from '../core/types';
 import { clear, fieldRow, h, numField, selectField, type NumField } from './dom';
 import { geomBBox, translateGeom } from './geometry';
-import { ensureRoleDefaults, ROLE_HINTS, ROLE_LABELS, ROLES, roleUsesMaterial, solidMaterials } from './project-utils';
+import { ensureRoleDefaults, materialOptionLabel, ROLE_HINTS, ROLE_LABELS, ROLES, roleUsesMaterial, solidMaterials } from './project-utils';
 import type { Store } from './state';
 
 const MM = 1000;
@@ -60,7 +60,7 @@ export function initProps(store: Store, host: HTMLElement): void {
       card.append(
         selectField(
           '材料',
-          solidMaterials().map((m) => ({ value: m.id, label: m.name })),
+          solidMaterials().map((m) => ({ value: m.id, label: materialOptionLabel(m, store.analysis) })),
           s.materialId,
           (v) => edit(s, 'mat', () => (s.materialId = v)),
         ).root,
@@ -194,6 +194,7 @@ export function initProps(store: Store, host: HTMLElement): void {
 
   store.on('selection', build);
   store.on('load', build);
+  store.on('analysis', build); // 電磁波では材料名に εr を添える
   store.on('project', (src) => {
     if (src === 'canvas') {
       // 図形が増減した可能性（追加・削除）は selection 側で再構築される。ここでは値の追従のみ

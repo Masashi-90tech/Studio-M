@@ -11,9 +11,13 @@ import type { EdgeBC, Field, Project, Raster, ResultSet, Solver, SolverFactory, 
 import { getMaterial } from '../core/materials';
 import { PcgSolver, SampledSeries, createStencil, progressFromResidual, type Stencil5 } from './linear';
 
-/** 収束判定: 相対残差 ‖r‖/‖b‖ がこれを下回れば収束 */
-const TOLERANCE = 1e-7;
-const MAX_ITERATIONS = 20000;
+// 収束判定: 相対残差 ‖r‖/‖b‖ がこれを下回れば収束（自動の値。project.heat.advanced で上書きできる）
+const DEFAULT_TOLERANCE = 1e-7;
+const DEFAULT_MAX_ITERATIONS = 20000;
+//
+// result().scalars に載せる「実際に使った値」（キーは固定）:
+// - tolerance:      '収束判定（相対残差）'
+// - maxIterations:  '最大反復回数'
 
 /** 組み立て結果 */
 interface HeatSystem {
@@ -194,6 +198,8 @@ class HeatSolver implements Solver {
   private readonly raster: Raster;
   private readonly sys: HeatSystem;
   private readonly cg: PcgSolver | null;
+  private readonly tolerance: number;
+  private readonly maxIterations: number;
   private readonly history = new SampledSeries();
   private readonly extraWarnings: string[] = [];
   private iteration = 0;
@@ -207,6 +213,10 @@ class HeatSolver implements Solver {
     this.project = project;
     this.raster = raster;
     this.sys = assemble(project, raster);
+    const adv = project.heat.advanced;
+    this.tolerance = adv?.tolerance !== undefined && adv.tolerance > 0 ? adv.tolerance : DEFAULT_TOLERANCE;
+    this.maxIterations =
+      adv?.maxIterations !== undefined && adv.maxIterations >= 1 ? Math.floor(adv.maxIterations) : DEFAULT_MAX_ITERATIONS;
 
     let solidCount = 0;
     for (let c = 0; c < raster.solid.length; c++) solidCount += raster.solid[c];
@@ -253,12 +263,12 @@ class HeatSolver implements Solver {
           if (!Number.isFinite(rel)) {
             this.done = true;
             this.extraWarnings.push('計算が発散しました。条件（熱伝達率・材料）を見直してください。');
-          } else if (rel < TOLERANCE) {
+          } else if (rel < this.tolerance) {
             this.done = true;
-          } else if (this.iteration >= MAX_ITERATIONS) {
+          } else if (this.iteration >= this.maxIterations) {
             this.done = true;
             this.extraWarnings.push(
-              `最大反復回数（${MAX_ITERATIONS}回）に達しましたが収束しきっていません（残差 ${rel.toExponential(1)}）。結果は参考値です。`,
+              `最大反復回数（${this.maxIterations}回）に達しましたが収束しきっていません（残差 ${rel.toExponential(1)}）。結果は参考値です。`,
             );
           }
         }
@@ -266,7 +276,7 @@ class HeatSolver implements Solver {
     }
     const progress = this.done
       ? 1
-      : Math.max(this.maxProgress, progressFromResidual(this.lastResidual, this.res0, TOLERANCE));
+      : Math.max(this.maxProgress, progressFromResidual(this.lastResidual, this.res0, this.tolerance));
     this.maxProgress = progress;
     return { done: this.done, progress, iteration: this.iteration, residual: this.lastResidual };
   }
@@ -375,6 +385,8 @@ class HeatSolver implements Solver {
         { key: 'avgTemp', label: '平均温度', unit: '°C', value: tSum / count },
         { key: 'totalHeat', label: '総発熱量', unit: 'W', value: this.sys.totalHeat },
         { key: 'heatOut', label: '放熱量', unit: 'W', value: heatOut },
+        { key: 'tolerance', label: '収束判定（相対残差）', unit: '', value: this.tolerance },
+        { key: 'maxIterations', label: '最大反復回数', unit: '回', value: this.maxIterations },
       ],
       history: [
         {

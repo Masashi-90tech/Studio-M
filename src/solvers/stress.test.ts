@@ -182,3 +182,37 @@ describe('stress solver', () => {
     expect(sec).toBeLessThan(10);
   }, 20000);
 });
+
+describe('stress solver: プロ設定（advanced）', () => {
+  const beam = (adv?: { tolerance?: number; maxIterations?: number }) => {
+    const p = makeProject(1.0, 0.1, 100, 0.01, [
+      shape('solid', rect(0, 0, 1.0, 0.1)),
+      shape('support', rect(0, 0, 0.01, 0.1)),
+      shape('load', rect(0.99, 0, 0.01, 0.1), { force: { fx: 0, fy: -100 } }),
+    ]);
+    if (adv) p.stress.advanced = adv;
+    return p;
+  };
+
+  it('自動のときは既定の収束判定と反復上限を結果に報告する', () => {
+    const { result } = solve(beam());
+    expect(scalar(result, 'tolerance')).toBe(1e-8);
+    expect(scalar(result, 'maxIterations')).toBe(Math.max(2000, 20 * (100 + 10)));
+  });
+
+  it('tolerance を厳しくすると反復回数が増える', () => {
+    const loose = solve(beam({ tolerance: 1e-3 }));
+    const auto = solve(beam());
+    const tight = solve(beam({ tolerance: 1e-11 }));
+    expect(loose.status.iteration).toBeLessThan(auto.status.iteration);
+    expect(auto.status.iteration).toBeLessThan(tight.status.iteration);
+    expect(tight.status.residual!).toBeLessThan(1e-11);
+  });
+
+  it('maxIterations で打ち切ると警告が出る', () => {
+    const { status, result } = solve(beam({ maxIterations: 5 }));
+    expect(status.iteration).toBe(5);
+    expect(scalar(result, 'maxIterations')).toBe(5);
+    expect(result.warnings.some((w) => w.includes('反復の上限（5回）'))).toBe(true);
+  });
+});

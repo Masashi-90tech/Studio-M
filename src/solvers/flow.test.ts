@@ -167,3 +167,65 @@ describe('createFlowSolver', () => {
     expect(r.history[0].t.length).toBeGreaterThanOrEqual(2000);
   });
 });
+
+describe('flow のプロ設定（advanced）', () => {
+  it('自動のときは latticeU=0.08・Cs=0.1 を結果に報告する', () => {
+    const p = cylinderProject(100);
+    const r = createFlowSolver(p, rasterize(p)).result();
+    expect(scalar(r, 'latticeU')).toBe(0.08);
+    expect(scalar(r, 'smagorinskyCs')).toBe(0.1);
+    expect(scalar(r, 'tau')!).toBeGreaterThan(0.5);
+  });
+
+  it('latticeU を指定するとそれを使い、τ もそれに合わせて変わる', () => {
+    const p = cylinderProject(100);
+    const auto = createFlowSolverWithOptions(p, rasterize(p));
+    p.flow.advanced = { latticeU: 0.04 };
+    const solver = createFlowSolverWithOptions(p, rasterize(p));
+    expect(solver.uLat).toBe(0.04);
+    expect(solver.tau).toBeLessThan(auto.tau);
+    expect(scalar(solver.result(), 'latticeU')).toBe(0.04);
+    expect(solver.result().warnings.some((w) => w.includes('丸めました'))).toBe(false);
+  });
+
+  it('latticeU が範囲外なら [0.01, 0.2] に丸めて警告する', () => {
+    const p = cylinderProject(100);
+    p.flow.advanced = { latticeU: 0.5 };
+    const hi = createFlowSolverWithOptions(p, rasterize(p));
+    expect(hi.uLat).toBe(0.2);
+    expect(hi.result().warnings.some((w) => w.includes('丸めました'))).toBe(true);
+    p.flow.advanced = { latticeU: 0.001 };
+    const lo = createFlowSolverWithOptions(p, rasterize(p));
+    expect(lo.uLat).toBe(0.01);
+    expect(lo.result().warnings.some((w) => w.includes('丸めました'))).toBe(true);
+  });
+
+  it('Cs=0（LES 無効）でも低 Re なら安定して動く', () => {
+    const p = cylinderProject(100);
+    p.flow.advanced = { smagorinskyCs: 0 };
+    const solver = createFlowSolverWithOptions(p, rasterize(p));
+    solver.advance(800);
+    const r = solver.result();
+    expect(scalar(r, 'smagorinskyCs')).toBe(0);
+    expect(scalar(r, 'drag')!).toBeGreaterThan(0);
+    expect(Number.isFinite(scalar(r, 'drag')!)).toBe(true);
+  });
+
+  it('perturbation=0 では初期に縦方向の流れが生じない。opts が advanced より優先される', () => {
+    const maxUy = (s: ReturnType<typeof createFlowSolverWithOptions>) =>
+      Math.max(...Array.from(field(s.result(), 'uy').data, Math.abs));
+    const p = cylinderProject(100);
+    p.flow.advanced = { perturbation: 0 };
+    const none = createFlowSolverWithOptions(p, rasterize(p));
+    expect(maxUy(none)).toBeLessThan(1e-9);
+    // advanced=0 でも opts=1 なら擾乱あり
+    const forced = createFlowSolverWithOptions(p, rasterize(p), { perturbation: 1 });
+    expect(maxUy(forced)).toBeGreaterThan(1e-9);
+    // advanced=2 は標準の 2 倍
+    p.flow.advanced = { perturbation: 2 };
+    const strong = createFlowSolverWithOptions(p, rasterize(p));
+    delete p.flow.advanced;
+    const std = createFlowSolverWithOptions(p, rasterize(p));
+    expect(maxUy(strong)).toBeGreaterThan(maxUy(std) * 1.9);
+  });
+});
