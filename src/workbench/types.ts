@@ -9,6 +9,7 @@
 //  - 重いもの（ソルバー・パネル）は `load…()` で遅延 import する。モジュール本体は軽く保つ
 //  - verdict など `load…` でない関数は、DOM に触れない純粋関数にする（毎フレーム呼ばれてもよいように）
 import type { AnalysisKind, Material, Project, Raster, ResultSet, SolverFactory, SolverStatus } from '../core/types';
+import type { MathProvider } from '../learn/types';
 import type { Prefs } from '../ui/modes';
 import type { Paint } from '../ui/overlay';
 import type { CanvasView } from '../ui/render';
@@ -178,8 +179,8 @@ export interface WorkbenchModule {
   presets?: string[];
 
   /**
-   * 数学の窓（判定の式を今の数値で見せる部品）。src/learn が提供する MathProvider を遅延 import で返す。
-   * 型はここでは決めない（workbench は learn に依存しない）。省略可。
+   * 数学の窓（判定の裏の式を今の数値で見せる部品）。src/learn が提供する MathProvider を遅延 import で返す。
+   * learn の型だけを使う（実行時の依存はこの import() の先にだけある）。省略可。
    */
-  math?: { loadProvider(): Promise<unknown> };
+  math?: { loadProvider(): Promise<MathProvider> };
 }

@@ -23,4 +23,6 @@ export const emWorkbench: WorkbenchModule = {
   materialLabel: (m) => (m.conductor ? `${m.name}（金属）` : `${m.name}（εr ${m.epsR ?? 1}）`),
   defaultField: 'field',
   presets: ['radar-cover', 'metal-shadow', 'wifi-room'],
+  // 数学の窓の式（学びモード）。使うときだけ読み込む
+  math: { loadProvider: async () => (await import('../../learn/providers/em')).emProvider },
 };

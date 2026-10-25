@@ -1,8 +1,9 @@
 // 電磁波の式。波長・半波長の厚み・板の透過率・dB・斜め入射・回折・距離による減衰。
+import { slabTransmission } from '../../core/slab';
 import type { Material, Project } from '../../core/types';
 import { formatSig, formatSub, formatValue } from '../format';
 import { dbInsight, powerInsight, ratioInsight } from '../insight';
-import { C0, amplitudeToDb, freeSpaceLossDb, halfWaveThickness, powerToDb, slabPower, toDeg, toRad, wavelength } from '../physics';
+import { C0, amplitudeToDb, freeSpaceLossDb, halfWaveThickness, powerToDb, toDeg, toRad, wavelength } from '../physics';
 import { topic } from '../topics';
 import type { Formula, MathProvider } from '../types';
 import { bodies, bodiesBox, boxOf, mathVar, safeMaterial, scalarOf } from './common';
@@ -169,8 +170,8 @@ export const emProvider: MathProvider = {
       approx: `垂直に当たる電波と、損失の小さい板の目安です。斜めに当たると必要な厚みが変わります（斜め入射の式を見てください）。${slabNote}`,
     };
 
-    const slabT0 = slabPower(epsR, tanD, e.thickness, e.freqHz).transmission;
-    const slabEval = (v: Record<string, number>): number => slabPower(v.epsR, v.tanD, v.d, v.f).transmission * 100;
+    const slabT0 = slabTransmission(epsR, tanD, e.thickness, e.freqHz).transmission;
+    const slabEval = (v: Record<string, number>): number => slabTransmission(v.epsR, v.tanD, v.d, v.f).transmission * 100;
     const slab: Formula = {
       id: 'em-slab',
       title: '板の透過率（反射の重なり）',

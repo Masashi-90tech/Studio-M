@@ -8,7 +8,9 @@ import { initEasyPanel } from './ui/easy-panel';
 import { Editor } from './ui/editor';
 import { formatNumber, formatQuantity } from './ui/format';
 import { initHeader } from './ui/header';
+import { initLearnDrawer } from './ui/learn-drawer';
 import { withLoading } from './ui/lazy';
+import { initMathCard } from './ui/math-card';
 import { initModeSwitch } from './ui/mode-switch';
 import { initialMode, loadUiState } from './ui/modes';
 import { initOverlayHost } from './ui/overlay-host';
@@ -54,6 +56,9 @@ const settings = initSettings(store, runner, $('settings'));
 const easy = initEasyPanel(store, runner, $('easy'));
 const results = initResults(store, runner, $('results'));
 const verdict = initVerdictCard(store, runner, $('verdict'));
+// 数学の窓（判定カードの下）と「学ぶ」ドロワー。中身の学びモードは開いたときに遅延 import する
+const mathCard = initMathCard({ store, runner, host: $('mathWindow') });
+const learnDrawer = initLearnDrawer({ store, runner, math: mathCard, drawer: $('learnDrawer'), button: $<HTMLButtonElement>('btnLearn'), chipHost: $('learnChip') });
 
 // プロ専用の道具は、プロモードを初めて開くときに読み込む
 let proSuite: { update(): void } | null = null;
@@ -164,6 +169,8 @@ function frame(now: number): void {
   const stepped = runner.tick();
   results.update();
   verdict.update();
+  mathCard.update();
+  learnDrawer.update();
   settings.update();
   easy.update();
   proSuite?.update();

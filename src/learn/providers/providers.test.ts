@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { PRESETS, beamHandCalc, halfWaveThicknessMm } from '../../ui/presets';
 import { slabTransmission } from '../../solvers/em';
 import type { AnalysisKind } from '../../core/types';
-import { slabPower } from '../physics';
 import type { Formula } from '../types';
 import { MATH_PROVIDERS, getMathProvider } from './index';
 import { beamParams } from './stress';
@@ -249,20 +248,6 @@ describe('電磁波', () => {
     expect(thin).toBeLessThan(f.evaluate(b));
     expect(f.evaluate({ ...b, d: 1.9e-3 })).toBeCloseTo(slabTransmission(b.epsR, b.tanD, 1.9e-3, b.f).transmission * 100, 9);
     expect(f.insight!({ ...b, d: b.d / 2 }, b)).toContain('透過は');
-  });
-  it('学びモード内の slabPower はソルバーの slabTransmission と同じ', () => {
-    for (const [eps, tan, d, f] of [
-      [2.8, 0.01, 3.7e-3, 24e9],
-      [2.8, 0.01, 1.9e-3, 24e9],
-      [5.5, 0.05, 0.1, 2.4e9],
-      [78, 0.12, 2e-3, 2.4e9],
-      [1, 0, 1e-3, 10e9],
-    ]) {
-      const a = slabPower(eps, tan, d, f);
-      const b = slabTransmission(eps, tan, d, f);
-      expect(a.transmission).toBeCloseTo(b.transmission, 12);
-      expect(a.reflection).toBeCloseTo(b.reflection, 12);
-    }
   });
   it('dB: 電力 1/2 → −3 dB、振幅 2 倍 → +6 dB、10 倍 → +10 / +20 dB', () => {
     const p = get('em-db-power', 'em', 'radar-cover');

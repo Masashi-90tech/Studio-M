@@ -1,12 +1,14 @@
 // ワークベンチの登録表。画面（ハーネス）は解析の種類を見分けず、ここから引いて使う。
 // 解析を足すときは modules/<kind>.ts を作り、index.ts で registerWorkbench に渡す。
 import type { AnalysisKind, Material, Project, Raster, Solver, SolverFactory } from '../core/types';
+import type { MathProvider } from '../learn/types';
 import type { OverlayFactory, PanelFactory, PanelSlot, WorkbenchModule } from './types';
 
 const modules = new Map<AnalysisKind, WorkbenchModule>();
 /** 読み込み済みのソルバーの作り方（読み込み中の Promise も入れて二重に読まない） */
 const solverLoads = new Map<AnalysisKind, Promise<SolverFactory>>();
 const solverReady = new Map<AnalysisKind, SolverFactory>();
+const mathLoads = new Map<AnalysisKind, Promise<MathProvider | null>>();
 const panelLoads = new Map<string, Promise<PanelFactory | null>>();
 const panelReady = new Map<string, PanelFactory>();
 
@@ -93,4 +95,18 @@ export function peekPanelFactory(kind: AnalysisKind, slot: PanelSlot): PanelFact
 export async function loadOverlayFactory(kind: AnalysisKind): Promise<OverlayFactory | null> {
   const wb = modules.get(kind);
   return wb?.ui?.loadOverlay ? wb.ui.loadOverlay() : null;
+}
+
+// ---------- 数学の窓 ----------
+
+/** 数学の窓の式の提供者を読み込む（初回だけ import する）。その解析に数学の窓がなければ null。失敗したら次回やり直せる */
+export function loadMathProvider(kind: AnalysisKind): Promise<MathProvider | null> {
+  const cached = mathLoads.get(kind);
+  if (cached) return cached;
+  const load = modules.get(kind)?.math?.loadProvider;
+  if (!load) return Promise.resolve(null);
+  const p = load();
+  mathLoads.set(kind, p);
+  p.catch(() => mathLoads.delete(kind));
+  return p;
 }

@@ -72,4 +72,40 @@ describe('画面（ハーネス）のシェル', () => {
     }
     expect(hits).toEqual([]);
   });
+
+  it('学びモード（src/learn）は、画面から遅延 import か型としてだけ読み込む', () => {
+    // 静的な import（型以外）で learn を読むと、起動時に学びモード全体が入ってしまう
+    const hits: string[] = [];
+    for (const f of shellFiles()) {
+      for (const m of strip(read(f)).matchAll(/^\s*import\s+(type\s+)?[^;]*?from\s+['"]([^'"]*learn\/[^'"]*)['"]/gm)) {
+        if (!m[1]) hits.push(`${f}: ${m[2]}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('src/learn は core だけに依存する（ui・workbench・solvers を import しない。テストは除く）', () => {
+    const hits: string[] = [];
+    const walk = (dir: string): string[] =>
+      readdirSync(join(SRC, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`]));
+    for (const f of walk('learn').filter((x) => x.endsWith('.ts') && !x.endsWith('.test.ts'))) {
+      for (const m of read(f).matchAll(/from\s+['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+        const spec = m[1] ?? m[2];
+        if (/(^|\/)(ui|workbench|solvers|export)(\/|$)/.test(spec)) hits.push(`${f}: ${spec}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('ワークベンチが learn から読むのは、型（import type）と遅延 import() だけ', () => {
+    const hits: string[] = [];
+    const walk = (dir: string): string[] =>
+      readdirSync(join(SRC, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`]));
+    for (const f of walk('workbench').filter((x) => x.endsWith('.ts') && !x.endsWith('.test.ts'))) {
+      for (const m of strip(read(f)).matchAll(/^\s*import\s+(type\s+)?[^;]*?from\s+['"]([^'"]*learn\/[^'"]*)['"]/gm)) {
+        if (!m[1]) hits.push(`${f}: ${m[2]}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
 });

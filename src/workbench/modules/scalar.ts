@@ -18,4 +18,6 @@ export const scalarWorkbench: WorkbenchModule = {
   // 判定は出さない（verdict なし）
   defaultField: 'phi',
   presets: ['square-column'],
+  // 数学の窓の式（学びモード）。使うときだけ読み込む
+  math: { loadProvider: async () => (await import('../../learn/providers/scalar')).scalarProvider },
 };

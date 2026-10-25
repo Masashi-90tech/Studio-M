@@ -34,4 +34,6 @@ export const stressWorkbench: WorkbenchModule = {
   viewTraits: { vectorMask: 'solid', deform: true },
   defaultField: 'vonMises',
   presets: ['l-bracket', 'cantilever'],
+  // 数学の窓の式（学びモード）。使うときだけ読み込む
+  math: { loadProvider: async () => (await import('../../learn/providers/stress')).stressProvider },
 };

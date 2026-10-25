@@ -26,4 +26,6 @@ export const heatWorkbench: WorkbenchModule = {
   applyAction: applyHeatAction,
   defaultField: 'temperature',
   presets: ['heatsink', 'board'],
+  // 数学の窓の式（学びモード）。使うときだけ読み込む
+  math: { loadProvider: async () => (await import('../../learn/providers/heat')).heatProvider },
 };

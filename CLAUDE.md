@@ -23,7 +23,10 @@ npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML 
 | 3. ソルバー | `src/solvers/` | 解析エンジン。`Project` と `Raster` を受け取り `Solver` を返す | DOM・UI・export・workbench の import |
 | 4. 出力 | `src/export/` | Excel など | UI・workbench の import |
 | 5. ワークベンチ | `src/workbench/` | 解析 1 つ分のまとめ（ソルバー・パネル・判定・プリセット・数学の窓）と登録表 | 画面（シェル）側からの逆向きの import |
+| 5. 学び | `src/learn/` | 数学の窓（式の提供者・部品）、レッスン、進み具合の保存。ワークベンチと同じ層の機能モジュール | `src/core` だけ import してよい（ソルバー・workbench・ui は import しない。テストは除く）。画面から見えるのは `src/learn` の入口と、ワークベンチ経由の `math.loadProvider` |
 | 6. 画面 | `src/ui/`、`src/main.ts` | 表示と操作（ハーネス） | ソルバー・解析ごとのモジュール内部への直接アクセス（`src/workbench` の登録表経由のみ） |
+
+`src/learn` は画面（ハーネス）から**使うときに遅延 import** する（数学の窓を開く・「学ぶ」を開く）。式の提供者（`MathProvider`）だけは、解析ごとのワークベンチが `math.loadProvider`（`() => import('../../learn/providers/<kind>')`）で公開し、画面は `loadMathProvider(kind)`（`src/workbench/registry.ts`）で引く。ワークベンチが learn から使ってよいのは型（`import type`）だけ。
 
 ワークベンチのパネルは `src/ui/` の部品（`dom`・`panel-kit`・`easy-kit`・`format` など）を使ってよい。逆に画面のシェルは、解析の種類を `if (kind === 'em')` のように見分けない（`src/workbench/shell.test.ts` が確かめる）。
 

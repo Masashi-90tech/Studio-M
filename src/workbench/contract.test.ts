@@ -8,7 +8,7 @@ import { rasterize } from '../core/raster';
 import type { AnalysisKind, Project, Raster, ResultSet, SolverStatus } from '../core/types';
 import { DEFAULT_PREFS } from '../ui/modes';
 import { PRESETS } from '../ui/presets';
-import { createSolver, getWorkbench, listWorkbenches, loadSolverFactory, registerWorkbench } from './index';
+import { createSolver, getWorkbench, listWorkbenches, loadMathProvider, loadSolverFactory, registerWorkbench } from './index';
 import type { Verdict, VerdictInput, WorkbenchModule } from './types';
 import { CHIP_TEXT } from './verdict-kit';
 
@@ -124,8 +124,19 @@ describe.each(listWorkbenches().map((w) => [w.kind, w] as const))('ワークベ�
     const ui = wb.ui;
     const loaded = await Promise.all([ui?.loadSettings?.(), ui?.loadEasy?.(), ui?.loadPro?.(), ui?.loadOverlay?.()]);
     for (const f of loaded) if (f !== undefined) expect(typeof f).toBe('function');
-    // 数学の窓は learn が後から付ける。付いているなら読み込める形であること
+    // 数学の窓は省略可。付いているなら読み込める形であること
     if (wb.math) expect(typeof wb.math.loadProvider).toBe('function');
+  });
+
+  it('数学の窓の式の提供者を登録表から読み込め、種類が合っていて、結果なしでも式を返す', async () => {
+    expect(wb.math, `${kind}: math.loadProvider`).toBeDefined();
+    const provider = await loadMathProvider(kind);
+    expect(provider?.kind).toBe(kind);
+    expect(await loadMathProvider(kind)).toBe(provider); // 2 回目は同じもの
+    const { project } = smallCase(wb);
+    const formulas = provider!.formulas({ project, result: null });
+    expect(formulas.length).toBeGreaterThan(0);
+    for (const f of formulas) expect(Number.isFinite(f.evaluate(Object.fromEntries(f.vars.map((v) => [v.key, v.value]))))).toBe(true);
   });
 
   it('ソルバーが契約どおりの ResultSet を返し、判定が妥当な値を返す', async () => {

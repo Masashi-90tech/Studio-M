@@ -1,5 +1,5 @@
 import { emInputs } from '../providers/em';
-import { slabPower } from '../physics';
+import { slabTransmission } from '../../core/slab';
 import { topic } from '../topics';
 import type { Lesson } from '../types';
 
@@ -82,7 +82,7 @@ PLA で 24 GHz なら、d = 12.5 ÷ (2 × 1.67) ≈ **3.7 mm**。プリセット
       check: ({ project }) => {
         const e = emInputs(project);
         if (!e.hasSlab || Math.abs(e.thickness - 3.73e-3) < 0.3e-3) return false;
-        return slabPower(e.slab.epsR ?? 1, e.slab.tanD ?? 0, e.thickness, e.freqHz).transmission >= 0.9;
+        return slabTransmission(e.slab.epsR ?? 1, e.slab.tanD ?? 0, e.thickness, e.freqHz).transmission >= 0.9;
       },
     },
   ],

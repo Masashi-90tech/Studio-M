@@ -1,4 +1,6 @@
 // 学びモード用の小さな DOM ヘルパー。画面側（src/ui/dom.ts）には依存しない。
+// src/ui/dom.ts と似ているのは意図的: 学び（src/learn）は src/core だけに依存する層なので、画面の部品を逆向きに import しない。
+// h() は 15 行ほどで、core には DOM を置けない。共通の置き場を作るほどではないので、コピーを持つ。style の扱いだけ違う。
 type Child = Node | string | null | undefined | false;
 type Props = Record<string, unknown>;
 

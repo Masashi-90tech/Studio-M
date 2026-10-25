@@ -21,4 +21,6 @@ export const flowWorkbench: WorkbenchModule = {
   viewTraits: { vectorMask: 'fluid', particles: true },
   defaultField: 'speed',
   presets: ['karman', 'naca0012'],
+  // 数学の窓の式（学びモード）。使うときだけ読み込む
+  math: { loadProvider: async () => (await import('../../learn/providers/flow')).flowProvider },
 };
