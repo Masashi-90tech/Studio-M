@@ -177,6 +177,52 @@ describe('熱', () => {
     expect(f.evaluate(base) / final).toBeCloseTo(1 - Math.exp(-1), 6);
     expect(f.evaluate({ ...base, t: base.t * 20 }) / final).toBeGreaterThan(0.999);
   });
+  it('LDO の損失 P = (Vin − Vout) × I: 5 V → 3.3 V・0.5 A で 0.85 W、電流が 2 倍なら発熱も 2 倍', () => {
+    const f = get('heat-ldo-loss', 'heat', 'board');
+    const base = baseVars(f);
+    expect(base).toMatchObject({ Vin: 5, Vout: 3.3, I: 0.5 });
+    expect(f.evaluate(base)).toBeCloseTo(0.85, 9);
+    expect(f.evaluate({ ...base, I: 1 })).toBeCloseTo(1.7, 9);
+    expect(f.insight!({ ...base, I: 1 }, base)).toBe('電流 I が 2 倍 → 発熱 P も 2 倍（比例だから）');
+    expect(f.evaluate({ ...base, Vin: 3 })).toBe(0); // Vin が Vout より低いときは損失 0
+  });
+  it('銅と基材の重み付き平均: 35 µm で約 8.9、70 µm でほぼ 2 倍。銅箔が 0 なら基材の値', () => {
+    const f = get('heat-copper-mix', 'heat', 'board');
+    const base = baseVars(f);
+    const k35 = f.evaluate(base);
+    expect(k35).toBeCloseTo((0.3 * (1.6e-3 - 35e-6) + 391 * 35e-6) / 1.6e-3, 6);
+    const k70 = f.evaluate({ ...base, tCu: 70e-6 });
+    expect(k70 / k35).toBeGreaterThan(1.9);
+    expect(k70 / k35).toBeLessThan(2);
+    expect(f.evaluate({ ...base, tCu: 0 })).toBeCloseTo(0.3, 9);
+    expect(f.insight!({ ...base, tCu: 70e-6 }, base)).toContain('2 倍');
+  });
+  it('基板（project.pcb）があれば、板厚・銅箔の厚さ・最も熱い部品を式に入れる', () => {
+    const p = PRESETS.find((x) => x.id === 'board')!.build();
+    p.pcb = { source: 'x.kicad_pcb', boardThicknessMm: 1.2, substrateId: 'fr4', layers: [{ name: 'F.Cu', thicknessUm: 35, polygons: [] }, { name: 'B.Cu', thicknessUm: 35, polygons: [] }] };
+    const formulas = getMathProvider('heat').formulas({ project: p, result: null });
+    const cu = formulas.find((f) => f.id === 'heat-copper-mix')!;
+    expect(baseVars(cu).T).toBeCloseTo(1.2e-3, 9);
+    expect(baseVars(cu).tCu).toBeCloseTo(70e-6, 12);
+    // いちばん発熱の大きい CPU（1.5 W）の損失になるように電流を逆算する
+    const ldo = formulas.find((f) => f.id === 'heat-ldo-loss')!;
+    expect(ldo.evaluate(baseVars(ldo))).toBeCloseTo(1.5, 9);
+  });
+  it('接合部温度 Tj = Ta + P·θja。結果に部品ごとの温度があれば、θja をそこから逆算する', () => {
+    const f = get('heat-junction', 'heat', 'board');
+    const base = baseVars(f);
+    expect(base.theta).toBe(50);
+    expect(f.evaluate(base)).toBeCloseTo(25 + 1.5 * 50, 9);
+    const p = PRESETS.find((x) => x.id === 'board')!.build();
+    const cpu = p.shapes.find((s) => s.heatW === 1.5)!;
+    const result = {
+      analysis: 'heat' as const, nx: 1, ny: 1, h: 1, fields: [], history: [], warnings: [], scalars: [],
+      perShape: [{ shapeId: cpu.id, label: cpu.name, values: [{ key: 'maxTemp', label: '', unit: '°C', value: 70 }] }],
+    };
+    const g = getMathProvider('heat').formulas({ project: { ...p, pcb: { source: 'x', boardThicknessMm: 1.6, substrateId: 'fr4', layers: [] } }, result }).find((x) => x.id === 'heat-junction')!;
+    expect(g.evaluate(baseVars(g))).toBeCloseTo(70, 6);
+    expect(g.insight!({ ...baseVars(g), theta: baseVars(g).theta * 2 }, baseVars(g))).toContain('2 倍');
+  });
   it('熱のつり合い: ΔT を上の式の答えにすると Q = P', () => {
     const f = get('heat-balance', 'heat', 'heatsink');
     expect(f.evaluate(baseVars(f))).toBeCloseTo(10, 6);

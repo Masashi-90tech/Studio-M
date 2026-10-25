@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { defaultProject } from '../../core/project';
-import type { Field, Raster, ResultSet, SolverStatus } from '../../core/types';
+import type { Field, PcbInfo, Raster, ResultSet, SolverStatus } from '../../core/types';
 import { kgToNewton } from '../../core/units';
 import { DEFAULT_PREFS } from '../../ui/modes';
 import { getWorkbench } from '../index';
 import type { SlabFn, Verdict, VerdictInput } from '../types';
 import { emVerdict, findSlab, recommendSlab } from './em';
 import { flowVerdict, reynoldsWords } from './flow';
-import { heatVerdict, materialTempLimits, nextCooling } from './heat';
+import { heatVerdict, marginLevel, materialTempLimits, nextCooling, partRows, partsVerdict } from './heat';
 import { stressVerdict } from './stress';
 
 /** 登録表のワークベンチ経由で判定を作る（画面と同じ入口） */
@@ -87,6 +87,127 @@ describe('heatVerdict / materialTempLimits', () => {
     expect(nextCooling(7)?.h).toBe(25);
     expect(nextCooling(25)?.h).toBe(60);
     expect(nextCooling(60)).toBeUndefined();
+  });
+});
+
+/** 部品ごとの結果つきの熱の結果を作る */
+function partsResult(parts: { id: string; name: string; maxC: number; limitC?: number; heatW?: number }[]): ResultSet {
+  return {
+    analysis: 'heat',
+    nx: 2,
+    ny: 2,
+    h: 0.001,
+    fields: [],
+    scalars: [{ key: 'maxTemp', label: '最高温度', unit: '°C', value: Math.max(...parts.map((p) => p.maxC)) }],
+    history: [],
+    warnings: [],
+    perShape: parts.map((p) => ({
+      shapeId: p.id,
+      label: p.name,
+      values: [
+        { key: 'maxTemp', label: '最高温度', unit: '°C', value: p.maxC },
+        { key: 'avgTemp', label: '平均温度', unit: '°C', value: p.maxC - 3 },
+        { key: 'heatW', label: '発熱', unit: 'W', value: p.heatW ?? 1 },
+        ...(p.limitC === undefined
+          ? []
+          : [
+              { key: 'limitC', label: '上限温度', unit: '°C', value: p.limitC },
+              { key: 'marginC', label: '余裕', unit: 'K', value: p.limitC - p.maxC },
+            ]),
+      ],
+    })),
+  };
+}
+
+const PCB: PcbInfo = { source: 't.kicad_pcb', boardThicknessMm: 1.6, substrateId: 'fr4', layers: [{ name: 'F.Cu', thicknessUm: 35, polygons: [] }] };
+const DONE: SolverStatus = { done: true, progress: 1, iteration: 10 };
+
+describe('熱の判定: 部品ごとの上限（基板）', () => {
+  it('余裕 10 K 以上は OK、0〜10 K は注意、負は NG', () => {
+    expect(marginLevel(10)).toBe('ok');
+    expect(marginLevel(9.9)).toBe('warn');
+    expect(marginLevel(0)).toBe('warn');
+    expect(marginLevel(-0.1)).toBe('ng');
+  });
+  it('部品の行は余裕の少ない順で、上限のない部品は最後に並ぶ', () => {
+    const rows = partRows(
+      partsResult([
+        { id: 'a', name: 'R1', maxC: 60 },
+        { id: 'b', name: 'U1', maxC: 100, limitC: 125 },
+        { id: 'c', name: 'U2', maxC: 130, limitC: 125 },
+      ]),
+    );
+    expect(rows.map((r) => r.shapeId)).toEqual(['c', 'b', 'a']);
+    expect(rows[0].marginC).toBe(-5);
+    expect(rows[2].limitC).toBeUndefined();
+  });
+  it('NG: 超える部品の名前・温度・上限を見出しに出す', () => {
+    const v = partsVerdict(partRows(partsResult([{ id: 'u2', name: 'U2 L298N', maxC: 132, limitC: 125 }])), 25);
+    expect(v.level).toBe('ng');
+    expect(v.headline).toBe('U2 L298N が 132°C で、上限 125°C を超えます');
+  });
+  it('注意・OK と、ほかに余裕の少ない部品の案内', () => {
+    const rows = partRows(
+      partsResult([
+        { id: 'a', name: 'U1', maxC: 120, limitC: 125 },
+        { id: 'b', name: 'U3', maxC: 100, limitC: 105 },
+        { id: 'c', name: 'U4', maxC: 50, limitC: 125 },
+      ]),
+    );
+    const warn = partsVerdict(rows, 25);
+    expect(warn.level).toBe('warn');
+    expect(warn.headline).toContain('U1');
+    expect(warn.lines.join('\n')).toContain('U3');
+    expect(warn.lines.join('\n')).not.toContain('U4');
+    const ok = partsVerdict(partRows(partsResult([{ id: 'c', name: 'U4', maxC: 50, limitC: 125 }])), 25);
+    expect(ok.level).toBe('ok');
+    expect(ok.headline).toContain('U4');
+  });
+  it('ワークベンチの判定: 基板なら 2oz 銅箔・ファン・発熱の見直しを次の一手に出す', () => {
+    const p = defaultProject();
+    p.pcb = structuredClone(PCB);
+    p.heat.surfaceH = 7;
+    const result = partsResult([{ id: 'u2', name: 'U2 L298N', maxC: 132, limitC: 125 }]);
+    const v = computeVerdict({ kind: 'heat', project: p, result, status: DONE, raster: null, prefs: DEFAULT_PREFS })!;
+    expect(v.level).toBe('ng');
+    expect(v.headline).toContain('U2 L298N');
+    expect(v.actions.map((a) => a.kind)).toEqual(['cooling', 'copper', 'review']);
+    expect(v.lines.join('')).toContain('銅ベタ');
+    // 材料をアルミにする、は基板では出さない
+    expect(v.actions.some((a) => a.kind === 'material')).toBe(false);
+  });
+  it('すでに 2oz なら銅箔の次の一手は出さず、強いファンなら冷やし方も出さない', () => {
+    const p = defaultProject();
+    p.pcb = structuredClone(PCB);
+    p.pcb.layers[0].thicknessUm = 70;
+    p.heat.surfaceH = 60;
+    const result = partsResult([{ id: 'u2', name: 'U2', maxC: 130, limitC: 125 }]);
+    const v = computeVerdict({ kind: 'heat', project: p, result, status: DONE, raster: null, prefs: DEFAULT_PREFS })!;
+    expect(v.actions.map((a) => a.kind)).toEqual(['review']);
+  });
+  it('OK のときは次の一手を出さない。計算中は計算中の判定', () => {
+    const p = defaultProject();
+    p.pcb = structuredClone(PCB);
+    const ok = computeVerdict({ kind: 'heat', project: p, result: partsResult([{ id: 'u', name: 'U', maxC: 60, limitC: 125 }]), status: DONE, raster: null, prefs: DEFAULT_PREFS })!;
+    expect(ok.level).toBe('ok');
+    expect(ok.actions).toHaveLength(0);
+    const pending = computeVerdict({ kind: 'heat', project: p, result: null, status: null, raster: null, prefs: DEFAULT_PREFS })!;
+    expect(pending.level).toBe('pending');
+  });
+  it('上限つきの部品がなければ、これまでどおり材料の耐熱で判定する（基板でない場合も同じ）', () => {
+    const p = defaultProject();
+    const result = partsResult([{ id: 'a', name: '発熱体', maxC: 60 }]);
+    const v = computeVerdict({ kind: 'heat', project: p, result, status: DONE, raster: null, prefs: DEFAULT_PREFS })!;
+    expect(v.level).toBe('info');
+    expect(v.headline).toContain('60');
+  });
+  it('部品に上限がある基板でないプロジェクトでは、冷やし方と材料の次の一手を出す', () => {
+    const p = defaultProject();
+    p.shapes = [{ id: 'a', name: 'チップ', role: 'heatSource', materialId: 'pla', geom: { kind: 'rect', x: 0, y: 0, w: 0.01, h: 0.01 } }];
+    p.heat.surfaceH = 7;
+    const v = computeVerdict({ kind: 'heat', project: p, result: partsResult([{ id: 'a', name: 'チップ', maxC: 90, limitC: 85 }]), status: DONE, raster: null, prefs: DEFAULT_PREFS })!;
+    expect(v.level).toBe('ng');
+    expect(v.actions.map((a) => a.kind)).toEqual(['cooling', 'material']);
   });
 });
 
@@ -237,6 +358,20 @@ describe('applyAction（次の一手の反映）', () => {
     expect(p.shapes.map((s) => s.materialId)).toEqual(['al6061', 'c1100']);
     wb.applyAction!({ project: p, action: { kind: 'cooling', h: 25, label: '' } });
     expect(p.heat.surfaceH).toBe(25);
+  });
+  it('熱（基板）: 銅箔の厚さを倍にする。部品を選ぶ操作は selectShape に渡す', () => {
+    const wb = getWorkbench('heat')!;
+    const p = defaultProject();
+    p.pcb = structuredClone(PCB);
+    wb.applyAction!({ project: p, action: { kind: 'copper', factor: 2, label: '' } });
+    expect(p.pcb.layers[0].thicknessUm).toBe(70);
+    const picked: (string | null)[] = [];
+    wb.applyAction!({ project: p, action: { kind: 'review', shapeId: 'u2', label: '' }, selectShape: (id) => picked.push(id) });
+    expect(picked).toEqual(['u2']);
+    // pcb がなくても、選択の関数がなくても壊れない
+    const q = defaultProject();
+    expect(() => wb.applyAction!({ project: q, action: { kind: 'copper', factor: 2, label: '' } })).not.toThrow();
+    expect(() => wb.applyAction!({ project: q, action: { kind: 'review', shapeId: 'x', label: '' } })).not.toThrow();
   });
   it('強度: 厚みを増やす・材料を全物体に反映する', () => {
     const wb = getWorkbench('stress')!;

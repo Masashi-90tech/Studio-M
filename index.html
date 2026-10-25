@@ -29,12 +29,22 @@
             <button id="btnPreset" class="btn" type="button" aria-haspopup="menu" aria-expanded="false">プリセット ▾</button>
             <div id="presetMenu" class="menu" role="menu" hidden></div>
           </div>
-          <button id="btnLearn" class="btn learn-btn" type="button" aria-expanded="false" aria-controls="learnDrawer" title="数学と物理をレッスンで学び直します">学ぶ</button>
-          <button id="btnSave" class="btn" type="button">保存</button>
-          <button id="btnOpen" class="btn" type="button">開く</button>
+          <div class="menu-wrap">
+            <button id="btnFile" class="btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="fileMenu">ファイル ▾</button>
+            <div id="fileMenu" class="menu menu-narrow" role="menu" aria-label="ファイル" hidden>
+              <button id="btnOpen" class="menu-item" type="button" role="menuitem"><strong>開く</strong><span>保存したプロジェクト（.studiom.json）を開きます</span></button>
+              <button id="btnKicad" class="menu-item" type="button" role="menuitem"><strong>KiCad基板を開く</strong><span>.kicad_pcb を読み、部品ごとの温度を調べます</span></button>
+              <button id="btnSave" class="menu-item" type="button" role="menuitem"><strong>保存</strong><span>プロジェクトをファイルに書き出します</span></button>
+            </div>
+          </div>
           <input id="fileInput" type="file" accept=".json,application/json" hidden />
+          <button id="btnLearn" class="btn learn-btn" type="button" aria-expanded="false" aria-controls="learnDrawer" title="数学と物理をレッスンで学び直します" hidden>学ぶ</button>
           <button id="btnExcel" class="btn primary" type="button">Excel出力</button>
           <button id="btnFormula" class="btn" type="button" title="Excel 自身が計算する数式入りのブックを作ります">Excel数式ブック</button>
+          <div class="menu-wrap">
+            <button id="btnPrefs" class="btn icon-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="prefsPopover" aria-label="設定" title="設定"><span aria-hidden="true">⚙</span></button>
+            <div id="prefsPopover" class="menu menu-narrow prefs-pop" role="dialog" aria-label="設定" hidden></div>
+          </div>
         </div>
       </header>
 
@@ -60,7 +70,7 @@
         <aside class="side" id="side">
           <div id="verdict" hidden></div>
           <div id="learnChip" hidden></div>
-          <div id="mathWindow"></div>
+          <div id="mathWindow" hidden></div>
           <div id="results"></div>
           <div id="easy" hidden></div>
           <div id="props"></div>

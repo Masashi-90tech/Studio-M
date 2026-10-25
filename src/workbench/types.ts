@@ -46,8 +46,8 @@ export interface PanelHandle {
 /** パネルの作り方。作ったらすぐ container に描き、操作口を返す */
 export type PanelFactory = (opts: PanelOptions) => PanelHandle;
 
-/** パネルの種類: 標準モードの設定 / かんたんモードの質問 / プロモードの詳細設定 */
-export type PanelSlot = 'settings' | 'easy' | 'pro';
+/** パネルの種類: 標準モードの設定 / かんたんモードの質問 / プロモードの詳細設定 / 結果ボックスの追加表示 */
+export type PanelSlot = 'settings' | 'easy' | 'pro' | 'results';
 
 // ---------- キャンバスの重ね描き ----------
 
@@ -75,7 +75,11 @@ export type VerdictAction =
   | { kind: 'thicker'; factor: number; label: string }
   | { kind: 'material'; materialId: string; label: string }
   | { kind: 'cooling'; h: number; label: string }
-  | { kind: 'slab'; thicknessMm: number; label: string };
+  | { kind: 'slab'; thicknessMm: number; label: string }
+  /** 基板の銅箔の厚さを factor 倍にする（熱。project.pcb の各層の thicknessUm） */
+  | { kind: 'copper'; factor: number; label: string }
+  /** 部品を選んで、発熱などを見直せるようにする（熱） */
+  | { kind: 'review'; shapeId: string; label: string };
 
 export interface Verdict {
   level: VerdictLevel;
@@ -154,6 +158,8 @@ export interface WorkbenchModule {
     loadPro?(): Promise<PanelFactory>;
     /** キャンバスの重ね描き（波源の印など） */
     loadOverlay?(): Promise<OverlayFactory>;
+    /** 結果ボックスの下に足す表示（熱の部品ごとの一覧など）。container の中だけを触る */
+    loadResultsExtra?(): Promise<PanelFactory>;
   };
 
   /** 解析を始める前の案内（物体がない、など）。初心者向けの文で返す。省略時は案内なし */
@@ -167,7 +173,7 @@ export interface WorkbenchModule {
    */
   verdict?(input: VerdictInput): Verdict | null;
   /** 判定の「次の一手」をプロジェクトに反映する。この解析の verdict が返す action を扱う */
-  applyAction?(opts: { project: Project; action: VerdictAction }): void;
+  applyAction?(opts: { project: Project; action: VerdictAction; selectShape?: (shapeId: string | null) => void }): void;
 
   /** 材料プルダウンの表示名（例: 電磁波では比誘電率を添える）。省略時は材料名 */
   materialLabel?(material: Material): string;

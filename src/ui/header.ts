@@ -1,6 +1,8 @@
-// ヘッダー: プロジェクト名、新規・プリセット・保存・開く・Excel 出力。
+// ヘッダー: プロジェクト名、新規・プリセット・ファイル（開く・KiCad基板を開く・保存）・Excel 出力。
 import { clear, downloadBlob, h, toast } from './dom';
+import { attachMenu } from './menu';
 import { openPreset } from './open-preset';
+import { openKicadImport } from './pcb-open';
 import { PRESETS } from './presets';
 import { safeFileName, sanitizeProject } from './project-utils';
 import type { Runner } from './runner';
@@ -34,10 +36,6 @@ export function initHeader(store: Store, runner: Runner): void {
   });
 
   // ---------- プリセット ----------
-  const closeMenu = (): void => {
-    presetMenu.hidden = true;
-    presetBtn.setAttribute('aria-expanded', 'false');
-  };
   clear(presetMenu);
   for (const p of PRESETS) {
     presetMenu.append(
@@ -47,28 +45,18 @@ export function initHeader(store: Store, runner: Runner): void {
           class: 'menu-item',
           type: 'button',
           role: 'menuitem',
-          onclick: () => {
-            openPreset({ store, presetId: p.id });
-            closeMenu();
-          },
+          onclick: () => openPreset({ store, presetId: p.id }),
         },
         h('strong', null, p.title),
         h('span', null, p.description),
       ),
     );
   }
-  presetBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const open = presetMenu.hidden;
-    presetMenu.hidden = !open;
-    presetBtn.setAttribute('aria-expanded', String(open));
-  });
-  document.addEventListener('click', (e) => {
-    if (!presetMenu.contains(e.target as Node)) closeMenu();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeMenu();
-  });
+  attachMenu({ button: presetBtn, menu: presetMenu });
+
+  // ---------- ファイル（開く・KiCad基板を開く・保存） ----------
+  attachMenu({ button: $('btnFile'), menu: $('fileMenu') });
+  $('btnKicad').addEventListener('click', () => void openKicadImport({ store }));
 
   // ---------- 保存 / 開く ----------
   $('btnSave').addEventListener('click', () => {

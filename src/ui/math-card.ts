@@ -7,6 +7,7 @@ import { loadMathProvider } from '../workbench';
 import { clear, h } from './dom';
 import { createGate, LEARN_UPDATE_MS, loadMathOpen, resolveMathOpen, resultForLearning, saveMathOpen } from './learn-logic';
 import { withLoading } from './lazy';
+import { createLearnSwitch, loadWhenEnabled, type LearnSwitch } from './learn-pref';
 import type { Runner } from './runner';
 import type { Store } from './state';
 
@@ -22,8 +23,10 @@ export interface MathCardHandle {
   isOpen(): boolean;
 }
 
-export function initMathCard(opts: { store: Store; runner: Runner; host: HTMLElement }): MathCardHandle {
+export function initMathCard(opts: { store: Store; runner: Runner; host: HTMLElement; learn?: LearnSwitch }): MathCardHandle {
   const { store, runner, host } = opts;
+  // 学習機能の表示設定。OFF のあいだはカードを隠し、学びモードの部品を読み込まない（省略時は常に ON）
+  const learn = opts.learn ?? createLearnSwitch({ initial: true });
   let saved = loadMathOpen();
   let isOpen = resolveMathOpen({ saved, mode: store.mode });
   let win: MathWindow | null = null;
@@ -62,7 +65,7 @@ export function initMathCard(opts: { store: Store; runner: Runner; host: HTMLEle
     }
     isOpen = next;
     syncView();
-    if (isOpen) {
+    if (isOpen && learn.get()) {
       force = true;
       void ensureWindow().then(() => update());
     }
@@ -71,10 +74,10 @@ export function initMathCard(opts: { store: Store; runner: Runner; host: HTMLEle
   /** 学びモードの部品と、いまの解析の式の提供者を読み込み、数学の窓を作る */
   async function ensureWindow(): Promise<MathWindow | null> {
     if (win) return win;
-    if (building) return null;
+    if (building || !learn.get()) return null;
     building = true;
     try {
-      const mod = await withLoading({ label: '数学の窓', task: import('../learn/components') });
+      const mod = await withLoading({ label: '数学の窓', task: loadWhenEnabled(learn, () => import('../learn/components')) });
       if (!mod) return null;
       if (!win) {
         clear(body);
@@ -101,7 +104,7 @@ export function initMathCard(opts: { store: Store; runner: Runner; host: HTMLEle
   }
 
   function update(): void {
-    if (!isOpen || !win) return;
+    if (!learn.get() || !isOpen || !win) return;
     const kind = runner.analysis;
     const provider = providers.get(kind);
     if (provider === undefined) {
@@ -136,16 +139,28 @@ export function initMathCard(opts: { store: Store; runner: Runner; host: HTMLEle
     if (next !== isOpen) setOpen(next, false);
   });
 
+  // 設定で ON / OFF が切り替わったら、カードを出し入れする（ON にして初めて学びモードを読み込む）
+  function syncEnabled(): void {
+    host.hidden = !learn.get();
+    if (learn.get() && isOpen) {
+      force = true;
+      void ensureWindow().then(() => update());
+    }
+  }
+  learn.subscribe(syncEnabled);
+
   syncView();
-  if (isOpen) void ensureWindow().then(() => update());
+  syncEnabled();
 
   async function open(): Promise<boolean> {
+    if (!learn.get()) return false;
     if (!isOpen) setOpen(true, true);
     await ensureWindow();
     return !!win;
   }
 
   async function openFormula(formulaId: string): Promise<void> {
+    if (!learn.get()) return;
     await open();
     force = true;
     // 式の提供者の読み込みと描画を待ってから、その式の位置へ動かす
