@@ -1062,3 +1062,8 @@ pre.log {
     display: none;
   }
 }
+
+/* ワークベンチのパネルの差し込み口（レイアウトには影響しない） */
+.panel-slot {
+  display: contents;
+}

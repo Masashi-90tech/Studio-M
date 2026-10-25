@@ -1,8 +1,9 @@
 // 選択した図形のプロパティパネル（名前・役割・材料・数値・寸法）。寸法は mm で表示し、内部ではメートルで持つ。
 import type { Shape, ShapeGeom, ShapeRole } from '../core/types';
+import { materialLabel } from '../workbench';
 import { clear, fieldRow, h, numField, selectField, type NumField } from './dom';
 import { geomBBox, translateGeom } from './geometry';
-import { ensureRoleDefaults, materialOptionLabel, ROLE_HINTS, ROLE_LABELS, ROLES, roleUsesMaterial, solidMaterials } from './project-utils';
+import { ensureRoleDefaults, ROLE_HINTS, ROLE_LABELS, ROLES, roleUsesMaterial, solidMaterials } from './project-utils';
 import type { Store } from './state';
 
 const MM = 1000;
@@ -60,7 +61,7 @@ export function initProps(store: Store, host: HTMLElement): void {
       card.append(
         selectField(
           '材料',
-          solidMaterials().map((m) => ({ value: m.id, label: materialOptionLabel(m, store.analysis) })),
+          solidMaterials().map((m) => ({ value: m.id, label: materialLabel({ kind: store.analysis, material: m }) })),
           s.materialId,
           (v) => edit(s, 'mat', () => (s.materialId = v)),
         ).root,

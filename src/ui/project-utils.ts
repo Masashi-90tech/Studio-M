@@ -1,7 +1,7 @@
 // プロジェクトの複製・検証・UI 用の定数。純粋関数だけを置く。
 import { MATERIALS } from '../core/materials';
 import { defaultProject, newShapeId } from '../core/project';
-import type { AnalysisKind, EdgeBC, EMSettings, FlowSettings, Material, Project, ScalarSettings, Shape, ShapeGeom, ShapeRole } from '../core/types';
+import type { EdgeBC, EMSettings, FlowSettings, Project, ScalarSettings, Shape, ShapeGeom, ShapeRole } from '../core/types';
 import { geomBBox, type Pt } from './geometry';
 
 export const ROLE_LABELS: Record<ShapeRole, string> = {
@@ -24,29 +24,12 @@ export const ROLE_HINTS: Record<ShapeRole, string> = {
 
 export const ROLES: ShapeRole[] = ['solid', 'heatSource', 'hole', 'fixedTemp', 'support', 'load'];
 
-export const ANALYSIS_LABELS: Record<AnalysisKind, string> = {
-  flow: '流れ',
-  heat: '熱',
-  stress: '強度',
-  em: '電磁波',
-  scalar: '対流拡散',
-};
-
-export const ANALYSES: AnalysisKind[] = ['flow', 'heat', 'stress', 'em', 'scalar'];
-
 export function roleUsesMaterial(role: ShapeRole): boolean {
   return role === 'solid' || role === 'heatSource';
 }
 
 export function solidMaterials() {
   return MATERIALS.filter((m) => m.kind === 'solid');
-}
-
-/** 材料プルダウンの表示名。電磁波では比誘電率 εr（金属はその旨）を添える */
-export function materialOptionLabel(m: Material, analysis: AnalysisKind): string {
-  if (analysis !== 'em') return m.name;
-  if (m.conductor) return `${m.name}（金属）`;
-  return `${m.name}（εr ${m.epsR ?? 1}）`;
 }
 
 export function fluidMaterials() {

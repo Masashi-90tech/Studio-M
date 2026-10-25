@@ -2,7 +2,7 @@
 import { MATERIALS } from '../core/materials';
 import type { Project, Shape, ShapeGeom } from '../core/types';
 import { geomBBox } from './geometry';
-import { GRAVITY, kgToNewton, newtonToKg } from './verdict';
+import { GRAVITY, kgToNewton, newtonToKg } from '../core/units';
 
 export { GRAVITY, kgToNewton, newtonToKg };
 

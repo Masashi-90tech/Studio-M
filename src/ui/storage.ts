@@ -1,6 +1,7 @@
 // localStorage への自動保存。使えない環境（プライベートモードなど）でも黙って動き続ける。
+import { DEFAULT_ANALYSIS, isAnalysisKind } from '../core/analyses';
 import type { AnalysisKind, Project } from '../core/types';
-import { ANALYSES, sanitizeProject } from './project-utils';
+import { sanitizeProject } from './project-utils';
 
 const KEY = 'studio-m-lite:v1';
 
@@ -16,7 +17,7 @@ export function loadSaved(): SavedState | null {
     const raw = JSON.parse(text) as { project?: unknown; analysis?: unknown };
     const project = sanitizeProject(raw.project);
     if (!project) return null;
-    const analysis = ANALYSES.includes(raw.analysis as AnalysisKind) ? (raw.analysis as AnalysisKind) : 'flow';
+    const analysis = isAnalysisKind(raw.analysis) ? raw.analysis : DEFAULT_ANALYSIS;
     return { project, analysis };
   } catch {
     return null;

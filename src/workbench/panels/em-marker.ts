@@ -1,9 +1,11 @@
 // 電磁波の波源をキャンバスに描き、点波源はドラッグで動かせるようにする。
-import type { Pt } from './geometry';
-import { ACCENT, setFont, type Paint } from './overlay';
-import { clampEmPoint } from './easy-logic';
-import type { CanvasView } from './render';
-import type { Store } from './state';
+// ワークベンチ（modules/em.ts）が重ね描きとして遅延 import で読み込む。電磁波のタブを開いている間だけ有効。
+import { clampEmPoint } from '../../ui/easy-logic';
+import type { Pt } from '../../ui/geometry';
+import { ACCENT, setFont, type Paint } from '../../ui/overlay';
+import type { CanvasView } from '../../ui/render';
+import type { Store } from '../../ui/state';
+import type { OverlayFactory } from '../types';
 
 const SRC = '#c2410c';
 
@@ -24,7 +26,6 @@ function arrow(p: Paint, from: Pt, to: Pt): void {
 
 /** 波源の印: 平面波は進む向きの矢印、点波源は ● と同心円 */
 export function drawEmSource(p: Paint, store: Store): void {
-  if (store.analysis !== 'em') return;
   const { em, domain } = store.project;
   const c = p.ctx;
   const d = p.dpr;
@@ -88,31 +89,29 @@ export function drawEmSource(p: Paint, store: Store): void {
   c.restore();
 }
 
-/** 点波源のドラッグ移動。Editor より先にイベントを受け取り、波源を掴んだときだけ横取りする */
-export function attachEmMarker(store: Store, view: CanvasView): void {
+/**
+ * 点波源のドラッグ移動。Editor より先にイベントを受け取り（capture）、波源を掴んだときだけ横取りする。
+ * 戻り値で、付けたイベントを外す。
+ */
+export function attachEmMarker(store: Store, view: CanvasView): () => void {
   const canvas = view.canvas;
   let dragging = false;
   let moved = false;
 
-  canvas.addEventListener(
-    'pointerdown',
-    (e) => {
-      if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
-      if (store.analysis !== 'em') return;
-      if (store.tool !== 'select' || store.project.em.source !== 'point') return;
-      const dom = store.project.domain;
-      const w = view.toWorld(e.clientX, e.clientY, dom);
-      const q = clampEmPoint(store.project);
-      const tol = view.pxToWorld(e.pointerType === 'mouse' ? 14 : 22, dom);
-      if (Math.hypot(w[0] - q.x, w[1] - q.y) > tol) return;
-      e.stopImmediatePropagation();
-      dragging = true;
-      moved = false;
-      canvas.setPointerCapture(e.pointerId);
-    },
-    true,
-  );
-  canvas.addEventListener('pointermove', (e) => {
+  const onDown = (e: PointerEvent): void => {
+    if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    if (store.tool !== 'select' || store.project.em.source !== 'point') return;
+    const dom = store.project.domain;
+    const w = view.toWorld(e.clientX, e.clientY, dom);
+    const q = clampEmPoint(store.project);
+    const tol = view.pxToWorld(e.pointerType === 'mouse' ? 14 : 22, dom);
+    if (Math.hypot(w[0] - q.x, w[1] - q.y) > tol) return;
+    e.stopImmediatePropagation();
+    dragging = true;
+    moved = false;
+    canvas.setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: PointerEvent): void => {
     if (!dragging) return;
     e.stopImmediatePropagation();
     const dom = store.project.domain;
@@ -125,12 +124,26 @@ export function attachEmMarker(store: Store, view: CanvasView): void {
     store.project.em.pointY = Math.min(dom.height, Math.max(0, w[1]));
     store.touch('canvas');
     view.invalid = true;
-  });
+  };
   const end = (e: PointerEvent): void => {
     if (!dragging) return;
     dragging = false;
     if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
   };
+  canvas.addEventListener('pointerdown', onDown, true);
+  canvas.addEventListener('pointermove', onMove, true);
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
+  return () => {
+    canvas.removeEventListener('pointerdown', onDown, true);
+    canvas.removeEventListener('pointermove', onMove, true);
+    canvas.removeEventListener('pointerup', end);
+    canvas.removeEventListener('pointercancel', end);
+  };
 }
+
+/** 重ね描き: 波源の印を描き、点波源をドラッグできるようにする */
+export const emOverlay: OverlayFactory = ({ store, view }) => {
+  const detach = attachEmMarker(store, view);
+  return { draw: (p) => drawEmSource(p, store), dispose: detach };
+};

@@ -1,4 +1,5 @@
 // 右パネル上部の「結果」ボックス。状態・スカラー値・注意・表示切り替え・再生ボタン。
+import { getWorkbench } from '../workbench';
 import { COLORMAP_LABELS, type ColormapName } from './colormap';
 import { clear, h } from './dom';
 import { formatNumber, formatQuantity } from './format';
@@ -146,8 +147,9 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
     fieldSel.disabled = !r || r.fields.length === 0;
 
     const vec = hasVectorFields(r);
-    particles.root.hidden = !(store.analysis === 'flow' && vec);
-    deform.root.hidden = !(store.analysis === 'stress' && vec);
+    const traits = getWorkbench(store.analysis)?.viewTraits;
+    particles.root.hidden = !(traits?.particles && vec);
+    deform.root.hidden = !(traits?.deform && vec);
   }
 
   store.on('analysis', () => {

@@ -1,7 +1,8 @@
 // 左のツールレール、キャンバス上の「新しい図形」バー、解析タブ。
 import type { AnalysisKind, ShapeRole } from '../core/types';
+import { listWorkbenches, materialLabel } from '../workbench';
 import { clear, h } from './dom';
-import { ANALYSES, ANALYSIS_LABELS, materialOptionLabel, ROLE_HINTS, ROLE_LABELS, ROLES, roleUsesMaterial, solidMaterials } from './project-utils';
+import { ROLE_HINTS, ROLE_LABELS, ROLES, roleUsesMaterial, solidMaterials } from './project-utils';
 import type { Store, Tool } from './state';
 
 const svg = (inner: string): string =>
@@ -74,7 +75,7 @@ export function initStageBar(store: Store, bar: HTMLElement): void {
   // 電磁波のときは比誘電率 εr も並べる
   const fillMaterials = (): void => {
     clear(mat);
-    for (const m of solidMaterials()) mat.append(h('option', { value: m.id }, materialOptionLabel(m, store.analysis)));
+    for (const m of solidMaterials()) mat.append(h('option', { value: m.id }, materialLabel({ kind: store.analysis, material: m })));
     mat.value = store.newMaterialId;
   };
   fillMaterials();
@@ -116,19 +117,13 @@ export function initStageBar(store: Store, bar: HTMLElement): void {
   refresh();
 }
 
-const TAB_HINT: Record<AnalysisKind, string> = {
-  flow: '空気や水の流れ（非定常）',
-  heat: '熱の伝わりと温度',
-  stress: '力をかけたときの応力と変形',
-  em: '電波・レーダーの伝わり方（FDTD）',
-  scalar: '動画と同じ Excel 式の対流拡散',
-};
-
 export function initTabs(store: Store, tabs: HTMLElement): void {
   const buttons = new Map<AnalysisKind, HTMLButtonElement>();
-  for (const k of ANALYSES) {
-    const b = h('button', { class: 'tab', type: 'button', role: 'tab', title: TAB_HINT[k], onclick: () => store.setAnalysis(k) }, ANALYSIS_LABELS[k]);
-    if (k === 'scalar') b.append(h('small', null, 'Excel式'));
+  // タブは登録されたワークベンチから作る（並び順・名前・説明・バッジはワークベンチが持つ）
+  for (const wb of listWorkbenches()) {
+    const k = wb.kind;
+    const b = h('button', { class: 'tab', type: 'button', role: 'tab', title: wb.shortHint, onclick: () => store.setAnalysis(k) }, wb.label);
+    if (wb.tabBadge) b.append(h('small', null, wb.tabBadge));
     buttons.set(k, b);
     tabs.append(b);
   }

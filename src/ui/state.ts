@@ -1,5 +1,6 @@
 // アプリ全体の状態（プロジェクト・選択・ツール・表示設定）と変更通知。
 // UI の各部品はここを購読し、変更は必ずここの関数を通す。
+import { DEFAULT_ANALYSIS } from '../core/analyses';
 import { defaultProject, newShapeId } from '../core/project';
 import type { AnalysisKind, Project, Shape, ShapeGeom, ShapeRole } from '../core/types';
 import type { ColormapName } from './colormap';
@@ -34,7 +35,7 @@ const UNDO_LIMIT = 60;
 
 export class Store {
   project: Project;
-  analysis: AnalysisKind = 'flow';
+  analysis: AnalysisKind = DEFAULT_ANALYSIS;
   tool: Tool = 'select';
   newRole: ShapeRole = 'solid';
   newMaterialId = 'al6061';
