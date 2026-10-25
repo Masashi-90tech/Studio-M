@@ -3,7 +3,7 @@
 // 単位は SI（m, N, Pa, kg）のまま。2D の平面応力要素（CPS4 など）を使い、厚さは *SOLID SECTION で与える。
 // 構成: 節点 → 要素 → 材料ごとの要素集合 → 材料 → 断面 → 拘束 → ステップ（荷重・出力要求）。
 
-import { GRAVITY, type Mesh } from './mesh';
+import type { Mesh } from './mesh';
 
 export interface InpOptions {
   /** 塑性（*PLASTIC）を入れるか。入れると荷重を増分で少しずつ掛ける */
@@ -13,7 +13,6 @@ export interface InpOptions {
   loadScale: number;
   /** 降伏後の硬化係数（E に対する割合 [%]） */
   hardeningPercent: number;
-  selfWeight: boolean;
   /** 先頭に入れる説明（日本語可。ccx は読み飛ばす） */
   title?: string;
 }
@@ -80,8 +79,8 @@ export function writeInp(mesh: Mesh, opts: InpOptions): string {
   const nonlinear = opts.plasticity || opts.largeDeformation;
   L.push(`*STEP${opts.largeDeformation ? ', NLGEOM' : ''}${nonlinear ? ', INC=1000' : ''}`);
   L.push('*STATIC');
-  // 増分: 初め 5%、成功が続けば最大 10%、収束しなければ自動で小さくする（最小 1e-6）
-  if (nonlinear) L.push('0.05, 1., 1e-6, 0.1');
+  // 増分: 初め 10%、成功が続けば最大 20%、収束しなければ自動で小さくする（最小 0.01%）
+  if (nonlinear) L.push('0.1, 1., 1e-4, 0.2');
   const s = opts.loadScale;
   if (mesh.nodalLoads.size > 0) {
     L.push('*CLOAD');
@@ -90,14 +89,16 @@ export function writeInp(mesh: Mesh, opts: InpOptions): string {
       if (f.fy !== 0) L.push(`${n}, 2, ${num(f.fy * s)}`);
     }
   }
-  if (opts.selfWeight) L.push('*DLOAD', `EALL, GRAV, ${num(GRAVITY * s)}, 0., -1., 0.`);
+  // 自重は mesh.nodalLoads に含まれている（mesh.ts）
 
-  // 出力: .dat は読み取り用（節点変位・支持の反力・要素の応力など）、.frd は ParaView / CGX 用
-  L.push('*NODE PRINT, NSET=NALL', 'U');
-  if (mesh.supportNodes.length > 0) L.push('*NODE PRINT, NSET=NSUP, TOTALS=ONLY', 'RF');
-  L.push('*EL PRINT, ELSET=EALL', opts.plasticity ? 'S, PEEQ' : 'S');
-  L.push('*NODE FILE', 'U, RF');
-  L.push('*EL FILE', opts.plasticity ? 'S, PEEQ' : 'S');
+  // 出力: .dat は読み取り用（節点変位・支持の反力・要素の応力など）、.frd は ParaView / CGX 用。
+  // 増分が多い計算では最後の増分だけを出す（FREQUENCY を大きくしても、ステップの最後は必ず出る）
+  const freq = nonlinear ? ', FREQUENCY=1000' : '';
+  L.push(`*NODE PRINT, NSET=NALL${freq}`, 'U');
+  if (mesh.supportNodes.length > 0) L.push(`*NODE PRINT, NSET=NSUP, TOTALS=ONLY${freq}`, 'RF');
+  L.push(`*EL PRINT, ELSET=EALL${freq}`, opts.plasticity ? 'S, PEEQ' : 'S');
+  L.push(`*NODE FILE${freq}`, 'U, RF');
+  L.push(`*EL FILE${freq}`, opts.plasticity ? 'S, PEEQ' : 'S');
   L.push('*END STEP');
   return L.join('\n') + '\n';
 }

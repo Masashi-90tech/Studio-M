@@ -30,10 +30,19 @@ async function step(
   opts: { logName?: string; timeoutMs?: number; onLine?: (line: string) => void; tolerate?: boolean } = {},
 ): Promise<{ ok: boolean; stdout: string }> {
   if (ctx.signal.aborted) throw cancelled();
-  const res = await ctx.run(cmd, args, {
-    timeoutMs: opts.timeoutMs ?? SHORT_MS,
-    onLine: opts.onLine ? (line, stream) => stream === 'stdout' && opts.onLine!(line) : undefined,
-  });
+  let res;
+  try {
+    res = await ctx.run(cmd, args, {
+      timeoutMs: opts.timeoutMs ?? SHORT_MS,
+      onLine: opts.onLine ? (line, stream) => stream === 'stdout' && opts.onLine!(line) : undefined,
+    });
+  } catch (e) {
+    if (ctx.signal.aborted) throw cancelled();
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new Error(`OpenFOAM のコマンド ${cmd} が見つかりません。OpenFOAM を入れるか、Docker で動かす設定にしてください。`);
+    }
+    throw e;
+  }
   await writeFile(join(ctx.workDir, `log.${opts.logName ?? cmd}`), res.stdout + (res.stderr ? `\n--- stderr ---\n${res.stderr}` : ''));
   if (ctx.signal.aborted) throw cancelled();
   if (res.code === 0) return { ok: true, stdout: res.stdout };
@@ -176,19 +185,21 @@ export async function solveFlow(req: JobRequest, ctx: AdapterContext): Promise<S
   const faces = collectBodyFaces({ cellToRaster, solid: plan.domain.solid, nx: raster.nx, ny: raster.ny });
   const useNut = spec.model !== 'laminar';
   const forces: ForceSeries = { t: [], fx: [], fy: [] };
-  let U = parseInternalField(await readFile(join(dir, times[times.length - 1], 'U'), 'utf8'), n);
-  let p = U;
+  let U = parseInternalField(await readFile(join(dir, times[0], 'U'), 'utf8'), n);
+  let p = parseInternalField(await readFile(join(dir, times[0], 'p'), 'utf8'), n);
   for (const [k, name] of times.entries()) {
     if (ctx.signal.aborted) throw cancelled();
-    const Uk = k === times.length - 1 ? U : parseInternalField(await readFile(join(dir, name, 'U'), 'utf8'), n);
-    p = parseInternalField(await readFile(join(dir, name, 'p'), 'utf8'), n);
+    if (k > 0) {
+      U = parseInternalField(await readFile(join(dir, name, 'U'), 'utf8'), n);
+      p = parseInternalField(await readFile(join(dir, name, 'p'), 'utf8'), n);
+    }
     const nut = useNut ? parseInternalField(await readFile(join(dir, name, 'nut'), 'utf8'), n) : undefined;
-    const f = bodyForce({ faces, h: raster.h, rho: plan.rho, nu: plan.nu, U: Uk, p, nut });
+    const f = bodyForce({ faces, h: raster.h, rho: plan.rho, nu: plan.nu, U, p, nut });
     forces.t.push(Number(name));
     forces.fx.push(f.fx);
     forces.fy.push(f.fy);
-    U = Uk;
   }
+  // この時点の U・p は最後の時刻のもの（結果の場に使う）
   const finalDir = times[times.length - 1];
 
   const warnings = [...plan.notes];
@@ -217,20 +228,17 @@ export async function solveFlow(req: JobRequest, ctx: AdapterContext): Promise<S
 
   // ---- 利用者に渡すファイル（名前は階層なし） ----
   const files: SolveOutput['files'] = [];
-  const addFile = async (name: string, description: string): Promise<void> => {
-    files.push({ name, description });
-  };
   const addCopy = async (from: string, name: string, description: string): Promise<void> => {
     if (!(await exists(join(dir, from)))) return;
     if (from !== name) await copyFile(join(dir, from), join(dir, name));
-    await addFile(name, description);
+    files.push({ name, description });
   };
   await addCopy('system/controlDict', 'controlDict', 'OpenFOAM の controlDict（時間・出力の設定）');
   await addCopy(`log.${solver}`, `log.${solver}`, `${solver} の計算ログ`);
   const k = plan.project.thickness / raster.h;
   const csv = ['time,drag_N,lift_N', ...forces.t.map((t, q) => `${t},${forces.fx[q] * k},${forces.fy[q] * k}`)].join('\n');
   await writeFile(join(dir, 'forces.csv'), csv + '\n');
-  await addFile('forces.csv', '物体にかかる力の時間変化（抗力・揚力 [N]、厚さ込み）');
+  files.push({ name: 'forces.csv', description: '物体にかかる力の時間変化（抗力・揚力 [N]、厚さ込み）' });
 
   ctx.progress(0.96, 'ParaView 用の結果（VTK）を書き出しています', 'reading');
   // 途中の時刻は力を求めたら不要。最後の時刻だけ残して VTK にする

@@ -7,10 +7,13 @@ import type { Project } from '../../../src/core/types';
 /** 要素の種類。CPS4 = 4 節点の平面応力、CPS4R = 低減積分、CPS8R = 8 節点（辺の中点にも節点）・低減積分 */
 export type PlaneStressElement = 'CPS4' | 'CPS4R' | 'CPS8R';
 
+/** 画面で選べる値。auto = 弾性は CPS4（Lite と同じ形）、塑性は CPS8R */
+export type ElementChoice = 'auto' | PlaneStressElement;
+
 export interface StressOptions {
   plasticity: boolean;
   largeDeformation: boolean;
-  elementType: PlaneStressElement;
+  elementType: ElementChoice;
   /** 塑性ありのとき、プロジェクトの荷重に掛けて最終的にかける倍率 */
   loadFactor: number;
   /** 降伏後の硬化係数（E に対する割合 [%]）。0 で完全弾塑性 */
@@ -55,13 +58,14 @@ export const STRESS_OPTION_SPECS: EngineOptionSpec[] = [
     key: 'elementType',
     label: '要素の種類',
     kind: 'select',
-    default: 'CPS4',
+    default: 'auto',
     choices: [
+      { value: 'auto', label: 'おまかせ（弾性は CPS4、塑性は CPS8R）' },
       { value: 'CPS4', label: 'CPS4（4 節点・Lite と同じ形）' },
       { value: 'CPS4R', label: 'CPS4R（4 節点・低減積分）' },
       { value: 'CPS8R', label: 'CPS8R（8 節点・低減積分。曲げに強い）' },
     ],
-    hint: 'Lite と比べたいときは CPS4 のままにしてください。',
+    hint: 'Lite と比べたいときは CPS4。塑性では CPS4 が実際より硬くなる（体積ロッキング）ので、おまかせでは CPS8R を使います。',
   },
 ];
 
@@ -79,11 +83,11 @@ const asNumber = (v: unknown, fallback: number): number => {
 
 export function parseStressOptions(options: JobRequest['options']): StressOptions {
   const o = options ?? {};
-  const et = String(o.elementType ?? 'CPS4').toUpperCase();
+  const et = String(o.elementType ?? 'auto').toUpperCase();
   return {
     plasticity: asBool(o.plasticity, false),
     largeDeformation: asBool(o.largeDeformation, false),
-    elementType: et === 'CPS4R' || et === 'CPS8R' ? et : 'CPS4',
+    elementType: et === 'CPS4' || et === 'CPS4R' || et === 'CPS8R' ? et : 'auto',
     loadFactor: Math.max(0.01, asNumber(o.loadFactor, 1)),
     hardeningPercent: Math.max(0, asNumber(o.hardeningPercent, 0)),
   };
@@ -109,15 +113,16 @@ const rowsOf = (project: Project, nx: number): number =>
 /**
  * 格子を決める。autoGrid が false でなければ core/auto の規則（Lite と同じ）で nx を決め、
  * quality に応じて細かくする（draft = Lite と同じ、standard = ×1.5、fine = ×2）。
- * 全セル数が MAX_CELLS を超えないように、超えるときは細かさを減らす。
+ * 全セル数が maxCells（既定 MAX_CELLS）を超えないように、超えるときは細かさを減らす。
  */
-export function chooseGrid(project: Project, quality: JobQuality = 'standard'): GridChoice {
-  const { project: resolved } = resolveProject(project, 'stress');
+export function chooseGrid(opts: { project: Project; analysis: 'stress' | 'heat'; quality?: JobQuality; maxCells?: number }): GridChoice {
+  const maxCells = opts.maxCells ?? MAX_CELLS;
+  const { project: resolved } = resolveProject(opts.project, opts.analysis);
   const baseNx = resolved.domain.nx;
-  const wanted = QUALITY_FACTOR[quality] ?? 1;
+  const wanted = QUALITY_FACTOR[opts.quality ?? 'standard'] ?? 1;
   let nx = Math.max(baseNx, Math.round(baseNx * wanted));
   let capped = false;
-  while (nx > baseNx && nx * rowsOf(resolved, nx) > MAX_CELLS) {
+  while (nx > baseNx && nx * rowsOf(resolved, nx) > maxCells) {
     nx--;
     capped = true;
   }
@@ -127,6 +132,6 @@ export function chooseGrid(project: Project, quality: JobQuality = 'standard'): 
   let note: string;
   if (nx === baseNx) note = `格子は Lite と同じ ${nx} × ${ny} セルです。`;
   else note = `格子は Lite（${baseNx} セル幅）の ${factor.toFixed(2).replace(/\.?0+$/, '')} 倍の細かさ（${nx} × ${ny} セル）にしました。`;
-  if (capped) note += `要素数の上限（${MAX_CELLS.toLocaleString('ja-JP')}）のため、細かさを抑えました。`;
+  if (capped) note += `要素数の上限（${maxCells.toLocaleString('ja-JP')}）のため、細かさを抑えました。`;
   return { project: out, baseNx, nx, ny, factor, note };
 }

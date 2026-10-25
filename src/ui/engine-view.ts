@@ -74,7 +74,8 @@ export function mountEngineView(opts: { store: Store; runner: Runner; session: E
           });
           control = h('label', { class: 'field' }, h('span', { class: 'field-label' }, spec.label, spec.unit ? h('span', { class: 'unit' }, ` [${spec.unit}]`) : null), input);
         }
-        box.append(control, spec.hint ? h('span', { class: 'hint' }, spec.hint) : null);
+        box.append(control);
+        if (spec.hint) box.append(h('span', { class: 'hint' }, spec.hint));
       }
       root.append(box);
     }

@@ -34,6 +34,23 @@ FreeCAD は何でもできる道具箱です。Studio M は道具箱を渡す代
   - 結果ブック: 条件・形状・材料、温度や応力のヒートマップ（条件付き書式）、履歴
   - 数式ブック: Excel 自身が反復計算で対流拡散を解く（動画と同じ考え方）
 
+## Studio M Engine（PC で本計算）
+
+Lite はブラウザの中の簡易な計算です。もっと確かな答えが欲しいときは、この PC の上で **Studio M Engine** を動かし、
+**CalculiX**（強度）や **OpenFOAM**（流れ）で「本計算」できます。結果は Lite の結果と切り替えたり、代表値を並べて比べたりできます。
+
+```bash
+npm run engine     # エンジンを起動（Node.js 22 以上）。画面に URL と合言葉が出る
+```
+
+1. ダウンロードした HTML（または `npm run dev` の開発版）で Studio M を開く
+2. ⚙ 設定 →「PCのエンジン」に URL と合言葉を貼り付けて「接続を確認」
+3. 強度・流れのタブで「本計算で解く」→ 進み具合 → 完了後に「Lite ⇄ 本計算」と比較表
+
+- 解析ソフトは別プロセスとして呼ぶだけで、Studio M には同梱しません（GPL）。入れ方（Ubuntu / Docker / Windows の WSL / macOS）は [docs/ENGINE.md](docs/ENGINE.md)
+- **安全**: エンジンは `127.0.0.1` だけで待ち受け、起動のたびに作る合言葉がないと答えません。画面から受け取るのは形と条件の JSON だけで、ファイルのパスや命令は受け取りません
+- claude.ai に公開したページ（Artifact）からは PC のエンジンに届きません。ダウンロードした HTML か開発版で使ってください
+
 ## 精度についての注意
 
 - 結果は**傾向と比較**のためのものです。絶対値として設計判断に使わないでください。
@@ -50,6 +67,8 @@ npm install       # 依存関係をインストール
 npm run dev       # 開発サーバーを起動
 npm test          # テストを実行（vitest）
 npm run build     # 型チェックのあと、dist/ に単一の HTML ファイルを出力
+npm run engine    # PC のエンジン（Studio M Engine）を起動。本計算に使う
+npm run check     # 型チェック + テスト + ライセンス確認
 ```
 
 `npm run build` の結果は、外部ファイルなしで単体で動く HTML です。
@@ -68,6 +87,7 @@ src/
 ├── core/      共通データモデル（types.ts）、材料（materials.ts）、格子化（raster.ts）、初期値（project.ts）
 ├── solvers/   流れ・熱・強度・対流拡散のソルバーと、その登録（index.ts）
 ├── export/    Excel 出力
+engine/        Studio M Engine（PC 上の Node.js サーバー）: server/（HTTP・ジョブ・実行）、adapters/（CalculiX・OpenFOAM の変換役）
 ├── workbench/ 解析 1 つ分のまとめ（ソルバー・パネル・判定・プリセット・数学の窓）と登録表
 ├── pcb/       KiCad 基板の取り込み（読み取り・部品ライブラリ・熱プロジェクトの組み立て・ダイアログ）
 ├── learn/     数学の窓（式の提供者・部品）、レッスン、進み具合
@@ -82,4 +102,4 @@ src/
 ## ライセンス
 
 - Studio M 自身のコード: MIT License
-- 将来 OpenFOAM など GPL のツールを使う場合は、**別プロセスとして呼び出し**、Studio M のコードにはリンクしません。
+- OpenFOAM・CalculiX など GPL のツールは、Studio M Engine から**別プロセスとして呼び出す**だけで、Studio M のコードにはリンクも同梱もしません。

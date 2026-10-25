@@ -7,7 +7,7 @@
 // 要素の値（応力・塑性ひずみ）は積分点ごとに並ぶ（平面応力要素は内部で 3D に広げられ、8 点になる）。
 // 積分点の平均は、双線形要素ではセルの中心の値に等しいので、読むそばから要素ごとの平均にまとめる。
 
-export type DatKind = 'displacement' | 'totalForce' | 'stress' | 'plasticStrain' | 'other';
+export type DatKind = 'displacement' | 'totalForce' | 'stress' | 'plasticStrain' | 'temperature' | 'totalHeat' | 'heatFlux' | 'other';
 
 export interface DatBlock {
   kind: DatKind;
@@ -27,9 +27,14 @@ const HEADERS: { re: RegExp; kind: DatKind; columns: number; perPoint: boolean }
   { re: /^\s*total force\s*\(/i, kind: 'totalForce', columns: 3, perPoint: false },
   { re: /^\s*stresses\s*\(/i, kind: 'stress', columns: 6, perPoint: true },
   { re: /^\s*equivalent plastic strain\s*\(/i, kind: 'plasticStrain', columns: 1, perPoint: true },
+  // 熱: 節点の温度、固定温度の節点の反力熱流（total heat generation = 熱の出入りの合計 [W]）、要素の熱流束
+  { re: /^\s*temperatures\s+for set/i, kind: 'temperature', columns: 1, perPoint: false },
+  { re: /^\s*total heat generation\s+for set/i, kind: 'totalHeat', columns: 1, perPoint: false },
+  { re: /^\s*heat flux\s*\(/i, kind: 'heatFlux', columns: 3, perPoint: true },
 ];
 
-const SET_TIME = /for set\s+(\S+)\s+and time\s+(\S+)/i;
+// 「for setEALL」のように空白なしの見出しもある
+const SET_TIME = /for set\s*(\S+)\s+and time\s+(\S+)/i;
 
 /** データ行（先頭が整数、残りが数値）か、totalForce のような数値だけの行 */
 function numbers(line: string): number[] | null {
@@ -91,7 +96,7 @@ export function parseDat(text: string): DatBlock[] {
     if (!cur) continue;
     if (line.trim() === '') {
       // 見出しの直後の空行は読み飛ばし、データのあとの空行でブロックを閉じる
-      if (ids.length > 0 || accumN > 0 || (cur.kind === 'totalForce' && values.length > 0)) finish();
+      if (ids.length > 0 || accumN > 0 || ((cur.kind === 'totalForce' || cur.kind === 'totalHeat') && values.length > 0)) finish();
       continue;
     }
     const nums = numbers(line);
@@ -99,8 +104,8 @@ export function parseDat(text: string): DatBlock[] {
       finish();
       continue;
     }
-    if (cur.kind === 'totalForce') {
-      values.push(...nums.slice(0, 3));
+    if (cur.kind === 'totalForce' || cur.kind === 'totalHeat') {
+      values.push(...nums.slice(0, cur.columns === 1 ? 1 : 3));
       continue;
     }
     const id = nums[0];

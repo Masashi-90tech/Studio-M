@@ -10,6 +10,7 @@ npm run check       # 型チェック + テスト + ライセンス確認（コ�
 npm test            # テストだけ
 npm run licenses    # OSS 台帳と依存パッケージの突き合わせ
 npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML を作る
+npm run engine      # PC 上の Studio M Engine を起動（本計算。docs/ENGINE.md）
 ```
 
 ## 層と依存の向き
@@ -26,6 +27,7 @@ npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML 
 | 5. 学び | `src/learn/` | 数学の窓（式の提供者・部品）、レッスン、進み具合の保存。ワークベンチと同じ層の機能モジュール | `src/core` だけ import してよい（ソルバー・workbench・ui は import しない。テストは除く）。画面から見えるのは `src/learn` の入口と、ワークベンチ経由の `math.loadProvider` |
 | 5. 基板 | `src/pcb/` | KiCad 基板の取り込み（v0.4）: ファイルの読み取り、部品の発熱ライブラリ、熱プロジェクトの組み立て、取り込みダイアログ。ワークベンチと同じ層の機能モジュール | `src/core` だけ import してよい（ソルバー・workbench は import しない。DOM を触るのはダイアログとプレビューだけで、そこは `src/ui/dom`・`src/ui/format` も可。テストは除く）。画面（シェル）は `src/pcb` を**遅延 import か `import type` だけ**で読む（`src/ui/pcb-open.ts` が入口。`src/workbench/shell.test.ts` と `src/pcb/layers.test.ts` が確かめる） |
 | 6. 画面 | `src/ui/`、`src/main.ts` | 表示と操作（ハーネス） | ソルバー・解析ごとのモジュール内部への直接アクセス（`src/workbench` の登録表経由のみ） |
+| 別プロセス. エンジン | `engine/` | Studio M Engine（PC 上の Node.js サーバー）。`server/`（HTTP・ジョブ・ctx.run）と `adapters/<名前>/`（CalculiX・OpenFOAM などの変換役）。ブラウザとは `src/core/engine-protocol.ts`・`engine-wire.ts` の型だけでやり取りする | `src/core` だけ import してよい（`src/ui`・`src/workbench`・`src/solvers` は import しない。テストは除く）。アダプターは自分で `spawn` せず、必ず `ctx.run` を使う。GPL の解析ソフトは別プロセスとして呼ぶだけで、同梱・リンクしない |
 
 `src/learn` は画面（ハーネス）から**使うときに遅延 import** する（数学の窓を開く・「学ぶ」を開く）。式の提供者（`MathProvider`）だけは、解析ごとのワークベンチが `math.loadProvider`（`() => import('../../learn/providers/<kind>')`）で公開し、画面は `loadMathProvider(kind)`（`src/workbench/registry.ts`）で引く。ワークベンチが learn から使ってよいのは型（`import type`）だけ。
 
@@ -34,6 +36,8 @@ npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML 
 結果ボックスの下に解析ごとの追加表示（熱の部品ごとの一覧など）を足したいときは、ワークベンチの任意項目 `ui.loadResultsExtra`（`PanelFactory` を遅延 import で返す）を使う。画面は `createPanelSlot` の `results` で差し込むだけで、解析の種類を見分けない。
 
 ワークベンチのパネルは `src/ui/` の部品（`dom`・`panel-kit`・`easy-kit`・`format` など）を使ってよい。逆に画面のシェルは、解析の種類を `if (kind === 'em')` のように見分けない（`src/workbench/shell.test.ts` が確かめる）。
+
+`src/ui/engine-*.ts`（PC のエンジンへの接続）は画面のシェルなので、解析の種類を見分けない。どの解析にエンジンがあるかは、サーバーが返す `EngineStatus.capabilities` を見て決める。通信（`engine-client.ts`）は fetch だけで DOM に触れず、読み込みは `engine-open.ts`（軽い入口）から遅延 import する。合言葉は閲覧者ごとの localStorage にだけ保存する。
 
 ## モジュールの約束
 
@@ -45,6 +49,14 @@ npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML 
 - **重いモジュールは遅延 import する**（`import()`）。ソルバー、解析ごとのパネル、Excel 出力、画像取り込み、プロ用ツール、将来の CAD エンジン（WASM）など。モジュールファイルは `() => import(...)` で配線するだけにして軽く保つ。読み込みが遅いときの表示と失敗時の日本語メッセージは `src/ui/lazy.ts`（`withLoading`）を使う。単一 HTML のビルドでは 1 ファイルにまとめられるが、デスクトップ版や Pages 版では必要なときだけ読み込まれる
 - **テストを付ける。** 純粋な関数は単体テスト。ソルバーは理論値や手計算との照合テスト。契約を満たしているか（必須のフィールド、単位、mask の長さ、判定の形）は `src/workbench/contract.test.ts` が登録済みの全ワークベンチに対して自動で確かめる
 - **外部エンジン（SolidCraft、OCCT、OpenFOAM など）は変換層越しに使う。** 外部の型を Studio M の中に漏らさない。バージョンを固定する
+
+### エンジンのアダプターを足すには
+
+1. `engine/adapters/<名前>/index.ts` で `EngineAdapter`（`engine/types.ts`）を export する。サーバーが起動時に自動で拾う（登録表の編集は要らない）
+2. 実行は `ctx.run(コマンド名, 引数の配列)` だけ。シェルを通さない。ファイルは `ctx.workDir` の中だけに書き、プロジェクトの文字列をコマンドやファイル名に使わない
+3. 失敗は、何が起きてどうすれば直るかを書いた日本語の Error にする（そのまま画面に出る）
+4. 解析ソフトを `docs/oss-ledger.json` に `separate-process` で記録する。詳しくは `docs/ENGINE.md`
+5. 契約（`engine-protocol.ts`・`engine/types.ts`）を変えるときは、項目を省略可能で足す（ブラウザとエンジンの版が違っても動くように）
 
 ### 新しい解析を足すには
 

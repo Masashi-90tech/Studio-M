@@ -85,6 +85,11 @@ export class Runner {
     return this.shownRemote() ? REMOTE_STATUS : this.liteStatus;
   }
 
+  /** Lite（ブラウザの中の計算）の結果。本計算を表示中でも Lite の結果を返す（比較表に使う） */
+  get liteResult(): ResultSet | null {
+    return this.lite;
+  }
+
   /** 形や条件が変わるたびに増える番号。本計算の結果が今のプロジェクトのものかを見分けるのに使う */
   get revision(): number {
     return this.rev;

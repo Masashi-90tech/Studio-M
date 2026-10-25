@@ -88,7 +88,16 @@ function labelComponents(raster: Raster): { comp: Int32Array; supported: boolean
   return { comp, supported };
 }
 
-export function buildMesh(project: Project, raster: Raster, elementType: PlaneStressElement): Mesh {
+export interface BuildMeshOptions {
+  project: Project;
+  raster: Raster;
+  elementType: PlaneStressElement;
+  /** 自重を節点荷重として入れる（重力は -y 方向）。省略時は入れない */
+  selfWeight?: boolean;
+}
+
+export function buildMesh(opts: BuildMeshOptions): Mesh {
+  const { project, raster, elementType } = opts;
   const { nx, ny, h } = raster;
   const t = project.thickness;
   const nCells = nx * ny;
@@ -210,21 +219,28 @@ export function buildMesh(project: Project, raster: Raster, elementType: PlaneSt
   }
 
   // ----- 荷重（セルごとの力を角の節点に 1/4 ずつ） -----
+  // 自重も同じ節点荷重にする（*DLOAD の重力だと、平面応力要素の反力の表示が荷重と合わなくなるため）。
+  // 4 節点要素は 1/4 ずつ。8 節点要素の一様な体積力と等価な配分は、角 −1/12、辺の中点 1/3。
   const nodalLoads = new Map<number, { fx: number; fy: number }>();
+  const addLoad = (n: number, fx: number, fy: number): void => {
+    const cur = nodalLoads.get(n);
+    if (cur) {
+      cur.fx += fx;
+      cur.fy += fy;
+    } else nodalLoads.set(n, { fx, fy });
+  };
   let appliedLoad = 0;
   for (let k = 0; k < nElem; k++) {
     const c = elementCell[k];
+    appliedLoad += Math.abs(raster.loadFx[c]) + Math.abs(raster.loadFy[c]);
     const fx = raster.loadFx[c] / 4;
     const fy = raster.loadFy[c] / 4;
-    appliedLoad += Math.abs(raster.loadFx[c]) + Math.abs(raster.loadFy[c]);
-    if (fx === 0 && fy === 0) continue;
-    for (let a = 0; a < 4; a++) {
-      const n = cornerNodes[k * 4 + a];
-      const cur = nodalLoads.get(n);
-      if (cur) {
-        cur.fx += fx;
-        cur.fy += fy;
-      } else nodalLoads.set(n, { fx, fy });
+    if (fx !== 0 || fy !== 0) for (let a = 0; a < 4; a++) addLoad(cornerNodes[k * 4 + a], fx, fy);
+    if (opts.selfWeight) {
+      const weight = materials[cellMat[c]].material.rho * GRAVITY * h * h * t;
+      const cornerShare = quad8 ? -1 / 12 : 1 / 4;
+      for (let a = 0; a < 4; a++) addLoad(cornerNodes[k * 4 + a], 0, -weight * cornerShare);
+      if (quad8) for (let a = 4; a < 8; a++) addLoad(connectivity[k * nodesPerElement + a], 0, -weight / 3);
     }
   }
 

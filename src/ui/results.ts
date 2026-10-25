@@ -27,6 +27,8 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
   const play = h('button', { class: 'btn primary', type: 'button', onclick: () => { runner.setRunning(true); refreshButtons(); } }, '再生');
   const pause = h('button', { class: 'btn', type: 'button', onclick: () => { runner.setRunning(false); refreshButtons(); } }, '一時停止');
   const reset = h('button', { class: 'btn', type: 'button', onclick: () => { runner.reset(); refreshButtons(); } }, 'リセット');
+  // 再生・一時停止・リセットは Lite の計算の操作。本計算の結果を見ているあいだは隠す
+  const playRow = h('div', { class: 'btn-row' }, play, pause, reset);
 
   const fieldSel = h('select', { 'aria-label': '表示する量' });
   fieldSel.addEventListener('change', () => {
@@ -65,7 +67,7 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
       warnBox,
       scalars,
       extraHost,
-      h('div', { class: 'btn-row' }, play, pause, reset),
+      playRow,
       h('label', { class: 'field' }, h('span', { class: 'field-label' }, '表示する量'), fieldSel),
       h('label', { class: 'field adv-only' }, h('span', { class: 'field-label' }, '色'), cmapSel),
       h('div', { class: 'toggles adv-only' }, smooth.root, particles.root, deform.root),
@@ -91,7 +93,7 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
   function update(): void {
     extra.update();
     const now = performance.now();
-    const sig = `${runner.running}|${store.analysis}|${runner.error}`;
+    const sig = `${runner.running}|${store.analysis}|${runner.error}|${runner.viewingRemote}`;
     if (runner.resultVersion === lastVersion && sig === lastSig) return;
     if (now - lastAt < UPDATE_INTERVAL_MS && sig === lastSig) return;
     lastAt = now;
@@ -105,9 +107,13 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
     // 状態
     let kind = 'run';
     let label = '計算中';
+    const remote = runner.viewingRemote ? runner.currentRemote() : null;
     if (runner.error) {
       kind = 'err';
       label = 'エラー';
+    } else if (remote) {
+      kind = 'done';
+      label = '本計算の結果';
     } else if (st?.done) {
       kind = 'done';
       label = '収束しました';
@@ -120,15 +126,18 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
     badge.className = `badge ${kind}`;
     badge.textContent = label;
     const parts: string[] = [];
-    if (st) {
+    if (remote) {
+      parts.push(remote.label);
+    } else if (st) {
       parts.push(`反復 ${st.iteration.toLocaleString('ja-JP')} 回`);
       if (st.residual !== undefined && Number.isFinite(st.residual)) parts.push(`残差 ${formatNumber(st.residual, 2)}`);
     }
     statusText.textContent = parts.join(' ・ ');
     bar.style.width = `${Math.round((st?.done ? 1 : Math.min(1, Math.max(0, st?.progress ?? 0))) * 100)}%`;
-    progress.hidden = !st;
-    msg.textContent = st?.message ?? '';
-    msg.hidden = !st?.message;
+    progress.hidden = !st || !!remote;
+    msg.textContent = remote ? '' : (st?.message ?? '');
+    msg.hidden = !!remote || !st?.message;
+    playRow.hidden = !!remote;
 
     setNotice(errorBox, runner.error ? [runner.error] : []);
     setNotice(hintBox, runner.hints);

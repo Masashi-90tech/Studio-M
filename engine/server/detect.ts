@@ -15,13 +15,14 @@ const PLANNED: { id: EngineId; name: string; license: string }[] = [
 export type ProbeFn = (command: string, args: string[]) => Promise<{ ok: boolean; output: string }>;
 
 /**
- * command が起動できれば ok: true（終了コードは見ない。ccx -v のように、版を出して 0 以外で終わるものがあるため）。
- * 見つからない・時間切れなら false。output は標準出力と標準エラーをつなげたもの。
+ * command を実行して、終了コードが 0 なら ok: true。見つからない・時間切れ・0 以外なら false。
+ * output は標準出力と標準エラーをつなげたもので、ok が false でも返す
+ * （ccx -v のように、版を表示して 0 以外で終わるソフトは、アダプターが output の中身で判断する）。
  */
 export const probeCommand: ProbeFn = async (command, args) => {
   try {
     const r = await runCommand({ command, args, workDir: tmpdir(), timeoutMs: PROBE_TIMEOUT_MS, backend: { kind: 'native' } });
-    return { ok: true, output: `${r.stdout}\n${r.stderr}`.trim() };
+    return { ok: r.code === 0, output: `${r.stdout}\n${r.stderr}`.trim() };
   } catch {
     return { ok: false, output: '' };
   }

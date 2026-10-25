@@ -1,0 +1,162 @@
+/* PC のエンジン（本計算）: 設定の欄と、結果の下のカード */
+.engine-card .engine-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.engine-launch,
+.engine-run,
+.engine-done {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.engine-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #faf6ec;
+  border-radius: 8px;
+}
+.engine-solve {
+  align-self: flex-start;
+}
+.engine-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.engine-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.engine-table caption {
+  text-align: left;
+  font-weight: 700;
+  padding-bottom: 4px;
+}
+.engine-table th,
+.engine-table td {
+  padding: 4px 5px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+.engine-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+}
+.engine-table tbody th {
+  text-align: left;
+  font-weight: 500;
+}
+.engine-table td {
+  white-space: nowrap;
+}
+.engine-table .diff {
+  font-weight: 700;
+}
+.engine-table .diff.big {
+  color: var(--err-ink);
+}
+.engine-log-box summary,
+.engine-files summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.engine-log {
+  margin: 6px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  background: #26221c;
+  color: #f1ece1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.engine-files ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--blue);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.engine-title {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.engine-lead {
+  margin-left: 0;
+}
+.prefs-pop .field {
+  margin-top: 8px;
+}
+.prefs-pop input[type='password'],
+.engine-card input[type='password'] {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  border-radius: 7px;
+  padding: 6px 8px;
+  min-height: 34px;
+}
+.engine-conn {
+  margin-top: 8px;
+}
+.engine-ok {
+  margin: 0 0 4px;
+  color: var(--ok);
+  font-weight: 700;
+}
+.engine-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+}
+.engine-list li {
+  display: flex;
+  gap: 6px;
+}
+.engine-list .mark {
+  flex: none;
+  font-weight: 700;
+}
+.engine-list .ok .mark {
+  color: var(--ok);
+}
+.engine-list .ng {
+  color: var(--muted);
+}
+.engine-list .ng .mark {
+  color: var(--err-ink);
+}
+
+.engine-note summary {
+  cursor: pointer;
+  color: var(--blue);
+  font-size: 12px;
+}
+.engine-note p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}

@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { EngineInfo } from '../../src/core/engine-protocol';
 import type { EngineAdapter } from '../types';
 import { createAdapterContext, decideBackend } from './context';
-import { detectEngines } from './detect';
+import { detectEngines, probeCommand } from './detect';
 import { buildDockerArgs, createLineSplitter, ExecError, isValidCommand, resolveInside, runCommand } from './exec';
 
 let dir: string;
@@ -133,6 +133,12 @@ describe('補助', () => {
 });
 
 describe('検出', () => {
+  it('probe: 終了コード 0 なら ok、0 以外でも出力は返す、見つからなければ ok: false', async () => {
+    expect(await probeCommand('node', ['-e', 'console.log("v1")'])).toEqual({ ok: true, output: 'v1' });
+    expect(await probeCommand('node', ['-e', 'console.log("Version 2.21"); process.exit(201)'])).toMatchObject({ ok: false, output: expect.stringContaining('Version 2.21') });
+    expect(await probeCommand('studio-m-no-such-command', [])).toEqual({ ok: false, output: '' });
+  });
+
   const adapter = (over: Partial<EngineAdapter> = {}): EngineAdapter => ({
     id: 'openfoam',
     capabilities: [{ analysis: 'flow', engine: 'openfoam', label: 'x' }],

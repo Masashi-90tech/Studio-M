@@ -23,7 +23,7 @@ export interface MappedResults {
   yieldedArea: number;
 }
 
-export function mapResults(mesh: Mesh, blocks: DatBlock[], opts: { plasticity: boolean }): MappedResults {
+export function mapResults(mesh: Mesh, blocks: DatBlock[], opts: { plasticity: boolean; loadScale?: number }): MappedResults {
   const { nx, ny } = mesh;
   const nCells = nx * ny;
   const notes: string[] = [];
@@ -123,8 +123,20 @@ export function mapResults(mesh: Mesh, blocks: DatBlock[], opts: { plasticity: b
 
   // 反力
   const rf = lastBlock(blocks, 'totalForce', 'NSUP');
-  const rx = rf?.values[0] ?? 0;
-  const ry = rf?.values[1] ?? 0;
+  // ccx の RF は「支持の節点の K·u」で、支持の節点に直接かかっている荷重（自重など）を含まない。
+  // 支持が受け止める力は、全荷重の和と釣り合う力なので、その分を足す（Lite の反力と同じ数え方）
+  let directX = 0;
+  let directY = 0;
+  const scale = opts.loadScale ?? 1;
+  for (const n of mesh.supportNodes) {
+    const f = mesh.nodalLoads.get(n);
+    if (f) {
+      directX += f.fx * scale;
+      directY += f.fy * scale;
+    }
+  }
+  const rx = (rf?.values[0] ?? 0) - directX;
+  const ry = (rf?.values[1] ?? 0) - directY;
   if (!rf) notes.push('支持の反力を結果から読み取れませんでした。');
 
   const scalars: ScalarValue[] = [

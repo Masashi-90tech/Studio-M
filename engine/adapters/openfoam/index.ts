@@ -69,7 +69,7 @@ export const openfoamAdapter: EngineAdapter = {
 
   async detect(ctx: DetectContext): Promise<EngineInfo> {
     const base = { id: 'openfoam' as const, name: 'OpenFOAM', license: 'GPL-3.0' };
-    const probe = await ctx.probe('blockMesh', ['-help']);
+    const probe = await ctx.probe('blockMesh', ['-help']).catch(() => ({ ok: false, output: '' }));
     const version = parseOpenFoamVersion(probe.output);
     if (probe.ok && version) return { ...base, available: true, version, via: 'native' };
     if (!probe.ok && /Could not find mandatory etc entry|did not locate installation path/.test(probe.output)) {
