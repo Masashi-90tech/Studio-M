@@ -24,9 +24,12 @@ npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML 
 | 4. 出力 | `src/export/` | Excel など | UI・workbench の import |
 | 5. ワークベンチ | `src/workbench/` | 解析 1 つ分のまとめ（ソルバー・パネル・判定・プリセット・数学の窓）と登録表 | 画面（シェル）側からの逆向きの import |
 | 5. 学び | `src/learn/` | 数学の窓（式の提供者・部品）、レッスン、進み具合の保存。ワークベンチと同じ層の機能モジュール | `src/core` だけ import してよい（ソルバー・workbench・ui は import しない。テストは除く）。画面から見えるのは `src/learn` の入口と、ワークベンチ経由の `math.loadProvider` |
+| 5. 基板 | `src/pcb/` | KiCad 基板の取り込み（v0.4）: ファイルの読み取り、部品の発熱ライブラリ、熱プロジェクトの組み立て、取り込みダイアログ。ワークベンチと同じ層の機能モジュール | `src/core` だけ import してよい（ソルバー・workbench は import しない。DOM を触るのはダイアログとプレビューだけで、そこは `src/ui/dom`・`src/ui/format` も可。テストは除く）。画面（シェル）は `src/pcb` を**遅延 import か `import type` だけ**で読む（`src/ui/pcb-open.ts` が入口。`src/workbench/shell.test.ts` と `src/pcb/layers.test.ts` が確かめる） |
 | 6. 画面 | `src/ui/`、`src/main.ts` | 表示と操作（ハーネス） | ソルバー・解析ごとのモジュール内部への直接アクセス（`src/workbench` の登録表経由のみ） |
 
 `src/learn` は画面（ハーネス）から**使うときに遅延 import** する（数学の窓を開く・「学ぶ」を開く）。式の提供者（`MathProvider`）だけは、解析ごとのワークベンチが `math.loadProvider`（`() => import('../../learn/providers/<kind>')`）で公開し、画面は `loadMathProvider(kind)`（`src/workbench/registry.ts`）で引く。ワークベンチが learn から使ってよいのは型（`import type`）だけ。
+
+学習機能（数学の窓・学ぶ）は、設定（⚙）の「学習機能を表示する」で出し入れする（既定は OFF、閲覧者ごとに保存。`src/ui/learn-pref.ts`）。OFF のあいだは `src/learn` の部品を読み込まない。`src/learn` を読み込む `import()` は、必ず `loadWhenEnabled`（`learn-pref.ts`）を通す。
 
 結果ボックスの下に解析ごとの追加表示（熱の部品ごとの一覧など）を足したいときは、ワークベンチの任意項目 `ui.loadResultsExtra`（`PanelFactory` を遅延 import で返す）を使う。画面は `createPanelSlot` の `results` で差し込むだけで、解析の種類を見分けない。
 

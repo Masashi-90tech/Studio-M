@@ -2,7 +2,7 @@
 // ファイルはブラウザの中だけで処理する（通信しない）。読み取りは kicad.ts、組み立ては build.ts。
 // 画面（ハーネス）からは、このファイルを使うときに遅延 import すること。
 import './import-dialog.css';
-import type { Project } from '../core/types';
+import type { AnalysisKind, Project } from '../core/types';
 import { h, numField, toast } from '../ui/dom';
 import { buildPcbProject, type BuildResult, type PartAssignment, type PartOverride } from './build';
 import { KicadParseError, parseKicadPcb, type KicadBoard } from './kicad';
@@ -10,6 +10,8 @@ import { drawPreview, hitPart, layerColor, previewHeight, type PreviewView } fro
 
 export interface PcbImportResult {
   project: Project;
+  /** 取り込んだあとに開く解析（熱）。画面は解析の名前を直接書かず、これを使う */
+  analysis: AnalysisKind;
   /** 取り込みで気づいたこと（外形の隙間、ライブラリにない部品、格子の説明など） */
   warnings: string[];
 }
@@ -63,6 +65,8 @@ export function openPcbImport(opts: PcbImportOptions): () => void {
     { class: 'pcb-empty' },
     h('strong', null, '.kicad_pcb ファイルをここにドロップ'),
     h('span', null, 'または「基板ファイルを選ぶ」。KiCad で保存した基板ファイルです（ゾーンは塗りつぶしてから保存してください）'),
+    h('button', { type: 'button', class: 'btn', onClick: () => void loadSample() }, 'サンプル基板で試す'),
+    h('span', { class: 'pcb-sample-note' }, 'ESP32 とモータードライバーを載せた手書きの例です。手元に基板がなくても、使い方を確かめられます'),
   );
   const stage = h('div', { class: 'pcb-stage' }, empty, canvas);
   const chips = h('div', { class: 'pcb-chips', role: 'group', 'aria-label': '表示する銅箔の層' });
@@ -280,11 +284,20 @@ export function openPcbImport(opts: PcbImportOptions): () => void {
 
   // ---------- ファイルの読み込み ----------
   async function loadFile(file: File): Promise<void> {
+    await loadText(file.name, () => file.text());
+  }
+
+  /** 同梱のサンプル基板（手書きの .kicad_pcb）。使うときに初めて読み込む（Vite の ?raw） */
+  async function loadSample(): Promise<void> {
+    await loadText('esp32-motor.kicad_pcb（サンプル）', async () => (await import('./fixtures/esp32-motor.kicad_pcb?raw')).default);
+  }
+
+  async function loadText(name: string, read: () => Promise<string>): Promise<void> {
     summary.textContent = '読み込み中…';
     try {
-      const text = await file.text();
+      const text = await read();
       if (closed) return;
-      setBoard(parseKicadPcb(text), file.name);
+      setBoard(parseKicadPcb(text), name);
     } catch (e) {
       if (closed) return;
       summary.textContent = '基板ファイルを読み込むと、ここに結果が出ます';
@@ -373,7 +386,7 @@ export function openPcbImport(opts: PcbImportOptions): () => void {
     if (importBtn.disabled || !built) return;
     const result = built;
     close();
-    opts.onImport({ project: result.project, warnings: result.warnings });
+    opts.onImport({ project: result.project, analysis: 'heat', warnings: result.warnings });
   }
 
   function close(): void {

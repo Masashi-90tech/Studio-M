@@ -106,6 +106,10 @@
   font-size: 12.5px;
   line-height: 1.5;
 }
+.pcb-sample-note {
+  font-size: 12px;
+  max-width: 34em;
+}
 .pcb-empty strong {
   color: var(--ink);
   font-size: 14px;
