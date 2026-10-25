@@ -1,5 +1,6 @@
 // アプリ全体の状態（プロジェクト・選択・ツール・表示設定）と変更通知。
 // UI の各部品はここを購読し、変更は必ずここの関数を通す。
+import { DEFAULT_ANALYSIS } from '../core/analyses';
 import { defaultProject, newShapeId } from '../core/project';
 import type { AnalysisKind, Project, Shape, ShapeGeom, ShapeRole } from '../core/types';
 import type { ColormapName } from './colormap';
@@ -34,7 +35,7 @@ const UNDO_LIMIT = 60;
 
 export class Store {
   project: Project;
-  analysis: AnalysisKind = 'flow';
+  analysis: AnalysisKind = DEFAULT_ANALYSIS;
   tool: Tool = 'select';
   newRole: ShapeRole = 'solid';
   newMaterialId = 'al6061';
@@ -46,6 +47,8 @@ export class Store {
   mode: UiMode = 'standard';
   /** かんたんモードの質問の答え（閲覧者ごと） */
   prefs: Prefs = { ...DEFAULT_PREFS };
+  /** いま開いているのがプリセットそのものなら、その id（読み込み・元に戻すで入れ替わると null）。「この例で学ぶ」の案内に使う */
+  presetId: string | null = null;
 
   private listeners = new Map<StoreEvent, Set<Listener>>();
   private undoStack: string[] = [];
@@ -110,6 +113,7 @@ export class Store {
 
   private replaceProject(p: Project): void {
     this.project = p;
+    this.presetId = null;
     if (this.selectedId && !p.shapes.some((s) => s.id === this.selectedId)) this.selectedId = null;
     this.emit('load');
     this.emit('selection');
@@ -119,8 +123,19 @@ export class Store {
 
   /** 新規・プリセット・ファイル読込。元に戻せるよう直前の状態を残す */
   loadProject(p: Project, analysis?: AnalysisKind): void {
+    this.load({ project: p, analysis });
+  }
+
+  /** プリセットを開く（loadProject と同じく元に戻せる）。どのプリセットかを presetId に残す */
+  loadPreset(opts: { project: Project; analysis: AnalysisKind; presetId: string }): void {
+    this.load(opts);
+  }
+
+  private load(opts: { project: Project; analysis?: AnalysisKind; presetId?: string }): void {
+    const { project: p, analysis } = opts;
     this.checkpoint();
     this.project = p;
+    this.presetId = opts.presetId ?? null;
     this.selectedId = null;
     if (analysis) this.analysis = analysis;
     this.emit('load');

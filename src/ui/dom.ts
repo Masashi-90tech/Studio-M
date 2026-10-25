@@ -121,6 +121,15 @@ export function toast(message: string, kind: 'info' | 'error' = 'info'): void {
   window.setTimeout(() => el.remove(), kind === 'error' ? 6400 : 3200);
 }
 
+/** 時間のかかる読み込み中に出し続けるメッセージ。戻り値の関数で消す */
+export function busyToast(message: string): () => void {
+  const host = document.getElementById('toasts');
+  if (!host) return () => undefined;
+  const el = h('div', { class: 'toast info', role: 'status' }, message);
+  host.append(el);
+  return () => el.remove();
+}
+
 interface ClaudeDownloads {
   save(req: { filename: string; data: Blob }): Promise<unknown>;
 }

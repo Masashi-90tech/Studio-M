@@ -7,6 +7,7 @@
 
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
+import { analysisLabel, ANALYSIS_KINDS } from '../core/analyses';
 import { getMaterial } from '../core/materials';
 import type {
   AnalysisKind,
@@ -33,13 +34,8 @@ export const FORMULA_MAX_NY = 80;
 /** 数式ブックのシート名 */
 export const FORMULA_SHEET_NAME = '対流拡散';
 
-const ANALYSIS_NAME: Record<AnalysisKind, string> = {
-  flow: '流れ',
-  heat: '熱',
-  stress: '強度',
-  scalar: '対流拡散',
-  em: '電磁波',
-};
+/** 解析の名前（画面のタブと同じ。core/analyses.ts） */
+const ANALYSIS_NAME: Record<AnalysisKind, string> = Object.fromEntries(ANALYSIS_KINDS.map((k) => [k, analysisLabel(k)])) as Record<AnalysisKind, string>;
 
 const ROLE_NAME: Record<ShapeRole, string> = {
   solid: '物体',

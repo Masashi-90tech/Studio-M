@@ -16,7 +16,7 @@ import {
   suggestHeatRect,
   totalHeatW,
 } from './easy-logic';
-import { COOLING_LEVELS } from './verdict';
+import { COOLING_LEVELS } from '../workbench/verdicts/heat';
 
 const rect = (id: string, role: Shape['role'], x: number, y: number, w: number, h: number, extra: Partial<Shape> = {}): Shape => ({
   id,

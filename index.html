@@ -29,6 +29,7 @@
             <button id="btnPreset" class="btn" type="button" aria-haspopup="menu" aria-expanded="false">プリセット ▾</button>
             <div id="presetMenu" class="menu" role="menu" hidden></div>
           </div>
+          <button id="btnLearn" class="btn learn-btn" type="button" aria-expanded="false" aria-controls="learnDrawer" title="数学と物理をレッスンで学び直します">学ぶ</button>
           <button id="btnSave" class="btn" type="button">保存</button>
           <button id="btnOpen" class="btn" type="button">開く</button>
           <input id="fileInput" type="file" accept=".json,application/json" hidden />
@@ -58,12 +59,16 @@
 
         <aside class="side" id="side">
           <div id="verdict" hidden></div>
+          <div id="learnChip" hidden></div>
+          <div id="mathWindow"></div>
           <div id="results"></div>
           <div id="easy" hidden></div>
           <div id="props"></div>
           <div id="settings"></div>
           <div id="proTools" hidden></div>
         </aside>
+
+        <aside class="learn-drawer" id="learnDrawer" role="complementary" aria-label="学ぶ" hidden></aside>
       </main>
       <div id="toasts" aria-live="polite"></div>
     </div>

@@ -1062,3 +1062,187 @@ pre.log {
     display: none;
   }
 }
+
+/* ワークベンチのパネルの差し込み口（レイアウトには影響しない） */
+.panel-slot {
+  display: contents;
+}
+
+/* =====================================================================
+   学びモード: 数学の窓のカード・「学ぶ」ドロワー・「この例で学ぶ」の案内
+   （数学の窓・レッスンの中身の見た目は src/learn/learn.css。使うときに読み込まれる）
+   ===================================================================== */
+.learn-btn {
+  border-color: var(--blue);
+  color: var(--blue);
+  font-weight: 700;
+}
+.learn-btn[aria-expanded='true'] {
+  background: var(--blue-soft);
+}
+
+/* 数学の窓のカード（判定カードの下） */
+.math-card {
+  padding: 0;
+  gap: 0;
+}
+.math-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 700;
+  font-size: 13px;
+}
+.math-toggle:hover {
+  background: #f7f3ea;
+}
+.math-toggle:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+.math-caret {
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.math-card[data-open='false'] .math-caret {
+  transform: rotate(-90deg);
+}
+.math-body {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.math-body .lw-head {
+  display: none; /* 見出しはカードの見出しがあるので重ねない */
+}
+.math-note:empty {
+  display: none;
+}
+.math-flash {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+/* 「この例で学ぶ」の案内 */
+.learn-chip {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--blue);
+  border-radius: 99px;
+  background: var(--blue-soft);
+  overflow: hidden;
+}
+.learn-chip button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--blue);
+}
+.learn-chip-open {
+  flex: 1 1 auto;
+  padding: 9px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: left;
+  min-height: 40px;
+}
+.learn-chip-x {
+  padding: 0 12px;
+  font-size: 16px;
+}
+.learn-chip button:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
+.learn-chip button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
+/* 学ぶドロワー */
+.learn-drawer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  border-left: 1px solid var(--line-strong);
+}
+.learn-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.learn-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+}
+.learn-title:focus {
+  outline: none;
+}
+.learn-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.learn-status:empty {
+  display: none;
+}
+@media (min-width: 861px) {
+  /* 中くらいの画面: 右に重ねる（キャンバスの操作は邪魔しない非モーダル） */
+  .workspace {
+    position: relative;
+  }
+  .learn-drawer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    width: min(420px, 100%);
+    box-shadow: -8px 0 24px rgba(60, 40, 10, 0.12);
+  }
+}
+@media (min-width: 1180px) {
+  /* 広い画面: 右に列を足し、キャンバスも側のパネルも隠さない */
+  body[data-learn='open'] .workspace {
+    grid-template-columns: 78px minmax(0, 1fr) 348px 420px;
+  }
+  .learn-drawer {
+    position: static;
+    width: auto;
+    box-shadow: none;
+  }
+}
+@media (max-width: 860px) {
+  /* スマホ: 画面いっぱいのシート。閉じても状態は残る */
+  .learn-drawer {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    border-left: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  body[data-learn='open'] {
+    overflow: hidden;
+  }
+}

@@ -1,9 +1,11 @@
 // 計算ループの管理。プロジェクトを格子化してソルバーを作り、requestAnimationFrame ごとに少しずつ進める。
+import { ANALYSIS_KINDS } from '../core/analyses';
 import { resolveProject, type AutoGrid } from '../core/auto';
 import { rasterize } from '../core/raster';
-import type { AnalysisKind, Field, Project, Raster, ResultSet, Solver, SolverStatus } from '../core/types';
-import { createSolver } from '../solvers';
-import { ANALYSES, projectForFormula } from './project-utils';
+import type { AnalysisKind, Field, Project, Raster, ResultSet, Solver, SolverFactory, SolverStatus } from '../core/types';
+import { getWorkbench, loadSolverFactory, peekSolverFactory } from '../workbench';
+import { withLoading } from './lazy';
+import { projectForFormula } from './project-utils';
 import type { Store } from './state';
 
 /** 1 フレームで計算に使う時間 [ms] */
@@ -94,7 +96,7 @@ export class Runner {
       this.grid = grid;
       this.resolved = resolved;
       this.raster = rasterize(resolved);
-      this.hints = collectHints(this.kind, resolved, this.raster);
+      this.hints = getWorkbench(this.kind)?.hints?.({ project: resolved, raster: this.raster }) ?? [];
     } catch (e) {
       this.raster = null;
       this.hints = [];
@@ -102,14 +104,44 @@ export class Runner {
       this.resultVersion++;
       return;
     }
-    try {
-      this.solver = createSolver(this.kind, this.resolved ?? project, this.raster);
-      this.result = this.solver.result();
-    } catch (e) {
-      this.solver = null;
-      this.error = `計算を始められませんでした: ${message(e)}`;
+    this.startSolver(project);
+  }
+
+  /**
+   * ソルバーを作って最初の結果を取る。解析エンジンは初めて使うときだけ遅延 import で読み込む。
+   * 読み込み済みなら今まで通り同期で始まり、未読み込みなら読み込みが終わるまで「準備中」になる。
+   */
+  private startSolver(fallback: Project): void {
+    const kind = this.kind;
+    const raster = this.raster;
+    if (!raster) return;
+    const project = this.resolved ?? fallback;
+    const start = (factory: SolverFactory): void => {
+      try {
+        this.solver = factory(project, raster);
+        this.result = this.solver.result();
+      } catch (e) {
+        this.solver = null;
+        this.error = `計算を始められませんでした: ${message(e)}`;
+      }
+      this.resultVersion++;
+    };
+    const ready = peekSolverFactory(kind);
+    if (ready) {
+      start(ready);
+      return;
     }
+    const gen = this.generation;
     this.resultVersion++;
+    void withLoading({ label: `${getWorkbench(kind)?.label ?? kind}の解析エンジン`, task: loadSolverFactory(kind) }).then((factory) => {
+      if (gen !== this.generation) return; // 待っている間に作り直された
+      if (!factory) {
+        this.error = '解析エンジンを読み込めませんでした。ページを開き直してみてください';
+        this.resultVersion++;
+        return;
+      }
+      start(factory);
+    });
   }
 
   reset(): void {
@@ -150,7 +182,7 @@ export class Runner {
   /** いまの形状・条件で計算済みの結果すべて（現在のタブ + 退避済みのもの） */
   collectResults(): ResultSet[] {
     const out: ResultSet[] = [];
-    for (const k of ANALYSES) {
+    for (const k of ANALYSIS_KINDS) {
       if (k === this.kind) {
         if (this.result) out.push(this.result);
       } else {
@@ -171,7 +203,7 @@ export class Runner {
   currentField(): Field | null {
     const r = this.result;
     if (!r || r.fields.length === 0) return null;
-    const key = this.store.fieldKeys[this.kind];
+    const key = this.store.fieldKeys[this.kind] ?? getWorkbench(this.kind)?.defaultField;
     return r.fields.find((f) => f.key === key) ?? r.fields[0];
   }
 
@@ -182,32 +214,4 @@ export class Runner {
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
-}
-
-/** 解析に必要な形状が足りないときの案内を、初心者向けに出す */
-function collectHints(kind: AnalysisKind, project: Project, r: Raster): string[] {
-  const hints: string[] = [];
-  const hasSolid = r.solid.some((v) => v === 1);
-  if (kind === 'flow' && !hasSolid) hints.push('物体がありません。長方形や円を置くと、そのまわりの流れを計算します。');
-  if (kind === 'heat') {
-    if (!hasSolid) hints.push('物体がありません。物体と発熱体を置いてください。');
-    else if (!r.heatGen.some((v) => v > 0) && !r.fixedTemp.some((v) => !Number.isNaN(v))) {
-      hints.push('熱源がありません。役割を「発熱体」にした図形か「温度固定」の図形を置いてください。');
-    }
-  }
-  if (kind === 'stress') {
-    if (!hasSolid) hints.push('物体がありません。部品の形を描いてください。');
-    else {
-      let supportOnBody = 0;
-      let loadSum = 0;
-      for (let c = 0; c < r.solid.length; c++) {
-        if (r.solid[c] && r.support[c]) supportOnBody++;
-        loadSum += Math.abs(r.loadFx[c]) + Math.abs(r.loadFy[c]);
-      }
-      if (supportOnBody === 0) hints.push('「支持」が物体に重なっていません。固定したい面に役割「支持」の図形を重ねてください。');
-      if (loadSum === 0 && !project.stress.selfWeight) hints.push('「荷重」が物体に重なっていません。力をかけたい場所に役割「荷重」の図形を重ねてください。');
-    }
-  }
-  if (kind === 'scalar' && !hasSolid) hints.push('物体がありません。物体の表面で φ を固定して、まわりへの広がりを計算します。');
-  return hints;
 }

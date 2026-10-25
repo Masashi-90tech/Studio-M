@@ -1,6 +1,7 @@
 // キャンバス描画の本体。場のヒートマップ → グリッド → 流線 → 図形 → 変形輪郭 → 選択 → 凡例の順に重ねる。
 import { getMaterial } from '../core/materials';
-import type { AnalysisKind, Field, Project, Raster, ResultSet, Shape } from '../core/types';
+import type { Field, Project, Raster, ResultSet, Shape } from '../core/types';
+import type { ViewTraits } from '../workbench/types';
 import { fieldRange, type ColormapName, type Range } from './colormap';
 import {
   drawDeformed,
@@ -25,7 +26,8 @@ export interface RenderInput {
   raster: Raster | null;
   result: ResultSet | null;
   field: Field | null;
-  analysis: AnalysisKind;
+  /** 解析ごとの描き方の違い（WorkbenchModule.viewTraits）。省略時は特別な描き方をしない */
+  traits?: ViewTraits;
   opts: ViewOptions;
   selectedId: string | null;
   hoverId: string | null;
@@ -64,14 +66,14 @@ function fluidMask(raster: Raster): Uint8Array {
   return m;
 }
 
-/** analysis が flow なら流体セル、stress なら物体セルを有効とみなす（場にマスクがないとき） */
-function vectorFields(r: ResultSet | null, raster: Raster | null, analysis: AnalysisKind): DispField | null {
+/** 場にマスクがないとき、vectorMask が 'fluid' なら流体セル、'solid' なら物体セルを有効とみなす */
+function vectorFields(r: ResultSet | null, raster: Raster | null, vectorMask: ViewTraits['vectorMask']): DispField | null {
   if (!r) return null;
   const fx = r.fields.find((f) => f.key === 'ux');
   const fy = r.fields.find((f) => f.key === 'uy');
   if (!fx || !fy) return null;
   let mask = fx.mask ?? fy.mask;
-  if (!mask && raster && raster.nx === r.nx && raster.ny === r.ny) mask = analysis === 'flow' ? fluidMask(raster) : raster.solid;
+  if (!mask && raster && raster.nx === r.nx && raster.ny === r.ny) mask = vectorMask === 'fluid' ? fluidMask(raster) : raster.solid;
   return { ux: fx.data, uy: fy.data, mask, nx: r.nx, ny: r.ny, h: r.h };
 }
 
@@ -195,8 +197,8 @@ export class CanvasView {
     if (inp.opts.grid) drawGrid(paint, dom.width, domainH);
 
     // 流線
-    if (inp.analysis === 'flow' && inp.opts.particles && inp.result) {
-      const v = vectorFields(inp.result, inp.raster, 'flow');
+    if (inp.traits?.particles && inp.opts.particles && inp.result) {
+      const v = vectorFields(inp.result, inp.raster, inp.traits.vectorMask);
       if (v) {
         this.particles.update(v, W, H, inp.running);
         this.particles.draw(ctx);
@@ -217,8 +219,8 @@ export class CanvasView {
     }
 
     // 変形輪郭
-    if (inp.analysis === 'stress' && inp.opts.deform) {
-      const d = vectorFields(inp.result, inp.raster, 'stress');
+    if (inp.traits?.deform && inp.opts.deform) {
+      const d = vectorFields(inp.result, inp.raster, inp.traits.vectorMask);
       if (d) {
         const m = maxDisplacement(d);
         if (m > 0) drawDeformed(paint, inp.project.shapes, d, exaggerationFactor(m, Math.min(dom.width, domainH)));

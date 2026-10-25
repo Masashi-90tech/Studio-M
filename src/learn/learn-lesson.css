@@ -1,0 +1,328 @@
+/* レッスンパネル .ll-* とレッスン一覧。共通の変数・チップは learn.css。 */
+
+/* ---------- レッスンパネル ---------- */
+.ll-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.ll-title {
+  margin: 0;
+  font-size: 15px;
+}
+.ll-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  color: var(--muted, #6b6459);
+  font-size: 12px;
+}
+.ll-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ll-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong, #cfc7b8);
+  background: var(--panel, #fffdf9);
+  color: var(--muted, #6b6459);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+.ll-dot.done {
+  background: #e6f4ea;
+  border-color: #6fbf88;
+  color: var(--ok, #15803d);
+}
+.ll-dot.current {
+  border-color: var(--accent, #e8590c);
+  box-shadow: 0 0 0 2px var(--accent-soft, #fde9dc);
+  color: var(--ink, #26221c);
+}
+.ll-dot:focus-visible {
+  outline: 2px solid var(--blue, #2563eb);
+  outline-offset: 2px;
+}
+.ll-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 140px;
+  padding: 12px 14px;
+  background: var(--panel, #fffdf9);
+  border: 1px solid var(--line, #e3ddd2);
+  border-radius: var(--radius, 10px);
+}
+.ll-kind {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0 8px;
+  border-radius: 99px;
+  background: var(--accent-soft, #fde9dc);
+  color: #8a3604;
+  font-size: 11px;
+  font-weight: 700;
+}
+.ll-kind[data-kind='try'] {
+  background: var(--blue-soft, #e8f0fe);
+  color: #1b43a6;
+}
+.ll-kind[data-kind='quiz'] {
+  background: var(--warn-bg, #fff6d6);
+  color: var(--warn-ink, #6b5200);
+}
+.ll-kind[data-kind='practice'] {
+  background: #e6f4ea;
+  color: #1c5a30;
+}
+.ll-step-title {
+  margin: 0;
+  font-size: 14.5px;
+}
+.ll-body p,
+.ll-task,
+.ll-question {
+  margin: 0 0 8px;
+  line-height: 1.8;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+.ll-body ul {
+  margin: 0 0 8px;
+  padding-left: 22px;
+  line-height: 1.8;
+  font-size: 13.5px;
+}
+.ll-body li + li {
+  margin-top: 2px;
+}
+.ll-code {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--bg, #f6f4ef);
+  border: 1px solid var(--line, #e3ddd2);
+  font-family: var(--lw-mono);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.ll-action {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.ll-task {
+  padding: 8px 10px;
+  background: var(--blue-soft, #e8f0fe);
+  border-radius: 8px;
+  width: 100%;
+  margin: 0;
+}
+.ll-hint {
+  width: 100%;
+}
+.ll-status {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted, #6b6459);
+}
+.ll-status.ok {
+  color: var(--ok, #15803d);
+  font-weight: 700;
+}
+.ll-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ll-choice {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  text-align: left;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid var(--line-strong, #cfc7b8);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13.5px;
+  line-height: 1.6;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.ll-choice:hover:not(:disabled) {
+  background: #f7f3ea;
+}
+.ll-choice:focus-visible {
+  outline: 2px solid var(--blue, #2563eb);
+  outline-offset: 1px;
+}
+.ll-choice:disabled {
+  cursor: default;
+}
+.ll-choice-mark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  line-height: 20px;
+  text-align: center;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted, #6b6459);
+}
+.ll-choice.correct {
+  border-color: #6fbf88;
+  background: #e6f4ea;
+}
+.ll-choice.wrong {
+  border-color: var(--err-line, #f2a5a5);
+  background: var(--err-bg, #fde8e8);
+}
+.ll-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.ll-fb-title {
+  margin: 0;
+  font-weight: 700;
+}
+.ll-fb-title.ok {
+  color: var(--ok, #15803d);
+}
+.ll-fb-title.ng {
+  color: var(--err-ink, #8a1c1c);
+}
+.ll-explain {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg, #f6f4ef);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.ll-finished {
+  margin: 0;
+  padding: 8px 10px;
+  background: #e6f4ea;
+  border-radius: 8px;
+  color: #1c5a30;
+  font-weight: 700;
+  font-size: 13px;
+}
+.ll-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ll-count {
+  color: var(--muted, #6b6459);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- レッスン一覧 ---------- */
+.ll-summary {
+  margin: 0;
+  color: var(--muted, #6b6459);
+  font-size: 12.5px;
+}
+.ll-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ll-stage-title {
+  margin: 0;
+  font-size: 13.5px;
+}
+.ll-stage-desc {
+  margin: 0;
+  color: var(--muted, #6b6459);
+  font-size: 12px;
+}
+.ll-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ll-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--panel, #fffdf9);
+  border: 1px solid var(--line, #e3ddd2);
+  border-radius: var(--radius, 10px);
+  cursor: pointer;
+}
+.ll-card:hover {
+  border-color: var(--line-strong, #cfc7b8);
+  background: #fff;
+}
+.ll-card:focus-visible {
+  outline: 2px solid var(--blue, #2563eb);
+  outline-offset: 1px;
+}
+.ll-card.done {
+  background: #f1f9f3;
+}
+.ll-card-check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  line-height: 20px;
+  text-align: center;
+  border: 1.5px solid var(--line-strong, #cfc7b8);
+  border-radius: 50%;
+  color: var(--ok, #15803d);
+  font-weight: 700;
+  font-size: 12px;
+}
+.ll-card.done .ll-card-check {
+  border-color: #6fbf88;
+  background: #e6f4ea;
+}
+.ll-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ll-card-title {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+.ll-card-summary {
+  color: var(--muted, #6b6459);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.ll-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 11.5px;
+  color: var(--muted, #6b6459);
+}

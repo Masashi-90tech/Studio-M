@@ -1,0 +1,330 @@
+/* 学びモード（数学の窓 .lw-* / レッスン .ll-*）。色と角丸は src/style.css のトークンを使う。
+   レッスン関連は learn-lesson.css に分けてある。 */
+@import './learn-lesson.css';
+
+.lw-root,
+.ll-root,
+.ll-list {
+  --lw-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', 'Menlo', 'Consolas', 'Noto Sans Mono CJK JP', monospace;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--ink, #26221c);
+}
+.lw-root [hidden],
+.ll-root [hidden],
+.ll-list [hidden] {
+  display: none !important;
+}
+
+/* ---------- 共通: 分野・段階のチップ ---------- */
+.lw-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--line, #e3ddd2);
+  background: var(--panel, #fffdf9);
+  color: var(--muted, #6b6459);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.lw-chip-level {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+.lw-chip[data-level='中学'] {
+  background: #e6f4ea;
+  border-color: #b7dfc2;
+  color: #1c5a30;
+}
+.lw-chip[data-level='高校'] {
+  background: var(--blue-soft, #e8f0fe);
+  border-color: #bcd0f7;
+  color: #1b43a6;
+}
+.lw-chip[data-level='大学'] {
+  background: var(--accent-soft, #fde9dc);
+  border-color: #f5c6a8;
+  color: #8a3604;
+}
+.ll-level {
+  display: inline-block;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--muted, #6b6459);
+}
+.ll-level[data-level='中学'] {
+  background: #2f8a4d;
+}
+.ll-level[data-level='高校'] {
+  background: var(--blue, #2563eb);
+}
+.ll-level[data-level='大学'] {
+  background: var(--accent, #e8590c);
+}
+
+/* ---------- 数学の窓 ---------- */
+.lw-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.lw-heading {
+  margin: 0;
+  font-size: 15px;
+}
+.lw-hint {
+  margin: 0;
+  color: var(--muted, #6b6459);
+  font-size: 12px;
+}
+.lw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lw-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px 14px;
+  background: var(--panel, #fffdf9);
+  border: 1px solid var(--line, #e3ddd2);
+  border-radius: var(--radius, 10px);
+}
+.lw-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lw-title {
+  margin: 0;
+  font-size: 13.5px;
+}
+.lw-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.lw-expr {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg, #f6f4ef);
+  border-radius: 8px;
+  font-family: var(--lw-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.lw-subst {
+  margin: 0;
+  color: var(--muted, #6b6459);
+  font-family: var(--lw-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.lw-result {
+  margin: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.lw-sym {
+  font-family: var(--lw-mono);
+  font-weight: 700;
+}
+.lw-value {
+  font-size: 18px;
+  color: var(--accent, #e8590c);
+  font-variant-numeric: tabular-nums;
+}
+.lw-result-label {
+  color: var(--muted, #6b6459);
+  font-size: 12px;
+}
+.lw-delta {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted, #6b6459);
+}
+.lw-insight {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--blue, #2563eb);
+  background: var(--blue-soft, #e8f0fe);
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lw-vars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lw-var {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(76px, auto);
+  grid-template-areas:
+    'label value'
+    'slider slider';
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+.lw-var.lw-changed {
+  background: var(--accent-soft, #fde9dc);
+  border-color: #f5c6a8;
+}
+.lw-var-label {
+  grid-area: label;
+  font-size: 12.5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lw-var-sym {
+  font-family: var(--lw-mono);
+  font-weight: 700;
+}
+.lw-var-source {
+  color: var(--muted, #6b6459);
+  font-size: 11px;
+}
+.lw-var-value {
+  grid-area: value;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.lw-slider {
+  grid-area: slider;
+  width: 100%;
+  margin: 4px 0 0;
+  accent-color: var(--accent, #e8590c);
+  min-height: 24px;
+}
+.lw-slider:focus-visible {
+  outline: 2px solid var(--blue, #2563eb);
+  outline-offset: 2px;
+}
+.lw-var-fixed {
+  grid-template-areas: 'label value';
+  color: var(--muted, #6b6459);
+}
+.lw-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.lw-details {
+  border: 1px solid var(--line, #e3ddd2);
+  border-radius: 8px;
+  background: var(--bg, #f6f4ef);
+}
+.lw-details > summary {
+  cursor: pointer;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 8px;
+}
+.lw-details > summary:focus-visible {
+  outline: 2px solid var(--blue, #2563eb);
+  outline-offset: 1px;
+}
+.lw-details[open] > summary {
+  border-bottom: 1px solid var(--line, #e3ddd2);
+  border-radius: 8px 8px 0 0;
+}
+.lw-details > p,
+.lw-details > ol {
+  margin: 0;
+  padding: 8px 12px 10px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.lw-details > ol {
+  padding-left: 30px;
+}
+.lw-details > ol li + li {
+  margin-top: 4px;
+}
+.lw-why {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lw-approx {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--warn-bg, #fff6d6);
+  border: 1px solid var(--warn-line, #f0d36a);
+  border-radius: 8px;
+  color: var(--warn-ink, #6b5200);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.lw-sim {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px dashed var(--line-strong, #cfc7b8);
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.lw-sim-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.lw-sim-key {
+  color: var(--muted, #6b6459);
+}
+.lw-sim-diff {
+  color: var(--blue, #2563eb);
+  font-weight: 600;
+}
+.lw-sim-note {
+  margin: 2px 0 0;
+  color: var(--muted, #6b6459);
+  font-size: 11.5px;
+}
+
+/* ---------- 狭い画面・動きを減らす設定 ---------- */
+@media (max-width: 420px) {
+  .lw-card,
+  .ll-step {
+    padding: 10px 10px 12px;
+  }
+  .lw-expr {
+    font-size: 13px;
+  }
+  .lw-value {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lw-var,
+  .ll-dot,
+  .ll-choice,
+  .ll-card {
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+}

@@ -1,5 +1,6 @@
 // ヘッダー: プロジェクト名、新規・プリセット・保存・開く・Excel 出力。
 import { clear, downloadBlob, h, toast } from './dom';
+import { openPreset } from './open-preset';
 import { PRESETS } from './presets';
 import { safeFileName, sanitizeProject } from './project-utils';
 import type { Runner } from './runner';
@@ -47,9 +48,8 @@ export function initHeader(store: Store, runner: Runner): void {
           type: 'button',
           role: 'menuitem',
           onclick: () => {
-            store.loadProject(p.build(), p.analysis);
+            openPreset({ store, presetId: p.id });
             closeMenu();
-            toast(`プリセット「${p.title}」を開きました`);
           },
         },
         h('strong', null, p.title),

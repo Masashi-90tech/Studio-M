@@ -1,0 +1,32 @@
+# v から始まるタグ（例: v0.3.0）を push すると、Lite の HTML を添付したリリースを作る
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build:artifact
+      - name: リリースを作成
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cp dist/index.html "StudioM-Lite-${TAG}.html"
+          gh release create "$TAG" "StudioM-Lite-${TAG}.html" \
+            --title "Studio M ${TAG}" \
+            --notes "Studio M Lite ${TAG}。添付の HTML を保存して、ブラウザで開くだけで動きます。"

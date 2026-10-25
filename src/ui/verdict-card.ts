@@ -1,36 +1,20 @@
 // 結果の先頭に出す「判定カード」: OK / 注意 / NG と、かんたんモードの次の一手ボタン。
-import { slabTransmission } from '../solvers/em';
+// 判定の中身と次の一手の反映は、解析ごとのワークベンチ（WorkbenchModule.verdict / applyAction）が受け持つ。
+import { getWorkbench } from '../workbench';
+import type { Verdict, VerdictAction } from '../workbench/types';
 import { clear, h, toast } from './dom';
-import { setBodyMaterial, setSlabThicknessMm } from './easy-logic';
 import type { Runner } from './runner';
 import type { Store } from './state';
-import { computeVerdict, findSlab, type Verdict, type VerdictAction } from './verdict';
 
-const TITLES = { stress: '強度の判定', heat: '熱の判定', em: '電波の判定', flow: '流れのようす', scalar: '' } as const;
 const MARKS = { ok: '✓', warn: '!', ng: '✕', info: 'i', pending: '…' } as const;
 const UPDATE_INTERVAL_MS = 150;
 
 /** 次の一手をプロジェクトに反映する（元に戻せる） */
 export function applyAction(store: Store, a: VerdictAction): void {
+  const wb = getWorkbench(store.analysis);
+  if (!wb?.applyAction) return;
   store.checkpoint(`verdict:${a.kind}`);
-  const p = store.project;
-  switch (a.kind) {
-    case 'thicker':
-      p.thickness *= a.factor;
-      break;
-    case 'material':
-      // 熱では、発熱体（チップなど）の材料は変えずに、まわりの部品だけを替える
-      setBodyMaterial(p, a.materialId, store.analysis === 'heat' ? ['solid'] : undefined);
-      break;
-    case 'cooling':
-      p.heat.surfaceH = a.h;
-      break;
-    case 'slab': {
-      const s = findSlab(p);
-      if (s) setSlabThicknessMm(s.shape, a.thicknessMm);
-      break;
-    }
-  }
+  wb.applyAction({ project: store.project, action: a });
   store.touch('settings');
   toast(`「${a.label}」を適用しました（元に戻すボタンで戻せます）`);
 }
@@ -41,7 +25,7 @@ export function initVerdictCard(store: Store, runner: Runner, host: HTMLElement)
   let lastVersion = -1;
   let lastMode = '';
 
-  function render(v: Verdict | null, kind: keyof typeof TITLES): void {
+  function render(v: Verdict | null, title: string): void {
     clear(host);
     if (!v) {
       host.hidden = true;
@@ -50,8 +34,8 @@ export function initVerdictCard(store: Store, runner: Runner, host: HTMLElement)
     host.hidden = false;
     const card = h(
       'section',
-      { class: `card verdict ${v.level}`, role: 'status', 'aria-live': 'polite', 'aria-label': TITLES[kind] },
-      h('div', { class: 'verdict-top' }, h('span', { class: 'vchip' }, h('span', { 'aria-hidden': 'true' }, MARKS[v.level]), ` ${v.chip}`), h('span', { class: 'vtitle' }, TITLES[kind])),
+      { class: `card verdict ${v.level}`, role: 'status', 'aria-live': 'polite', 'aria-label': title },
+      h('div', { class: 'verdict-top' }, h('span', { class: 'vchip' }, h('span', { 'aria-hidden': 'true' }, MARKS[v.level]), ` ${v.chip}`), h('span', { class: 'vtitle' }, title)),
       h('p', { class: 'verdict-head' }, v.headline),
     );
     if (v.lines.length > 0) card.append(h('ul', { class: 'verdict-lines' }, ...v.lines.map((l) => h('li', null, l))));
@@ -76,21 +60,21 @@ export function initVerdictCard(store: Store, runner: Runner, host: HTMLElement)
     lastVersion = runner.resultVersion;
     lastMode = store.mode;
     const kind = runner.analysis;
+    const wb = getWorkbench(kind);
     const v = runner.error
       ? null
-      : computeVerdict({
+      : (wb?.verdict?.({
           kind,
           project: runner.resolved ?? store.project,
           result: runner.result,
           status: runner.status,
           raster: runner.raster,
           prefs: store.prefs,
-          slab: slabTransmission,
-        });
+        }) ?? null);
     const next = v ? `${kind}|${store.mode}|${v.level}|${v.headline}|${v.lines.join('/')}|${v.actions.map((a) => a.label).join('/')}` : `${kind}|none`;
     if (next === sig) return;
     sig = next;
-    render(v, kind);
+    render(v, wb?.verdictTitle ?? '');
   }
 
   store.on('analysis', () => {

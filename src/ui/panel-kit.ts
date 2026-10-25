@@ -1,4 +1,5 @@
 // パネル部品: 設定パネル（標準・かんたん・プロ）で共有する小さな部品。
+import type { PanelFactory } from '../workbench/types';
 import { h } from './dom';
 import type { Runner } from './runner';
 import type { Store } from './state';
@@ -25,6 +26,28 @@ export function makeCtx(store: Store, runner: Runner, refreshers: (() => void)[]
     onRefresh(fn) {
       refreshers.push(fn);
     },
+  };
+}
+
+/**
+ * カード 1 枚のパネル（PanelFactory）を作る。build は PanelCtx を受け取ってカードを返す。
+ * ctx.onRefresh に登録した関数は handle.refresh() でまとめて呼ばれる。毎フレームの処理があれば { root, update } で返す。
+ * 作りが変わる条件があれば structureKey で返す（PanelHandle.structureKey）。dispose はカードを container から外す。
+ */
+export function cardPanel(
+  build: (ctx: PanelCtx) => HTMLElement | { root: HTMLElement; update?: () => void; structureKey?: () => string },
+): PanelFactory {
+  return ({ store, runner, container }) => {
+    const refreshers: (() => void)[] = [];
+    const built = build(makeCtx(store, runner, refreshers));
+    const part = 'root' in built ? built : { root: built, update: undefined, structureKey: undefined };
+    container.append(part.root);
+    return {
+      refresh: () => refreshers.forEach((fn) => fn()),
+      update: part.update,
+      structureKey: part.structureKey,
+      dispose: () => part.root.remove(),
+    };
   };
 }
 

@@ -1,5 +1,6 @@
 // 表示モード（かんたん / 標準 / プロ）と、閲覧者ごとの表示設定の保存。
 // モードは「何を見せるか」だけを変える。Project のデータはどのモードでも同じ。
+import { ANALYSIS_KINDS } from '../core/analyses';
 import type { Project } from '../core/types';
 
 export type UiMode = 'easy' | 'standard' | 'pro';
@@ -89,7 +90,7 @@ export function initialMode(saved: UiMode | undefined, hasSavedProject: boolean)
 /** プロ用の詳細設定が使われているか（advanced のどれかが設定済み、または格子を手動にしている） */
 export function hasProSettings(p: Project): boolean {
   if (p.domain.autoGrid === false) return true;
-  for (const k of ['flow', 'heat', 'stress', 'scalar', 'em'] as const) {
+  for (const k of ANALYSIS_KINDS) {
     const adv = (p[k] as { advanced?: Record<string, unknown> } | undefined)?.advanced;
     if (adv && Object.values(adv).some((v) => v !== undefined)) return true;
   }

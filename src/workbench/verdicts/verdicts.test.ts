@@ -1,21 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { defaultProject } from '../core/project';
-import type { Field, Raster, ResultSet, SolverStatus } from '../core/types';
-import { DEFAULT_PREFS } from './modes';
-import {
-  computeVerdict,
-  emVerdict,
-  findSlab,
-  flowVerdict,
-  heatVerdict,
-  kgToNewton,
-  materialTempLimits,
-  nextCooling,
-  recommendSlab,
-  reynoldsWords,
-  stressVerdict,
-  type SlabFn,
-} from './verdict';
+import { defaultProject } from '../../core/project';
+import type { Field, Raster, ResultSet, SolverStatus } from '../../core/types';
+import { kgToNewton } from '../../core/units';
+import { DEFAULT_PREFS } from '../../ui/modes';
+import { getWorkbench } from '../index';
+import type { SlabFn, Verdict, VerdictInput } from '../types';
+import { emVerdict, findSlab, recommendSlab } from './em';
+import { flowVerdict, reynoldsWords } from './flow';
+import { heatVerdict, materialTempLimits, nextCooling } from './heat';
+import { stressVerdict } from './stress';
+
+/** 登録表のワークベンチ経由で判定を作る（画面と同じ入口） */
+const computeVerdict = (inp: VerdictInput): Verdict | null => getWorkbench(inp.kind)?.verdict?.(inp) ?? null;
 
 /** 空気中の無損失の平板（垂直入射）の解析解。em.ts が使えない環境でも検証できるようにする */
 const mockSlab: SlabFn = (epsR, _tanD, d, f) => {
@@ -227,5 +223,39 @@ describe('findSlab / computeVerdict', () => {
   });
   it('対流拡散には判定を出さない', () => {
     expect(computeVerdict({ kind: 'scalar', project: mk(), result: null, status: null, raster: null, prefs: DEFAULT_PREFS })).toBeNull();
+  });
+});
+
+describe('applyAction（次の一手の反映）', () => {
+  const body = (id: string, role: 'solid' | 'heatSource', materialId: string) =>
+    ({ id, name: id, role, materialId, geom: { kind: 'rect', x: 0, y: 0, w: 0.01, h: 0.01 } }) as const;
+  it('熱: 材料の変更は発熱体を変えず、まわりの部品だけを替える。冷やし方は熱伝達率に入る', () => {
+    const wb = getWorkbench('heat')!;
+    const p = defaultProject();
+    p.shapes = [body('a', 'solid', 'pla'), body('b', 'heatSource', 'c1100')];
+    wb.applyAction!({ project: p, action: { kind: 'material', materialId: 'al6061', label: '' } });
+    expect(p.shapes.map((s) => s.materialId)).toEqual(['al6061', 'c1100']);
+    wb.applyAction!({ project: p, action: { kind: 'cooling', h: 25, label: '' } });
+    expect(p.heat.surfaceH).toBe(25);
+  });
+  it('強度: 厚みを増やす・材料を全物体に反映する', () => {
+    const wb = getWorkbench('stress')!;
+    const p = defaultProject();
+    p.shapes = [body('a', 'solid', 'pla'), body('b', 'solid', 'pla')];
+    const t = p.thickness;
+    wb.applyAction!({ project: p, action: { kind: 'thicker', factor: 1.5, label: '' } });
+    expect(p.thickness).toBeCloseTo(t * 1.5, 12);
+    wb.applyAction!({ project: p, action: { kind: 'material', materialId: 'petg', label: '' } });
+    expect(p.shapes.map((s) => s.materialId)).toEqual(['petg', 'petg']);
+  });
+  it('電磁波: 平板の厚みを中心を保って変える', () => {
+    const wb = getWorkbench('em')!;
+    const p = defaultProject();
+    p.domain = { width: 0.12, height: 0.08, nx: 300, autoGrid: true };
+    p.shapes = [{ id: 'a', name: 'カバー', role: 'solid', materialId: 'pla', geom: { kind: 'rect', x: 0.05, y: 0.006, w: 0.0037, h: 0.068 } }];
+    wb.applyAction!({ project: p, action: { kind: 'slab', thicknessMm: 2, label: '' } });
+    const g = p.shapes[0].geom;
+    expect(g.kind === 'rect' && g.w).toBeCloseTo(0.002, 9);
+    expect(g.kind === 'rect' && g.x + g.w / 2).toBeCloseTo(0.05 + 0.0037 / 2, 9);
   });
 });
