@@ -7,13 +7,14 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p engine/tsconfig.json",
     "build:artifact": "npm run build && node scripts/artifact.mjs",
     "licenses": "node scripts/check-licenses.mjs",
-    "check": "tsc --noEmit && vitest run && node scripts/check-licenses.mjs"
+    "check": "tsc --noEmit && tsc --noEmit -p engine/tsconfig.json && vitest run && node scripts/check-licenses.mjs"
   },
   "license": "MIT",
   "devDependencies": {
+    "@types/node": "^26.6.5",
     "typescript": "^5.9.3",
     "vite": "^5.4.21",
     "vite-plugin-singlefile": "^2.3.4",
