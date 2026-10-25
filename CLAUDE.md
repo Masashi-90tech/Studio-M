@@ -28,6 +28,8 @@ npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML 
 
 `src/learn` は画面（ハーネス）から**使うときに遅延 import** する（数学の窓を開く・「学ぶ」を開く）。式の提供者（`MathProvider`）だけは、解析ごとのワークベンチが `math.loadProvider`（`() => import('../../learn/providers/<kind>')`）で公開し、画面は `loadMathProvider(kind)`（`src/workbench/registry.ts`）で引く。ワークベンチが learn から使ってよいのは型（`import type`）だけ。
 
+結果ボックスの下に解析ごとの追加表示（熱の部品ごとの一覧など）を足したいときは、ワークベンチの任意項目 `ui.loadResultsExtra`（`PanelFactory` を遅延 import で返す）を使う。画面は `createPanelSlot` の `results` で差し込むだけで、解析の種類を見分けない。
+
 ワークベンチのパネルは `src/ui/` の部品（`dom`・`panel-kit`・`easy-kit`・`format` など）を使ってよい。逆に画面のシェルは、解析の種類を `if (kind === 'em')` のように見分けない（`src/workbench/shell.test.ts` が確かめる）。
 
 ## モジュールの約束

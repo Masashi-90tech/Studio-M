@@ -13,6 +13,7 @@ export const heatWorkbench: WorkbenchModule = {
     loadSettings: async () => (await import('../panels/heat')).heatSettings,
     loadEasy: async () => (await import('../panels/heat')).heatEasy,
     loadPro: async () => (await import('../panels/heat')).heatPro,
+    loadResultsExtra: async () => (await import('../panels/heat-results')).heatResultsExtra,
   },
   hints: ({ raster }) => {
     if (!raster.solid.some((v) => v === 1)) return ['物体がありません。物体と発熱体を置いてください。'];
