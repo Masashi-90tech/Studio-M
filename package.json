@@ -8,7 +8,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build:artifact": "npm run build && node scripts/artifact.mjs"
+    "build:artifact": "npm run build && node scripts/artifact.mjs",
+    "licenses": "node scripts/check-licenses.mjs",
+    "check": "tsc --noEmit && vitest run && node scripts/check-licenses.mjs"
   },
   "license": "MIT",
   "devDependencies": {

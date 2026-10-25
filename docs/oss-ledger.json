@@ -1,0 +1,55 @@
+{
+  "$comment": "Studio M の OSS 台帳。使っている・使う予定の OSS とライセンスの調査結果をここに集める。npm run licenses がこの台帳と node_modules を突き合わせる。説明は docs/OSS.md",
+  "updated": "2026-10-25",
+  "policy": {
+    "project_license": "MIT",
+    "bundle_allowed": ["MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "0BSD", "Unlicense", "Zlib", "CC0-1.0", "MIT/X11", "BlueOak-1.0.0", "Python-2.0"],
+    "bundle_conditional": ["LGPL-2.1", "LGPL-2.1-or-later", "LGPL-3.0", "MPL-2.0"],
+    "bundle_forbidden": ["GPL-2.0", "GPL-2.0-or-later", "GPL-3.0", "GPL-3.0-or-later", "AGPL-3.0", "AGPL-3.0-or-later", "SSPL-1.0"],
+    "rule": "forbidden のものは Studio M に組み込まず、別プロセス・ファイル連携でだけ使う。conditional は動的リンクや差し替え可能な形など条件を満たす場合に限り組み込む。デュアルライセンスは許可側を選んで記録する"
+  },
+  "usage_kinds": {
+    "bundled": "Studio M の配布物に含まれる（ブラウザのバンドルなど）",
+    "dev": "開発・ビルド時だけ使い、配布物に含まれない",
+    "separate-process": "別プロセスとして呼び出す。配布物には含めない",
+    "file-format": "ファイル形式だけでつながる（相手のソフトは利用者が別に入れる）",
+    "planned": "採用予定。組み込む前に再調査する",
+    "installed": "node_modules には入るが、配布物には含まれない（Node.js 実行時だけ使う依存など）。shipped: false で示す",
+    "reference": "参考にしただけ。コードは使っていない"
+  },
+  "entries": [
+    { "name": "exceljs", "version": "^4.4.0", "role": "Excel 出力", "license": "MIT", "usage": "bundled", "commercial": "ok", "obligations": ["著作権表示"], "source": "https://github.com/exceljs/exceljs", "checked": "2026-10-24" },
+    { "name": "jszip", "version": "^3.10.2", "role": "xlsx の後処理（反復計算の設定）", "license": "MIT OR GPL-3.0-or-later", "chosen": "MIT", "usage": "bundled", "commercial": "ok", "obligations": ["著作権表示"], "source": "https://github.com/Stuk/jszip", "checked": "2026-10-24" },
+    { "name": "vite", "role": "ビルド", "license": "MIT", "usage": "dev", "commercial": "ok", "source": "https://github.com/vitejs/vite", "checked": "2026-10-24" },
+    { "name": "vite-plugin-singlefile", "role": "単一 HTML 化", "license": "MIT", "usage": "dev", "commercial": "ok", "source": "https://github.com/richardtallent/vite-plugin-singlefile", "checked": "2026-10-24" },
+    { "name": "typescript", "role": "型チェック", "license": "Apache-2.0", "usage": "dev", "commercial": "ok", "source": "https://github.com/microsoft/TypeScript", "checked": "2026-10-24" },
+    { "name": "vitest", "role": "テスト", "license": "MIT", "usage": "dev", "commercial": "ok", "source": "https://github.com/vitest-dev/vitest", "checked": "2026-10-24" },
+
+    { "name": "buffers", "version": "0.1.1", "role": "exceljs の依存（unzipper 経由）", "license": "UNKNOWN", "usage": "installed", "shipped": false, "commercial": "unknown", "notes": "ライセンス表記なし。Node.js で xlsx を読むとき（unzipper）だけ使われ、ブラウザ版の配布物（dist/index.html、exceljs.min.js）には含まれないことを確認済み。配布物に入るようになったら代替を検討する", "checked": "2026-10-25" },
+
+    { "name": "Ten Minute Physics 17-fluidSim", "role": "流れソルバーの参考", "license": "MIT", "usage": "reference", "commercial": "ok", "source": "https://github.com/matthias-research/pages", "checked": "2026-10-24", "notes": "コードは使っていない" },
+    { "name": "pmocz/latticeboltzmann-python", "role": "LBM の参考", "license": "GPL-3.0", "usage": "reference", "commercial": "conditions", "source": "https://github.com/pmocz/latticeboltzmann-python", "checked": "2026-10-24", "notes": "GPL のためコードは使わない。LBM は自作" },
+    { "name": "CFDPython (12 steps to Navier-Stokes)", "role": "数値計算の教材", "license": "BSD-3-Clause（コード）/ CC-BY（教材）", "usage": "reference", "commercial": "ok", "source": "https://github.com/barbagroup/CFDPython", "checked": "2026-10-24" },
+
+    { "name": "SolidCraft", "role": "3D CAD エンジン（主力）", "license": "MIT OR Apache-2.0", "usage": "planned", "commercial": "ok", "obligations": ["Apache-2.0 を選ぶ場合は NOTICE の保持"], "source": "https://github.com/bherbruck/solidcraft", "checked": "2026-10-25", "notes": "開発初期。カーネルは truck（Apache-2.0）。変換層越しに使い、バージョンを固定する" },
+    { "name": "replicad", "role": "3D 形状（補助・保険）", "license": "MIT", "usage": "planned", "commercial": "ok", "source": "https://github.com/sgenoud/replicad", "checked": "2026-10-25", "notes": "中身の opencascade.js / OCCT は LGPL-2.1。組み込み方を採用時に確認" },
+    { "name": "OpenCASCADE (OCCT)", "role": "3D 形状カーネル", "license": "LGPL-2.1（例外条項付き）", "usage": "planned", "commercial": "conditions", "obligations": ["LGPL: 利用者が差し替えられる形で組み込む", "改変した場合はソース公開"], "source": "https://dev.opencascade.org", "checked": "2026-10-25" },
+    { "name": "Manifold", "role": "メッシュのブーリアン", "license": "Apache-2.0", "usage": "planned", "commercial": "ok", "source": "https://github.com/elalish/manifold", "checked": "2026-10-25" },
+    { "name": "Tauri", "role": "デスクトップアプリ化", "license": "MIT OR Apache-2.0", "usage": "planned", "commercial": "ok", "source": "https://github.com/tauri-apps/tauri", "checked": "2026-10-25" },
+
+    { "name": "OpenFOAM", "role": "本格的な流れ・熱", "license": "GPL-3.0", "usage": "separate-process", "commercial": "conditions", "obligations": ["組み込まない。配布する場合は GPL に従う"], "source": "https://www.openfoam.com", "checked": "2026-10-24" },
+    { "name": "foamlib", "role": "OpenFOAM の制御", "license": "GPL-3.0", "usage": "separate-process", "commercial": "conditions", "source": "https://github.com/gerlero/foamlib", "checked": "2026-10-24", "notes": "PC 側の計算エンジン（別プロセス）でだけ使う" },
+    { "name": "CalculiX", "role": "本格的な強度", "license": "GPL-2.0", "usage": "separate-process", "commercial": "conditions", "source": "http://www.calculix.de", "checked": "2026-10-24" },
+    { "name": "Elmer", "role": "熱・マルチフィジックス", "license": "GPL-2.0 / LGPL-2.1", "usage": "separate-process", "commercial": "conditions", "source": "https://github.com/ElmerCSC/elmerfem", "checked": "2026-10-24" },
+    { "name": "openEMS", "role": "本格的な電磁波", "license": "GPL-3.0", "usage": "separate-process", "commercial": "conditions", "source": "https://github.com/thliebig/openEMS", "checked": "2026-10-25" },
+    { "name": "gmsh", "role": "メッシング", "license": "GPL-2.0-or-later", "usage": "separate-process", "commercial": "conditions", "source": "https://gmsh.info", "checked": "2026-10-24" },
+    { "name": "FreeCAD", "role": "CNC 加工（CAM）", "license": "LGPL-2.0-or-later", "usage": "separate-process", "commercial": "ok", "source": "https://github.com/FreeCAD/FreeCAD", "checked": "2026-10-24" },
+    { "name": "ParaView", "role": "3D 可視化", "license": "BSD-3-Clause", "usage": "file-format", "commercial": "ok", "source": "https://www.paraview.org", "checked": "2026-10-24" },
+    { "name": "KiCad", "role": "基板設計", "license": "GPL-3.0", "usage": "file-format", "commercial": "ok", "source": "https://www.kicad.org", "checked": "2026-10-25", "notes": "ファイル形式（.kicad_pcb）を読むだけ。KiCad のコードは使わない" },
+    { "name": "ngspice", "role": "回路シミュレーション", "license": "BSD-3-Clause", "usage": "planned", "commercial": "ok", "source": "https://ngspice.sourceforge.io", "checked": "2026-10-24" },
+
+    { "name": "Chili3D", "role": "ブラウザ CAD（比較対象）", "license": "AGPL-3.0", "usage": "reference", "commercial": "conditions", "source": "https://github.com/xiangechen/chili3d", "checked": "2026-10-25", "notes": "紹介記事・ミラーでの記載。組み込まない" },
+    { "name": "Dune 3D", "role": "パラメトリック CAD（比較対象）", "license": "GPL-3.0", "usage": "reference", "commercial": "conditions", "source": "https://github.com/dune3d/dune3d", "checked": "2026-10-25", "notes": "ミラーでの記載。組み込まない" },
+    { "name": "Fornjot", "role": "Rust CAD カーネル（比較対象）", "license": "0BSD", "usage": "reference", "commercial": "ok", "source": "https://github.com/hannobraun/fornjot", "checked": "2026-10-25", "notes": "2026年6月に開発終了・アーカイブ。初期プロジェクトに依存するリスクの例" }
+  ]
+}
