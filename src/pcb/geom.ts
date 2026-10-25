@@ -34,12 +34,18 @@ export function bboxOf(points: Pt[], into: BBox = emptyBBox()): BBox {
 /** 点 p を原点まわりに deg 度回す（画面上で反時計回りが正、y 下向き） */
 export function rotatePt([x, y]: Pt, deg: number): Pt {
   if (!deg) return [x, y];
+  // 90° の倍数は誤差なしで回す（部品の範囲がきれいな値になるように）
+  const q = (((deg % 360) + 360) % 360) / 90;
+  if (Number.isInteger(q)) {
+    if (q === 0) return [x, y];
+    if (q === 1) return [y, -x];
+    if (q === 2) return [-x, -y];
+    return [-y, x];
+  }
   const r = (deg * Math.PI) / 180;
   const c = Math.cos(r);
   const s = Math.sin(r);
-  // 90° や 180° の誤差（6e-17 など）が残らないようにする
-  const snap = (v: number) => (Math.abs(v) < 1e-12 ? 0 : v);
-  return [snap(x * c + y * s), snap(y * c - x * s)];
+  return [x * c + y * s, y * c - x * s];
 }
 
 /** フットプリントの座標を基板の座標へ直す関数を作る（回して、平行移動する） */
