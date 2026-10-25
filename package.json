@@ -10,13 +10,17 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p engine/tsconfig.json",
     "build:artifact": "npm run build && node scripts/artifact.mjs",
     "licenses": "node scripts/check-licenses.mjs",
-    "check": "tsc --noEmit && tsc --noEmit -p engine/tsconfig.json && vitest run && node scripts/check-licenses.mjs"
+    "check": "tsc --noEmit && tsc --noEmit -p engine/tsconfig.json && vitest run && node scripts/check-licenses.mjs",
+    "engine": "vite build --ssr engine/main.ts --outDir dist-engine -c engine/vite.config.ts --logLevel warn && node dist-engine/main.js",
+    "engine:dev": "vite-node engine/main.ts",
+    "build:engine": "vite build --ssr engine/main.ts --outDir dist-engine -c engine/vite.config.ts"
   },
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^26.6.5",
     "typescript": "^5.9.3",
     "vite": "^5.4.21",
+    "vite-node": "^2.1.9",
     "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^2.1.9"
   },

@@ -37,6 +37,16 @@ export const FORMULA_SHEET_NAME = '対流拡散';
 /** 解析の名前（画面のタブと同じ。core/analyses.ts） */
 const ANALYSIS_NAME: Record<AnalysisKind, string> = Object.fromEntries(ANALYSIS_KINDS.map((k) => [k, analysisLabel(k)])) as Record<AnalysisKind, string>;
 
+/** シート名に使う短い名前。PC のエンジンの結果（label あり）は「強度本計算」のように Lite と区別する */
+function sheetPrefix(rs: ResultSet): string {
+  return rs.label ? `${ANALYSIS_NAME[rs.analysis]}本計算` : ANALYSIS_NAME[rs.analysis];
+}
+
+/** 見出しに使う名前（label があれば添える） */
+function titleName(rs: ResultSet): string {
+  return rs.label ? `${ANALYSIS_NAME[rs.analysis]}・${rs.label}` : ANALYSIS_NAME[rs.analysis];
+}
+
 const ROLE_NAME: Record<ShapeRole, string> = {
   solid: '物体',
   heatSource: '発熱体',
@@ -223,7 +233,7 @@ function addFieldSheet(wb: ExcelJS.Workbook, name: string, rs: ResultSet, field:
   ws.getCell(2, 1).value = hasData
     ? `最小 ${+min.toPrecision(4)} ／ 最大 ${+max.toPrecision(4)}${unit}`
     : '有効なセルがありません';
-  const notes = [`解析: ${ANALYSIS_NAME[rs.analysis]}　格子 ${rs.nx}×${rs.ny}、セル幅 ${rs.h} m。上端が領域の上（j = ny-1）、左端が i = 0。`];
+  const notes = [`解析: ${titleName(rs)}　格子 ${rs.nx}×${rs.ny}、セル幅 ${rs.h} m。上端が領域の上（j = ny-1）、左端が i = 0。`];
   if (field.diverging) notes.push('0 を中心に青（負）・赤（正）で色分け。');
   if (g.factor > 1) notes.push(`格子が大きいため ${g.factor}×${g.factor} セルの平均で間引いています（${g.nx}×${g.ny}）。`);
   if (field.mask) notes.push('灰色のセルは値が無効（物体の外・内など）。');
@@ -286,7 +296,7 @@ function addOverviewSheet(wb: ExcelJS.Workbook, project: Project, results: Resul
 
   for (const rs of results) {
     ws.addRow([]);
-    const head = ws.addRow([`【${ANALYSIS_NAME[rs.analysis]}】 解析結果（格子 ${rs.nx}×${rs.ny}、h = ${rs.h} m）`]);
+    const head = ws.addRow([`【${titleName(rs)}】 解析結果（格子 ${rs.nx}×${rs.ny}、h = ${rs.h} m）`]);
     head.font = { bold: true, size: 13 };
     const th = ws.addRow(['項目', '値', '単位']);
     styleHeaderRow(th);
@@ -432,11 +442,11 @@ export async function exportResultsWorkbook(project: Project, results: ResultSet
 
   for (const rs of results) {
     for (const field of rs.fields) {
-      const name = makeSheetName(`${ANALYSIS_NAME[rs.analysis]}_${field.label}`, used);
+      const name = makeSheetName(`${sheetPrefix(rs)}_${field.label}`, used);
       addFieldSheet(wb, name, rs, field);
     }
     if (rs.history.length > 0) {
-      addHistorySheet(wb, makeSheetName(`履歴_${ANALYSIS_NAME[rs.analysis]}`, used), rs);
+      addHistorySheet(wb, makeSheetName(`履歴_${sheetPrefix(rs)}`, used), rs);
     }
   }
   return toBytes(wb);

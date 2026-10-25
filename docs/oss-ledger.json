@@ -108,6 +108,15 @@
       "checked": "2026-10-24"
     },
     {
+      "name": "vite-node",
+      "role": "エンジン（Studio M Engine）を開発中にそのまま動かす（npm run engine:dev）",
+      "license": "MIT",
+      "usage": "dev",
+      "commercial": "ok",
+      "source": "https://github.com/vitest-dev/vitest/tree/main/packages/vite-node",
+      "checked": "2026-10-25"
+    },
+    {
       "name": "@types/node",
       "role": "エンジン（Node.js）の型定義",
       "license": "MIT",

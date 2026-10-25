@@ -270,6 +270,8 @@ export interface ResultSet {
   warnings: string[];
   /** 形状（部品）ごとの結果。熱なら部品ごとの最高温度など。省略可 */
   perShape?: ShapeResult[];
+  /** 出どころの表示名（例: 「CalculiX 本計算」）。省略時は Lite の結果。Excel のシート名や見出しに使う */
+  label?: string;
 }
 
 export interface ShapeResult {
