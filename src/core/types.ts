@@ -39,6 +39,10 @@ export interface Shape {
   tempC?: number;
   /** load の合計荷重 [N]（x, y 成分） */
   force?: { fx: number; fy: number };
+  /** この部品の上限温度の目安 [°C]（電子部品の動作温度など）。熱の判定で材料の maxTempC より優先する */
+  maxTempC?: number;
+  /** 取り込み元の情報（KiCad の部品番号・値・フットプリントなど）。表示と書き出しにだけ使う */
+  meta?: Record<string, string>;
 }
 
 // ---------- 材料 ----------
@@ -182,6 +186,8 @@ export interface Project {
   domain: { width: number; height: number; nx: number; autoGrid?: boolean };
   /** 2D解析の奥行き厚さ [m] */
   thickness: number;
+  /** KiCad などから取り込んだ基板の情報。あれば熱解析で銅箔の効果を入れる */
+  pcb?: PcbInfo;
   shapes: Shape[];
   flow: FlowSettings;
   heat: HeatSettings;
@@ -210,6 +216,16 @@ export interface Raster {
   /** セルに加わる荷重 [N]（x, y） */
   loadFx: Float32Array;
   loadFy: Float32Array;
+  /**
+   * そのセルを最後に塗った形状の、project.shapes での番号（なければ -1）。
+   * 部品ごとの結果（部品の最高温度など）を出すのに使う。省略時は部品ごとの結果を出さない
+   */
+  shapeIndex?: Int32Array;
+  /**
+   * 面内の実効熱伝導率 [W/(m·K)]。基板の銅箔のように、材料の k をセルごとに上書きしたいときに使う。
+   * NaN または省略なら材料の k を使う
+   */
+  kEff?: Float32Array;
 }
 
 // ---------- 解析結果 ----------
@@ -252,6 +268,16 @@ export interface ResultSet {
   history: History[];
   /** 利用者に見せる注意（精度の限界、条件の自動調整など） */
   warnings: string[];
+  /** 形状（部品）ごとの結果。熱なら部品ごとの最高温度など。省略可 */
+  perShape?: ShapeResult[];
+}
+
+export interface ShapeResult {
+  shapeId: string;
+  /** 表示名（部品番号や形状の名前） */
+  label: string;
+  /** 値の一覧。key は ScalarValue と同じ書き方（例: maxTemp） */
+  values: ScalarValue[];
 }
 
 // ---------- ソルバー ----------
@@ -279,3 +305,25 @@ export interface Solver {
 }
 
 export type SolverFactory = (project: Project, raster: Raster) => Solver;
+
+// ---------- 基板（KiCad 取り込み） ----------
+
+/** 銅箔の層。polygons は基板座標を Studio M の座標（m、y 上向き）に直した多角形 */
+export interface CopperLayer {
+  /** 層の名前（F.Cu、B.Cu、In1.Cu など） */
+  name: string;
+  /** 銅箔の厚さ [µm]。1oz ≈ 35 µm */
+  thicknessUm: number;
+  /** 配線・ベタ・パッドを多角形にしたもの */
+  polygons: [number, number][][];
+}
+
+export interface PcbInfo {
+  /** 取り込んだファイル名 */
+  source: string;
+  /** 基板全体の厚さ [mm]（通常 1.6） */
+  boardThicknessMm: number;
+  /** 基材の材料ID（通常 fr4） */
+  substrateId: string;
+  layers: CopperLayer[];
+}
