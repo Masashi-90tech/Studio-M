@@ -66,7 +66,16 @@ export async function createSolver(opts: { kind: AnalysisKind; project: Project;
 // ---------- パネル ----------
 
 function panelLoader(wb: WorkbenchModule, slot: PanelSlot): (() => Promise<PanelFactory>) | undefined {
-  return slot === 'settings' ? wb.ui?.loadSettings : slot === 'easy' ? wb.ui?.loadEasy : wb.ui?.loadPro;
+  switch (slot) {
+    case 'settings':
+      return wb.ui?.loadSettings;
+    case 'easy':
+      return wb.ui?.loadEasy;
+    case 'pro':
+      return wb.ui?.loadPro;
+    case 'results':
+      return wb.ui?.loadResultsExtra;
+  }
 }
 
 /** パネルの作り方を読み込む。その解析にそのパネルがなければ null */

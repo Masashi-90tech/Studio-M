@@ -22,6 +22,7 @@ import {
   type DrawerState,
 } from './learn-logic';
 import { withLoading } from './lazy';
+import { createLearnSwitch, loadWhenEnabled, type LearnSwitch } from './learn-pref';
 import type { MathCardHandle } from './math-card';
 import { openPreset } from './open-preset';
 import type { Runner } from './runner';
@@ -47,8 +48,18 @@ export interface LearnDrawerHandle {
   close(): void;
 }
 
-export function initLearnDrawer(opts: { store: Store; runner: Runner; math: MathCardHandle; drawer: HTMLElement; button: HTMLButtonElement; chipHost: HTMLElement }): LearnDrawerHandle {
+export function initLearnDrawer(opts: {
+  store: Store;
+  runner: Runner;
+  math: MathCardHandle;
+  drawer: HTMLElement;
+  button: HTMLButtonElement;
+  chipHost: HTMLElement;
+  /** 学習機能の表示設定。OFF のあいだはボタン・ドロワー・案内を隠し、学びモードを読み込まない（省略時は常に ON） */
+  learn?: LearnSwitch;
+}): LearnDrawerHandle {
   const { store, runner, math, drawer, button, chipHost } = opts;
+  const enabled = opts.learn ?? createLearnSwitch({ initial: true });
   let state: DrawerState = INITIAL_DRAWER;
   let learn: Learn | null = null;
   let loading: Promise<Learn | null> | null = null;
@@ -84,7 +95,7 @@ export function initLearnDrawer(opts: { store: Store; runner: Runner; math: Math
   // ---------- 学びモードの読み込み ----------
   function ensureLearn(): Promise<Learn | null> {
     if (learn) return Promise.resolve(learn);
-    loading ??= withLoading({ label: '学びモード', task: loadLearn() }).then((m) => {
+    loading ??= withLoading({ label: '学びモード', task: loadWhenEnabled(enabled, loadLearn) }).then((m) => {
       loading = null;
       if (!m) return null;
       learn = m;
@@ -149,9 +160,11 @@ export function initLearnDrawer(opts: { store: Store; runner: Runner; math: Math
   }
 
   function open(lessonId?: string): void {
+    if (!enabled.get()) return;
     state = openDrawer(state, lessonId);
     syncView();
     void ensureLearn().then((m) => {
+      if (!enabled.get()) return; // 読み込み中に OFF にされた
       if (!m) {
         // 読み込めなかったときは閉じる（toast は withLoading が出している）
         state = closeDrawer(state);
@@ -203,22 +216,26 @@ export function initLearnDrawer(opts: { store: Store; runner: Runner; math: Math
     );
   }
 
-  store.on('load', () => {
+  /** 開いているプリセットに合う「この例で学ぶ」の案内を作り直す（OFF のあいだは何も読み込まない） */
+  function refreshChip(): void {
     const seq = ++chipSeq;
     chipLesson = undefined;
     chipDismissed = false;
-    edited = false;
     renderChip();
     const presetId = store.presetId;
     if (!presetId) return;
     // 学びモードの読み込みは、案内を出すときだけ（レッスンの一覧は軽い）
-    void import('../learn/lessons').then((m) => {
-      if (seq !== chipSeq) return; // 読み込み中にまた別のものが開かれた
+    void loadWhenEnabled(enabled, () => import('../learn/lessons')).then((m) => {
+      if (!m || seq !== chipSeq) return; // OFF になった、または読み込み中にまた別のものが開かれた
       chipLesson = m.lessonForPreset(presetId);
       // ドロワーでそのレッスンを開いているなら案内は要らない
       chipDismissed = state.open && state.lessonId === chipLesson?.id;
       renderChip();
     });
+  }
+  store.on('load', () => {
+    edited = false;
+    refreshChip();
   });
   store.on('project', (src) => {
     if (src === 'name' || src === 'label' || edited) return;
@@ -239,6 +256,26 @@ export function initLearnDrawer(opts: { store: Store; runner: Runner; math: Math
     panel.refresh();
   }
 
+  // 設定で ON / OFF が切り替わったら、ボタンとドロワーを出し入れする
+  function syncEnabled(): void {
+    const on = enabled.get();
+    button.hidden = !on;
+    if (!on) {
+      // 開いていれば閉じ、レッスンの表示も片づける（フォーカスはボタンが隠れるので動かさない）
+      state = closeDrawer(state);
+      disposePanel();
+      chipSeq++;
+      chipLesson = undefined;
+      renderChip();
+      syncView();
+    } else {
+      // 開いたままのプリセットがあれば、その案内を出す
+      refreshChip();
+    }
+  }
+  enabled.subscribe(syncEnabled);
+
+  syncEnabled();
   syncView();
 
   return { update, open, close };

@@ -111,14 +111,15 @@ export function section(title: string, ...children: Child[]): HTMLElement {
   return h('section', { class: 'card' }, h('h3', null, title), ...children);
 }
 
-/** 画面下に一時的なメッセージを出す */
-export function toast(message: string, kind: 'info' | 'error' = 'info'): void {
+/** 画面下に一時的なメッセージを出す。長い文は opts.ms（表示する時間 [ms]）で長く出せる */
+export function toast(message: string, kind: 'info' | 'error' = 'info', opts: { ms?: number } = {}): void {
   const host = document.getElementById('toasts');
   if (!host) return;
   const el = h('div', { class: `toast ${kind}`, role: kind === 'error' ? 'alert' : 'status' }, message);
   host.append(el);
-  window.setTimeout(() => el.classList.add('out'), kind === 'error' ? 6000 : 2800);
-  window.setTimeout(() => el.remove(), kind === 'error' ? 6400 : 3200);
+  const ms = opts.ms ?? (kind === 'error' ? 6000 : 2800);
+  window.setTimeout(() => el.classList.add('out'), ms);
+  window.setTimeout(() => el.remove(), ms + 400);
 }
 
 /** 時間のかかる読み込み中に出し続けるメッセージ。戻り値の関数で消す */

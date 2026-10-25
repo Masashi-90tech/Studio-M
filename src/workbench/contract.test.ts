@@ -122,7 +122,7 @@ describe.each(listWorkbenches().map((w) => [w.kind, w] as const))('ワークベ�
 
   it('パネルと重ね描きのローダーが関数を返す', async () => {
     const ui = wb.ui;
-    const loaded = await Promise.all([ui?.loadSettings?.(), ui?.loadEasy?.(), ui?.loadPro?.(), ui?.loadOverlay?.()]);
+    const loaded = await Promise.all([ui?.loadSettings?.(), ui?.loadEasy?.(), ui?.loadPro?.(), ui?.loadOverlay?.(), ui?.loadResultsExtra?.()]);
     for (const f of loaded) if (f !== undefined) expect(typeof f).toBe('function');
     // 数学の窓は省略可。付いているなら読み込める形であること
     if (wb.math) expect(typeof wb.math.loadProvider).toBe('function');

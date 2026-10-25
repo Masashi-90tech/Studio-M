@@ -9,7 +9,7 @@ import { withLoading } from './lazy';
 import type { Runner } from './runner';
 import type { Store } from './state';
 
-const SLOT_NAME: Record<PanelSlot, string> = { settings: '設定パネル', easy: 'かんたんパネル', pro: '詳細設定パネル' };
+const SLOT_NAME: Record<PanelSlot, string> = { settings: '設定パネル', easy: 'かんたんパネル', pro: '詳細設定パネル', results: '結果の追加表示' };
 
 export interface PanelSlotHost {
   /** 解析 kind のパネルに差し替える（null なら空にする）。読み込み済みなら同期で描く */

@@ -3,6 +3,7 @@ import { getWorkbench } from '../workbench';
 import { COLORMAP_LABELS, type ColormapName } from './colormap';
 import { clear, h } from './dom';
 import { formatNumber, formatQuantity } from './format';
+import { createPanelSlot } from './panel-host';
 import { hasVectorFields } from './render';
 import type { Runner } from './runner';
 import type { Store } from './state';
@@ -19,6 +20,9 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
   const hintBox = h('div', { class: 'notice info', hidden: true });
   const warnBox = h('div', { class: 'notice warn', hidden: true });
   const scalars = h('dl', { class: 'scalars adv-only' });
+  // 解析ごとの追加表示（熱の部品ごとの一覧など）。ワークベンチの ui.loadResultsExtra が差し込む
+  const extraHost = h('div', { class: 'results-extra' });
+  const extra = createPanelSlot({ store, runner, container: extraHost, slot: 'results' });
 
   const play = h('button', { class: 'btn primary', type: 'button', onclick: () => { runner.setRunning(true); refreshButtons(); } }, '再生');
   const pause = h('button', { class: 'btn', type: 'button', onclick: () => { runner.setRunning(false); refreshButtons(); } }, '一時停止');
@@ -60,6 +64,7 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
       hintBox,
       warnBox,
       scalars,
+      extraHost,
       h('div', { class: 'btn-row' }, play, pause, reset),
       h('label', { class: 'field' }, h('span', { class: 'field-label' }, '表示する量'), fieldSel),
       h('label', { class: 'field adv-only' }, h('span', { class: 'field-label' }, '色'), cmapSel),
@@ -84,6 +89,7 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
   }
 
   function update(): void {
+    extra.update();
     const now = performance.now();
     const sig = `${runner.running}|${store.analysis}|${runner.error}`;
     if (runner.resultVersion === lastVersion && sig === lastSig) return;
@@ -154,7 +160,9 @@ export function initResults(store: Store, runner: Runner, host: HTMLElement): { 
 
   store.on('analysis', () => {
     lastVersion = -1;
+    extra.mount(store.analysis);
   });
+  extra.mount(store.analysis);
   refreshButtons();
   return { update };
 }

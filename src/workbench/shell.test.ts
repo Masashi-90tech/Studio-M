@@ -84,6 +84,22 @@ describe('画面（ハーネス）のシェル', () => {
     expect(hits).toEqual([]);
   });
 
+  it('KiCad 基板（src/pcb）は、画面から遅延 import か型としてだけ読み込む', () => {
+    // 静的な import（型以外・副作用だけの import も含む）で pcb を読むと、起動時に基板の取り込み一式が入ってしまう
+    const hits: string[] = [];
+    for (const f of shellFiles()) {
+      for (const m of strip(read(f)).matchAll(/^\s*import\s+(type\s+)?(?:[^;'"]*?from\s+)?['"]([^'"]*(?:^|\/)pcb(?:\/[^'"]*)?)['"]/gm)) {
+        if (!m[1]) hits.push(`${f}: ${m[2]}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('画面が KiCad 基板を読む入口は、遅延 import の 1 か所（pcb-open.ts）に集まっている', () => {
+    const files = shellFiles().filter((f) => /import\(\s*['"][^'"]*\/pcb\//.test(strip(read(f))));
+    expect(files).toEqual(['ui/pcb-open.ts']);
+  });
+
   it('src/learn は core だけに依存する（ui・workbench・solvers を import しない。テストは除く）', () => {
     const hits: string[] = [];
     const walk = (dir: string): string[] =>

@@ -221,3 +221,119 @@ describe('熱解析: プロ設定（advanced）', () => {
     expect(result.warnings.some((w) => w.includes('最大反復回数（3回）'))).toBe(true);
   });
 });
+
+/** 基板 100×60 mm に 1 W のチップを置いた構成。copper が true なら全面に 35 µm の銅箔（片面）を張る */
+function boardProject(opts: { copper: boolean; chipMaxC?: number }): Project {
+  const p = defaultProject();
+  p.domain = { width: 0.12, height: 0.08, nx: 120 }; // h = 1 mm
+  p.thickness = 0.0016;
+  p.heat.surfaceH = 10;
+  p.heat.faceCooling = true;
+  p.shapes = [
+    { id: 'pcb', name: '基板', role: 'solid', materialId: 'fr4', geom: { kind: 'rect', x: 0.01, y: 0.01, w: 0.1, h: 0.06 } },
+    { id: 'u1', name: 'U1 レギュレーター', role: 'heatSource', materialId: 'fr4', heatW: 1, maxTempC: opts.chipMaxC, geom: { kind: 'rect', x: 0.05, y: 0.03, w: 0.01, h: 0.01 } },
+  ];
+  if (opts.copper) {
+    p.pcb = {
+      source: 'test.kicad_pcb',
+      boardThicknessMm: 1.6,
+      substrateId: 'fr4',
+      layers: [{ name: 'F.Cu', thicknessUm: 35, polygons: [[[0.0, 0.0], [0.12, 0.0], [0.12, 0.08], [0.0, 0.08]]] }],
+    };
+  }
+  return p;
+}
+
+describe('熱解析: 基板の実効熱伝導率（kEff）', () => {
+  it('銅箔を入れると熱が広がり、同じ発熱でも最高温度が下がる。熱収支も合う', () => {
+    const plain = solve(boardProject({ copper: false }));
+    const cu = solve(boardProject({ copper: true }));
+    expect(scalar(cu.result, 'maxTemp')).toBeLessThan(scalar(plain.result, 'maxTemp') - 5);
+    expect(Math.abs(scalar(cu.result, 'heatOut') - 1)).toBeLessThan(0.01);
+    expect(Math.abs(scalar(plain.result, 'heatOut') - 1)).toBeLessThan(0.01);
+    // 銅箔の 2D 近似であることを知らせる警告は、kEff を使ったときだけ出る
+    expect(cu.result.warnings.some((w) => w.includes('実効熱伝導率'))).toBe(true);
+    expect(plain.result.warnings.some((w) => w.includes('実効熱伝導率'))).toBe(false);
+  });
+
+  it('kEff は面内の伝導だけを変える（実効 k = (0.3·(1.6−0.035) + 391·0.035)/1.6 ≈ 8.8 の棒の温度分布）', () => {
+    const p = rodProject();
+    p.shapes = [
+      { id: 'rod', name: '棒', role: 'solid', materialId: 'fr4', geom: { kind: 'rect', x: 0, y: 0.04, w: 1, h: 0.02 } },
+      { id: 'tl', name: '高温端', role: 'fixedTemp', materialId: '', tempC: 100, geom: { kind: 'rect', x: 0, y: 0.04, w: 0.01, h: 0.02 } },
+      { id: 'tr', name: '低温端', role: 'fixedTemp', materialId: '', tempC: 20, geom: { kind: 'rect', x: 0.99, y: 0.04, w: 0.01, h: 0.02 } },
+    ];
+    const raster = rasterize(p);
+    const kEff = (0.3 * (1.6e-3 - 35e-6) + 391 * 35e-6) / 1.6e-3;
+    raster.kEff = new Float32Array(raster.solid.length).fill(NaN);
+    for (let c = 0; c < raster.solid.length; c++) if (raster.solid[c]) raster.kEff[c] = kEff;
+    const solver = createHeatSolver(p, raster);
+    let st = solver.step(50);
+    while (!st.done) st = solver.step(50);
+    const q = field(solver.result(), 'heatFlux').data[5 * 100 + 50];
+    expect(Math.abs(q - (kEff * 80) / 0.99) / ((kEff * 80) / 0.99)).toBeLessThan(0.01);
+  });
+
+  it('kEff が NaN のセルは材料の k を使う', () => {
+    const p = rodProject();
+    p.shapes = [
+      { id: 'rod', name: '棒', role: 'solid', materialId: 'al6061', geom: { kind: 'rect', x: 0, y: 0.04, w: 1, h: 0.02 } },
+      { id: 'tl', name: '高温端', role: 'fixedTemp', materialId: '', tempC: 100, geom: { kind: 'rect', x: 0, y: 0.04, w: 0.01, h: 0.02 } },
+      { id: 'tr', name: '低温端', role: 'fixedTemp', materialId: '', tempC: 20, geom: { kind: 'rect', x: 0.99, y: 0.04, w: 0.01, h: 0.02 } },
+    ];
+    const raster = rasterize(p);
+    raster.kEff = new Float32Array(raster.solid.length).fill(NaN);
+    const solver = createHeatSolver(p, raster);
+    let st = solver.step(50);
+    while (!st.done) st = solver.step(50);
+    const r = solver.result();
+    expect(Math.abs(field(r, 'heatFlux').data[5 * 100 + 50] - (167 * 80) / 0.99) / ((167 * 80) / 0.99)).toBeLessThan(0.01);
+    expect(r.warnings.some((w) => w.includes('実効熱伝導率'))).toBe(false);
+  });
+});
+
+describe('熱解析: 部品ごとの結果（perShape）', () => {
+  it('発熱体の最高・平均温度と発熱、上限との余裕を返す', () => {
+    const { result } = solve(boardProject({ copper: false, chipMaxC: 125 }));
+    const parts = result.perShape!;
+    expect(parts).toHaveLength(1);
+    const u1 = parts[0];
+    expect(u1.shapeId).toBe('u1');
+    expect(u1.label).toBe('U1 レギュレーター');
+    const v = (key: string) => u1.values.find((x) => x.key === key)!.value;
+    // 発熱体が基板でいちばん熱いので、全体の最高温度と一致する
+    expect(v('maxTemp')).toBeCloseTo(scalar(result, 'maxTemp'), 4);
+    expect(v('avgTemp')).toBeLessThanOrEqual(v('maxTemp'));
+    expect(v('avgTemp')).toBeGreaterThan(25);
+    expect(v('heatW')).toBeCloseTo(1, 4);
+    expect(v('limitC')).toBe(125);
+    expect(v('marginC')).toBeCloseTo(125 - v('maxTemp'), 6);
+    for (const x of u1.values) expect(x.label.length).toBeGreaterThan(0);
+    expect(u1.values.find((x) => x.key === 'marginC')!.unit).toBe('K');
+  });
+
+  it('上限のない発熱体は余裕を出さず、maxTempC だけの solid も対象になる。発熱体も上限もない solid は対象外', () => {
+    const p = boardProject({ copper: false });
+    p.shapes[0].maxTempC = 90; // 基板に上限を付ける
+    const { result } = solve(p);
+    const byId = new Map(result.perShape!.map((s) => [s.shapeId, s]));
+    expect([...byId.keys()].sort()).toEqual(['pcb', 'u1']);
+    // U1 は FR-4 の材料上限（130°C）を引き継ぐ
+    expect(byId.get('u1')!.values.find((x) => x.key === 'limitC')!.value).toBe(130);
+    expect(byId.get('pcb')!.values.find((x) => x.key === 'limitC')!.value).toBe(90);
+
+    const q = boardProject({ copper: false });
+    q.shapes[1].materialId = 'al6061'; // 材料にも上限なし
+    const r2 = solve(q).result;
+    expect(r2.perShape![0].values.some((x) => x.key === 'limitC' || x.key === 'marginC')).toBe(false);
+  });
+
+  it('対象の形状がなければ perShape は省略する', () => {
+    const p = rodProject();
+    p.shapes = [
+      { id: 'rod', name: '棒', role: 'solid', materialId: 'al6061', geom: { kind: 'rect', x: 0, y: 0.04, w: 1, h: 0.02 } },
+      { id: 'tl', name: '高温端', role: 'fixedTemp', materialId: '', tempC: 100, geom: { kind: 'rect', x: 0, y: 0.04, w: 0.01, h: 0.02 } },
+    ];
+    expect(solve(p).result.perShape).toBeUndefined();
+  });
+});

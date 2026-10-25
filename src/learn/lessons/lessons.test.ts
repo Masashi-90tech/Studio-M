@@ -86,6 +86,11 @@ describe('確認（check）が、アプリの状態で ✓ になる', () => {
     });
     expect(runCheck(stepOf(L('board'), 'practice'), grow)).toBe(true);
   });
+  it('基板: ファン（熱伝達率 25 以上）で ✓。LDO・銅ベタ・接合部温度の式を開く', () => {
+    expect(runCheck(stepOf(L('board'), 'try'), ctxOf('board', (p) => (p.heat.surfaceH = 25)))).toBe(true);
+    const ids = L('board').steps.flatMap((s) => (s.kind === 'theory' && s.formulaId ? [s.formulaId] : []));
+    expect(ids).toEqual(['heat-ldo-loss', 'heat-junction', 'heat-copper-mix']);
+  });
   it('L 字ブラケット: 荷重 100 N / 安全率 3 以上', () => {
     const load = ctxOf('l-bracket', (p) => {
       const s = p.shapes.find((x) => x.role === 'load')!;

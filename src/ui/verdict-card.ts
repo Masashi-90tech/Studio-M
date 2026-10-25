@@ -14,7 +14,7 @@ export function applyAction(store: Store, a: VerdictAction): void {
   const wb = getWorkbench(store.analysis);
   if (!wb?.applyAction) return;
   store.checkpoint(`verdict:${a.kind}`);
-  wb.applyAction({ project: store.project, action: a });
+  wb.applyAction({ project: store.project, action: a, selectShape: (id) => store.select(id) });
   store.touch('settings');
   toast(`「${a.label}」を適用しました（元に戻すボタンで戻せます）`);
 }

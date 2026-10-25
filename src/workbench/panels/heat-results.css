@@ -1,0 +1,94 @@
+/* 熱の結果の追加表示: 部品ごとの温度の表と基板の情報。色は style.css の判定カードに合わせる */
+.parts-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+.parts-box h4 {
+  margin: 0;
+  font-size: 12.5px;
+}
+.parts-scroll {
+  overflow-x: auto;
+}
+.parts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.parts-table th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--line-strong);
+  white-space: nowrap;
+}
+.parts-table th:first-child,
+.parts-table td:first-child {
+  text-align: left;
+}
+.parts-table td {
+  text-align: right;
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.parts-table td:first-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 5em;
+  font-weight: 600;
+}
+.part-row {
+  cursor: pointer;
+  border-left: 4px solid var(--line-strong);
+}
+.part-row:hover,
+.part-row:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+.part-row.sel td {
+  background: var(--accent-soft);
+}
+.part-row.ok td:last-child {
+  color: #15803d;
+  font-weight: 700;
+}
+.part-row.warn td:last-child {
+  color: #8a5a00;
+  font-weight: 700;
+}
+.part-row.ng td:last-child {
+  color: #b91c1c;
+  font-weight: 800;
+}
+.part-row.ok {
+  border-left-color: #16a34a;
+  background: #f1fbf4;
+}
+.part-row.warn {
+  border-left-color: #d99a00;
+  background: #fffbea;
+}
+.part-row.ng {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+.board-info {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  font-size: 12px;
+}
+.board-info dt {
+  color: var(--muted);
+}
+.board-info dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
