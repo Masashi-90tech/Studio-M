@@ -35,7 +35,7 @@ const CAPABILITIES: EngineCapability[] = [
         label: '流れが領域を通り抜ける回数',
         kind: 'number',
         default: 4,
-        hint: '層流・LES の計算時間 = 回数 × 領域の幅 / 流入速度。渦放出を見るなら 8 以上。RANS では反復回数の目安（回数 × nx × 1.5）',
+        hint: '層流・LES の計算時間 = 回数 × 領域の幅 / 流入速度。渦放出を見るなら 8 以上。RANS では反復回数の目安（回数 × nx）',
       },
       {
         key: 'turbulenceIntensity',

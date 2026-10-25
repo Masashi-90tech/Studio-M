@@ -231,7 +231,7 @@ wallDist
 export function fvSolution(spec: CaseSpec): string {
   if (spec.model === 'rans') {
     const res = spec.residualControl
-      ? `    residualControl\n    {\n        p               1e-5;\n        U               1e-6;\n        "(k|omega)"     1e-5;\n    }\n`
+      ? `    residualControl\n    {\n        p               1e-4;\n        U               1e-4;\n        "(k|omega)"     1e-4;\n    }\n`
       : '';
     return foamFile(
       'dictionary',

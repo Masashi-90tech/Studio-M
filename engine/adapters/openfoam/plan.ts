@@ -119,7 +119,7 @@ export function planJob(req: JobRequest): Plan {
   const flowThrough = width / uInf;
   const steady = model === 'rans';
   const endTime = steady
-    ? Math.min(5000, Math.max(300, Math.round(options.flowThroughs * raster.nx * 1.5)))
+    ? Math.min(5000, Math.max(300, Math.round(options.flowThroughs * raster.nx)))
     : options.flowThroughs * flowThrough;
 
   const spec: CaseSpec = {
