@@ -45,7 +45,7 @@
     { "name": "gmsh", "role": "メッシング", "license": "GPL-2.0-or-later", "usage": "separate-process", "commercial": "conditions", "source": "https://gmsh.info", "checked": "2026-10-24" },
     { "name": "FreeCAD", "role": "CNC 加工（CAM）", "license": "LGPL-2.0-or-later", "usage": "separate-process", "commercial": "ok", "source": "https://github.com/FreeCAD/FreeCAD", "checked": "2026-10-24" },
     { "name": "ParaView", "role": "3D 可視化", "license": "BSD-3-Clause", "usage": "file-format", "commercial": "ok", "source": "https://www.paraview.org", "checked": "2026-10-24" },
-    { "name": "KiCad", "role": "基板設計", "license": "GPL-3.0", "usage": "file-format", "commercial": "ok", "source": "https://www.kicad.org", "checked": "2026-10-25", "notes": "ファイル形式（.kicad_pcb）を読むだけ。KiCad のコードは使わない" },
+    { "name": "KiCad", "role": "基板設計", "license": "GPL-3.0", "usage": "file-format", "commercial": "ok", "source": "https://www.kicad.org", "checked": "2026-10-25", "notes": "ファイル形式（.kicad_pcb）を読むだけ。.kicad_pcb の読み取り（src/pcb/）は Studio M 自前の実装で、KiCad のコードもサンプル基板も使っていない（テスト用の基板は手書き）" },
     { "name": "ngspice", "role": "回路シミュレーション", "license": "BSD-3-Clause", "usage": "planned", "commercial": "ok", "source": "https://ngspice.sourceforge.io", "checked": "2026-10-24" },
 
     { "name": "Chili3D", "role": "ブラウザ CAD（比較対象）", "license": "AGPL-3.0", "usage": "reference", "commercial": "conditions", "source": "https://github.com/xiangechen/chili3d", "checked": "2026-10-25", "notes": "紹介記事・ミラーでの記載。組み込まない" },
