@@ -85,6 +85,15 @@ export class Runner {
     return this.shownRemote() ? REMOTE_STATUS : this.liteStatus;
   }
 
+  /**
+   * 表示中の結果と同じ格子の Raster。本計算の結果は Lite と格子の大きさが違うことがあるので、
+   * 合わないときは null（判定などが、別の格子の配列を読み違えないように）
+   */
+  get shownRaster(): Raster | null {
+    const r = this.result;
+    return this.raster && r && this.raster.nx === r.nx && this.raster.ny === r.ny ? this.raster : null;
+  }
+
   /** Lite（ブラウザの中の計算）の結果。本計算を表示中でも Lite の結果を返す（比較表に使う） */
   get liteResult(): ResultSet | null {
     return this.lite;

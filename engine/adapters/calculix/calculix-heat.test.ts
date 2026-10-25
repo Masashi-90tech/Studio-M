@@ -34,7 +34,7 @@ describe('宣言した能力（熱）', () => {
   });
 });
 
-describe.skipIf(!hasCcx)('CalculiX 通し試験（熱）', () => {
+describe.skipIf(!hasCcx)('CalculiX 通し試験（熱）', { timeout: 120_000 }, () => {
   it('アルミ板 + 5 W のチップ: Lite と最高温度が 1% 以内で一致し、発熱量 = 放熱量（熱収支）', async () => {
     const project = heatPlate({ material: 'al6061' });
     const { result, out } = await runCcx(project);

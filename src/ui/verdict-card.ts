@@ -68,7 +68,7 @@ export function initVerdictCard(store: Store, runner: Runner, host: HTMLElement)
           project: runner.resolved ?? store.project,
           result: runner.result,
           status: runner.status,
-          raster: runner.raster,
+          raster: runner.shownRaster,
           prefs: store.prefs,
         }) ?? null);
     const next = v ? `${kind}|${store.mode}|${v.level}|${v.headline}|${v.lines.join('/')}|${v.actions.map((a) => a.label).join('/')}` : `${kind}|none`;

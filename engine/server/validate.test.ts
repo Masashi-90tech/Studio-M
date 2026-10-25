@@ -4,7 +4,7 @@ import { collectAdapters, isAdapter } from './adapters';
 import { parseArgs } from './args';
 import { extractBearer, generateToken, tokenMatches } from './auth';
 import { isAllowedHost, isAllowedOrigin } from './cors';
-import { cleanStaleWorkDirs, checkResult } from './jobs';
+import { cleanStaleWorkDirs, checkResult, isFlatFileName } from './jobs';
 import { fakeAdapter, fakeCapability, fakeResult } from './testing';
 import { checkJobRequest, checkOptions, checkProject } from './validate';
 import { mkdtemp, mkdir, utimes, readdir, rm } from 'node:fs/promises';
@@ -93,6 +93,10 @@ describe('コマンドライン・アダプター登録・後片づけ', () => {
     expect(isAdapter({ id: 'x' })).toBe(false);
     expect(collectAdapters({})).toEqual([]);
     expect(collectAdapters({ '../adapters/a/index.ts': { fakeAdapter, other: 1, dup: fakeAdapter } })).toEqual([fakeAdapter]);
+  });
+  it('配るファイル名は平らなものだけ', () => {
+    for (const ok of ['out.txt', 'case.foam', 'result_1.vtk', '日本語.csv']) expect(isFlatFileName(ok)).toBe(true);
+    for (const ng of ['a/b.txt', '../x', 'a\\b', '..', '.hidden', '', 'x\0y', 'a..b']) expect(isFlatFileName(ng)).toBe(false);
   });
   it('結果の形の検査', () => {
     expect(checkResult(fakeResult())).toBeNull();

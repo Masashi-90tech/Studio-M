@@ -6,7 +6,7 @@ import type { EngineInfo } from '../../src/core/engine-protocol';
 import type { EngineAdapter } from '../types';
 import { createAdapterContext, decideBackend } from './context';
 import { detectEngines, probeCommand } from './detect';
-import { buildDockerArgs, createLineSplitter, ExecError, isValidCommand, resolveInside, runCommand } from './exec';
+import { buildDockerArgs, buildEnv, createLineSplitter, ExecError, isValidCommand, resolveInside, runCommand } from './exec';
 
 let dir: string;
 beforeAll(async () => {
@@ -108,6 +108,17 @@ describe('Docker', () => {
     });
     await ctx.run('studio-m-no-such-command', []).catch(() => undefined); // docker の有無で結果は変わる。やり直したことだけ確かめる
     expect(lines.some((l) => l.includes('Docker'))).toBe(true);
+  });
+});
+
+describe('環境変数の補い', () => {
+  it('WM_PROJECT_DIR は、未設定で /usr/share/openfoam/etc があるときだけ補う。設定済み・アダプター指定が優先', () => {
+    const yes = (p: string): boolean => p === '/usr/share/openfoam/etc';
+    expect(buildEnv({ base: { PATH: '/bin' }, exists: yes }).WM_PROJECT_DIR).toBe('/usr/share/openfoam');
+    expect(buildEnv({ base: { PATH: '/bin' }, exists: () => false }).WM_PROJECT_DIR).toBeUndefined();
+    expect(buildEnv({ base: { WM_PROJECT_DIR: '/opt/of' }, exists: yes }).WM_PROJECT_DIR).toBe('/opt/of');
+    expect(buildEnv({ base: {}, extra: { WM_PROJECT_DIR: '/x' }, exists: yes }).WM_PROJECT_DIR).toBe('/x');
+    expect(buildEnv({ base: { A: '1' }, extra: { B: '2' }, exists: () => false })).toEqual({ A: '1', B: '2' });
   });
 });
 

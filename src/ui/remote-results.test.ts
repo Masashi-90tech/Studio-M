@@ -68,6 +68,17 @@ describe('Runner の本計算の結果', () => {
     vi.useRealTimers();
   });
 
+  it('本計算の格子が Lite と違っても、そのまま表示でき、Raster は合うときだけ渡す', () => {
+    const { runner } = setup();
+    (runner as unknown as { raster: unknown }).raster = { nx: 1, ny: 1 };
+    expect(runner.shownRaster).not.toBeNull();
+    const fine = { ...rs('stress', 11), nx: 3, ny: 2, h: 0.5 };
+    runner.setRemote({ kind: 'stress', result: fine, label: 'X', rev: runner.revision, show: true });
+    expect(runner.result?.nx).toBe(3);
+    expect(runner.shownRaster).toBeNull();
+    vi.useRealTimers();
+  });
+
   it('名前だけの変更では古くならない。計算中に変更があった結果は最初から古い', () => {
     const { runner, store } = setup();
     const rev = runner.revision;

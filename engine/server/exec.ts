@@ -1,6 +1,7 @@
 // 解析ソフトの実行（ctx.run の実体）。シェルを通さず、引数は配列のまま渡す。
 // PC に直接入っている（native）場合と、Docker のイメージで動かす場合の両方を、同じ呼び方で扱う。
 import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { isAbsolute, posix, relative, resolve, sep } from 'node:path';
 import type { RunResult } from '../types';
 
@@ -8,6 +9,27 @@ import type { RunResult } from '../types';
 const COMMAND_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
 /** 取っておく出力の最大バイト数（超えたら先頭を捨てる） */
 const KEEP_BYTES = 2 * 1024 * 1024;
+/**
+ * 環境変数が足りないせいで動かない既知のソフトのための補い。「この変数が未設定で、このフォルダがあれば、この値にする」。
+ * 解析ごとではなく、PC の入れ方（Debian/Ubuntu のパッケージなど）に対する補いなので、サーバーに置く。
+ * 利用者が自分で設定していればそれを優先する。
+ */
+export const KNOWN_ENV_DEFAULTS: { name: string; value: string; whenExists: string }[] = [
+  // Debian/Ubuntu の openfoam パッケージ（v1912）は、これがないとどのコマンドも動かない
+  { name: 'WM_PROJECT_DIR', value: '/usr/share/openfoam', whenExists: '/usr/share/openfoam/etc' },
+];
+
+/** 子プロセスに渡す環境変数: 親の環境 + 既知の補い（未設定のものだけ）+ アダプターが指定したもの */
+export function buildEnv(opts: { base?: NodeJS.ProcessEnv; extra?: Record<string, string>; exists?: (p: string) => boolean } = {}): NodeJS.ProcessEnv {
+  const base = opts.base ?? process.env;
+  const exists = opts.exists ?? existsSync;
+  const env: NodeJS.ProcessEnv = { ...base };
+  for (const d of KNOWN_ENV_DEFAULTS) {
+    if (!env[d.name] && exists(d.whenExists)) env[d.name] = d.value;
+  }
+  return { ...env, ...opts.extra };
+}
+
 /** 止めるときに、穏やかな終了を待つ時間 [ms] */
 const KILL_GRACE_MS = 2000;
 
@@ -160,7 +182,7 @@ export function runCommand(o: ExecOptions): Promise<RunResult> {
     }
     const child = spawn(file, args, {
       cwd: o.backend.kind === 'docker' ? undefined : cwd,
-      env: o.backend.kind === 'docker' ? process.env : { ...process.env, ...o.env },
+      env: o.backend.kind === 'docker' ? process.env : buildEnv({ extra: o.env }),
       shell: false,
       windowsHide: true,
       detached: process.platform !== 'win32',

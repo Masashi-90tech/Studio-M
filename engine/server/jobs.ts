@@ -51,6 +51,11 @@ interface Job {
 
 export class QueueFullError extends Error {}
 
+/** 配るファイルの名前は平ら（フォルダの区切りも .. もない）に限る */
+export function isFlatFileName(name: string): boolean {
+  return name.length > 0 && name.length <= 200 && !/[/\\\0]/.test(name) && !name.includes('..') && !name.startsWith('.');
+}
+
 export function isJobId(id: string): boolean {
   return ID_RE.test(id);
 }
@@ -137,7 +142,7 @@ export class JobManager {
   /** 配ってよいファイルの実体。アダプターが挙げた名前で、作業フォルダの中にあるものだけ */
   async resolveFile(id: string, name: string): Promise<{ path: string; size: number; name: string } | null> {
     const job = this.jobs.get(id);
-    if (!job || !job.fileNames.has(name)) return null;
+    if (!job || !isFlatFileName(name) || !job.fileNames.has(name)) return null;
     try {
       const path = await insideRealpath(job.workDir, name);
       if (!path) return null;
@@ -249,13 +254,14 @@ export class JobManager {
     const files: JobFile[] = [];
     for (const f of listed) {
       try {
+        if (!isFlatFileName(f.name)) throw new Error('not flat');
         const p = await insideRealpath(job.workDir, f.name);
         const st = p ? await stat(p) : null;
         if (!st?.isFile()) throw new Error('not a file');
         job.fileNames.add(f.name);
         files.push({ name: f.name, size: st.size, description: f.description });
       } catch {
-        this.pushLog(job, `ファイル「${f.name}」が見つからないので、一覧から外しました`);
+        this.pushLog(job, `ファイル「${f.name}」が見つからない（またはフォルダ名つき）ので、一覧から外しました`);
       }
     }
     return files;

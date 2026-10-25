@@ -80,7 +80,7 @@ describe('explainFailure', () => {
   });
 });
 
-describe.skipIf(!hasCcx)('CalculiX 通し試験（片持ち梁）', () => {
+describe.skipIf(!hasCcx)('CalculiX 通し試験（片持ち梁）', { timeout: 120_000 }, () => {
   const P = 100;
 
   it('先端のたわみがオイラー・ベルヌーイ梁と 10%、Lite と 5% 以内で一致し、反力が荷重と等しい', async () => {
@@ -228,7 +228,7 @@ describe.skipIf(!hasCcx)('CalculiX 通し試験（片持ち梁）', () => {
   });
 });
 
-describe.skipIf(!hasCcx)('CalculiX 通し試験（塑性）', () => {
+describe.skipIf(!hasCcx)('CalculiX 通し試験（塑性）', { timeout: 120_000 }, () => {
   it('降伏する荷重では、降伏した面積と塑性ひずみが固定端付近の上下の縁に出る', async () => {
     const P = 5500; // 弾性の計算では降伏応力の約 1.2 倍になる荷重
     const project = steelBeam({ P });
@@ -266,9 +266,9 @@ describe.skipIf(!hasCcx)('CalculiX 通し試験（塑性）', () => {
     expect(yieldFactor).toBeLessThan(0.95);
     expect(result.warnings.some((w) => w.includes('降伏した部分があります'))).toBe(true);
     expect(scalar(result, 'minSafety')).toBeGreaterThan(0.9); // 完全弾塑性: 応力は降伏応力を超えない
-  }, 120_000);
+  });
 
-  it('降伏しない荷重では降伏した面積は 0、降伏荷重の倍率が分かる', { timeout: 120_000 }, async () => {
+  it('降伏しない荷重では降伏した面積は 0、降伏荷重の倍率が分かる', async () => {
     const { result } = await runCcx(steelBeam({ P: 100 }), { options: { plasticity: true, elementType: 'CPS4' } });
     expect(scalar(result, 'yieldedArea')).toBe(0);
     expect(scalar(result, 'maxPlasticStrain')).toBe(0);
@@ -282,11 +282,11 @@ describe.skipIf(!hasCcx)('CalculiX 通し試験（塑性）', () => {
     expect(scalar(result, 'yieldedArea')).toBeGreaterThan(0);
     expect(scalar(result, 'yieldLoadFactor')).toBeGreaterThan(4);
     expect(scalar(result, 'yieldLoadFactor')).toBeLessThan(5);
-  }, 120_000);
+  });
 
   it('荷重が崩壊荷重を超えると、日本語で理由と直し方を返す', async () => {
     // 粗い格子（50 × 5）で速く。崩壊荷重はおよそ 6 kN なのに 20 kN をかける
     const project = steelBeam({ P: 20000, nx: 50 });
     await expect(runCcx(project, { options: { plasticity: true } })).rejects.toThrow('荷重が大きすぎて、材料が支えきれずに崩れています（降伏荷重を超えています）');
-  }, 120_000);
+  });
 });
