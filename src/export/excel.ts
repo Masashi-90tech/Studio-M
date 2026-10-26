@@ -328,6 +328,12 @@ function addConditionsSheet(wb: ExcelJS.Workbook, project: Project): void {
     ['流れ', '流体', materialName(f.fluidId), ''],
     ['流れ', '流入速度（左端から一様流入）', f.inletVelocity, 'm/s'],
     ['流れ', '上下の壁', f.walls === 'slip' ? 'スリップ（対称）' : 'ノースリップ（壁面）', ''],
+    ...(f.thermal?.enabled === true
+      ? [
+          ['流れ', '温度も計算する（風で冷やす）', 'する', ''],
+          ['流れ', '流入する風の温度', f.thermal.inletTempC ?? 25, '°C'],
+        ]
+      : []),
     ['熱', '周囲温度', h.ambientC, '°C'],
     ['熱', '表面熱伝達率', h.surfaceH, 'W/(m²·K)'],
     ['熱', '板の表裏面からの放熱', h.faceCooling ? 'あり' : 'なし', ''],

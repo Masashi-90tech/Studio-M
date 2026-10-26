@@ -654,7 +654,9 @@ class FlowSolverImpl implements FlowSolver {
       done: false,
       progress: 0,
       iteration: this.stepCount,
-      message: `LBM ${this.stepCount} ステップ（t = ${(this.stepCount * this.dt).toPrecision(3)} s、${Math.round((ran / elapsed) * 1000)} ステップ/秒）`,
+      message:
+        `LBM ${this.stepCount} ステップ（t = ${(this.stepCount * this.dt).toPrecision(3)} s、${Math.round((ran / elapsed) * 1000)} ステップ/秒）` +
+        (this.heat !== null ? `、最高温度 ${this.heat.maxTemp().toFixed(1)} °C` : ''),
     };
   }
 

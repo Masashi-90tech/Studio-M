@@ -157,6 +157,9 @@ describe('プリセット', () => {
     expect(0.003 / r.h).toBeGreaterThanOrEqual(3);
     // 流れのワークベンチの先頭は、契約テストが使うカルマン渦のまま
     expect(getWorkbench('flow')!.presets).toEqual(['karman', 'naca0012', 'fan-heatsink']);
+    // 温度も計算しているときは、まず温度を見せる（流れだけなら流速のまま）
+    expect(getWorkbench('flow')!.defaultFieldFor?.(p)).toBe('temp');
+    expect(getWorkbench('flow')!.defaultFieldFor?.(PRESETS.find((x) => x.id === 'karman')!.build())).toBeUndefined();
   });
 
   it('ファンで冷やすヒートシンクは、少し動かしても温度が出て、部品ごとの結果にチップが載る', () => {

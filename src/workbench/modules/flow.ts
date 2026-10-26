@@ -33,6 +33,8 @@ export const flowWorkbench: WorkbenchModule = {
   // 速度場は流体セルで有効。流線を動かせる
   viewTraits: { vectorMask: 'fluid', particles: true },
   defaultField: 'speed',
+  // 温度も計算しているときは、まず温度を見せる
+  defaultFieldFor: (project) => (project.flow.thermal?.enabled === true ? 'temp' : undefined),
   presets: ['karman', 'naca0012', 'fan-heatsink'],
   // 数学の窓の式（学びモード）。使うときだけ読み込む
   math: { loadProvider: async () => (await import('../../learn/providers/flow')).flowProvider },

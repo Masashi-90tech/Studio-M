@@ -183,6 +183,8 @@ export interface WorkbenchModule {
   viewTraits?: ViewTraits;
   /** 最初に表示する場の key（結果の fields にあるもの）。省略時は先頭の場 */
   defaultField?: string;
+  /** プロジェクトの設定によって最初に表示する場を変えたいとき（例: 流れで温度も計算しているときは温度）。省略または undefined なら defaultField */
+  defaultFieldFor?(project: Project): string | undefined;
   /** この解析で開くプリセットの id（ui/presets.ts の PRESETS にあるもの） */
   presets?: string[];
 

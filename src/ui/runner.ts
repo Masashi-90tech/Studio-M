@@ -279,7 +279,8 @@ export class Runner {
   currentField(): Field | null {
     const r = this.result;
     if (!r || r.fields.length === 0) return null;
-    const key = this.store.fieldKeys[this.kind] ?? getWorkbench(this.kind)?.defaultField;
+    const wb = getWorkbench(this.kind);
+    const key = this.store.fieldKeys[this.kind] ?? wb?.defaultFieldFor?.(this.store.project) ?? wb?.defaultField;
     return r.fields.find((f) => f.key === key) ?? r.fields[0];
   }
 

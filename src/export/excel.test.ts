@@ -49,6 +49,21 @@ describe('exportResultsWorkbook', () => {
   const raster = rasterize(project);
   const rs = fakeResult(raster.nx, raster.ny, raster.h);
 
+  it('流れで温度も計算しているときだけ、条件シートに温度の設定が入る', async () => {
+    const cond = async (p: typeof project): Promise<string[]> => {
+      const wb = await load(await exportResultsWorkbook(p, [rs]));
+      const ws = wb.getWorksheet('条件')!;
+      const out: string[] = [];
+      ws.eachRow((row) => out.push(String(row.getCell(2).value)));
+      return out;
+    };
+    expect((await cond(project)).some((t) => t.includes('温度も計算'))).toBe(false);
+    const hot = { ...project, flow: { ...project.flow, thermal: { enabled: true, inletTempC: 30 } } };
+    const items = await cond(hot);
+    expect(items.some((t) => t.includes('温度も計算'))).toBe(true);
+    expect(items.some((t) => t.includes('流入する風の温度'))).toBe(true);
+  });
+
   it('必要なシートが揃い、場シートの寸法が ny×nx に一致する', async () => {
     const bytes = await exportResultsWorkbook(project, [rs]);
     expect(bytes).toBeInstanceOf(Uint8Array);

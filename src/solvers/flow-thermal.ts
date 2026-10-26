@@ -340,9 +340,19 @@ export class FlowThermal {
         this.solidG[4 * s + d] = g;
         gSum += g;
       }
-      this.solidInv[s] = gSum > 0 ? 1 / gSum : 0;
-      // q h² は奥行き 1 m あたりの発熱 [W/m]。k の単位 [W/(m·K)] で割ると温度 [K]
-      this.solidQ[s] = gSum > 0 ? (raster.heatGen[c] * h * h) / gSum : 0;
+      if (gSum > 0) {
+        this.solidInv[s] = 1 / gSum;
+        // q h² は奥行き 1 m あたりの発熱 [W/m]。k の単位 [W/(m·K)] で割ると温度 [K]
+        this.solidQ[s] = (raster.heatGen[c] * h * h) / gSum;
+      } else {
+        // 熱をまったく通さない（k が 0 の）セル: 自分自身を隣とみなして、温度を変えない
+        for (let d = 0; d < 4; d++) {
+          this.solidNbr[4 * s + d] = c;
+          this.solidG[4 * s + d] = 1;
+        }
+        this.solidInv[s] = 0.25;
+        this.solidQ[s] = 0;
+      }
     }
 
     // 固体の連結成分と、外（固体のリストにないセル）との面
