@@ -13,7 +13,8 @@
     "check": "tsc --noEmit && tsc --noEmit -p engine/tsconfig.json && vitest run && node scripts/check-licenses.mjs",
     "engine": "vite build --ssr engine/main.ts --outDir dist-engine -c engine/vite.config.ts --logLevel warn && node dist-engine/main.js",
     "engine:dev": "vite-node engine/main.ts",
-    "build:engine": "vite build --ssr engine/main.ts --outDir dist-engine -c engine/vite.config.ts"
+    "build:engine": "vite build --ssr engine/main.ts --outDir dist-engine -c engine/vite.config.ts",
+    "test:engines": "STUDIO_M_ENGINE_TESTS=1 vitest run engine"
   },
   "license": "MIT",
   "devDependencies": {

@@ -387,7 +387,7 @@ describe('計画（plan）', () => {
   });
 
   it('readOptions: 既定値と範囲', () => {
-    expect(readOptions(undefined)).toEqual({ model: 'auto', flowThroughs: 4, turbulenceIntensity: 1 });
+    expect(readOptions(undefined)).toEqual({ model: 'auto', flowThroughs: 2, turbulenceIntensity: 1 });
     expect(readOptions({ model: 'rans', flowThroughs: 1000, turbulenceIntensity: 0 })).toEqual({ model: 'rans', flowThroughs: 100, turbulenceIntensity: 0.05 });
     expect(readOptions({ model: 'nonsense' }).model).toBe('auto');
   });
@@ -417,7 +417,7 @@ describe('計画（plan）', () => {
     expect(plan.raster.nx).toBe(100);
     expect(plan.domain.length).toBeCloseTo(0.1, 2);
     const U = plan.spec.uInf;
-    expect(plan.spec.endTime).toBeCloseTo((4 * 1) / U, 6); // 4 回 × 幅 / U
+    expect(plan.spec.endTime).toBeCloseTo((2 * 1) / U, 6); // 既定 2 回 × 幅 / U
     expect(plan.spec.deltaT).toBeCloseTo((0.2 * 0.01) / U, 9);
     expect(plan.spec.maxCo).toBeGreaterThanOrEqual(0.5);
     expect(plan.spec.maxCo).toBeLessThanOrEqual(0.8);
@@ -429,7 +429,8 @@ describe('計画（plan）', () => {
     const auto = planJob(req(fast));
     expect(auto.spec.model).toBe('rans');
     expect(auto.solver).toBe('simpleFoam');
-    expect(auto.spec.endTime).toBe(400);
+    expect(auto.spec.endTime).toBe(300); // 2 回 × nx = 200 は下限 300 に上げる
+    expect(planJob(req(fast, { options: { flowThroughs: 4 } })).spec.endTime).toBe(400);
     expect(planJob(req(fast, { options: { model: 'laminar' } })).spec.model).toBe('laminar');
     expect(planJob(req(fast, { options: { model: 'les' } })).solver).toBe('pimpleFoam');
     expect(planJob(req(fast, { options: { turbulenceIntensity: 5 } })).spec.intensity).toBeCloseTo(0.05);
@@ -495,5 +496,15 @@ describe('アダプターの宣言と detect', () => {
   it('solve: flow 以外は日本語の例外', async () => {
     const project = defaultProject();
     await expect(openfoamAdapter.solve({ analysis: 'heat', engine: 'openfoam', project }, {} as never)).rejects.toThrow('flow');
+  });
+});
+
+describe('remainingText', () => {
+  it('始めは出さず、進んだら残り時間を分で出す', async () => {
+    const { remainingText } = await import('./run');
+    expect(remainingText(0.01, 60_000)).toBe('');
+    expect(remainingText(0.5, 5_000)).toBe('');
+    expect(remainingText(0.25, 120_000)).toBe('、残り約 6 分');
+    expect(remainingText(0.9, 60_000)).toBe('、残り 1 分未満');
   });
 });

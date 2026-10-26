@@ -157,9 +157,10 @@ export async function solveFlow(req: JobRequest, ctx: AdapterContext): Promise<S
   // ---- 計算 ----
   const endTime = spec.endTime;
   let lastReported = -1;
+  const solveStart = Date.now();
   const running = (fraction: number, t: number): void => {
     const what = spec.model === 'rans' ? `反復 ${Math.round(t)} / ${Math.round(endTime)}` : `t = ${Number(t.toPrecision(3))} s`;
-    ctx.progress(0.1 + 0.8 * Math.min(1, fraction), `${solver} で計算中（${what}）`, 'running');
+    ctx.progress(0.1 + 0.8 * Math.min(1, fraction), `${solver} で計算中（${what}${remainingText(fraction, Date.now() - solveStart)}）`, 'running');
   };
   running(0, 0);
   const run = await step(ctx, solver, [], {
@@ -255,4 +256,11 @@ export async function solveFlow(req: JobRequest, ctx: AdapterContext): Promise<S
   }
   if (!hasVtk) ctx.log('foamToVTK が使えなかったため、ParaView 用の結果は出していません');
   return { result, files };
+}
+
+/** ここまでの進み方から残り時間を見積もる（始めの 3% と 10 秒は見積もりが荒れるので出さない） */
+export function remainingText(fraction: number, elapsedMs: number): string {
+  if (fraction < 0.03 || elapsedMs < 10_000 || fraction >= 1) return '';
+  const remainMin = (elapsedMs / fraction - elapsedMs) / 60_000;
+  return remainMin < 1 ? '、残り 1 分未満' : `、残り約 ${Math.round(remainMin)} 分`;
 }

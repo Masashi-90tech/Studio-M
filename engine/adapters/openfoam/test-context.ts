@@ -16,7 +16,9 @@ export function foamEnv(): Record<string, string> {
 }
 
 /** OpenFOAM が使えるか（blockMesh -help が成功するか） */
+/** 実際に OpenFOAM を動かす結合テストは STUDIO_M_ENGINE_TESTS=1 のときだけ（npm run test:engines）。普段の npm run check を軽く保つため */
 export function hasOpenFoam(): boolean {
+  if (process.env.STUDIO_M_ENGINE_TESTS !== '1') return false;
   try {
     const r = spawnSync('blockMesh', ['-help'], { env: { ...process.env, ...foamEnv() }, timeout: 20_000 });
     return r.status === 0;

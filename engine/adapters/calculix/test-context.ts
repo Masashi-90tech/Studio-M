@@ -18,7 +18,8 @@ export function hasCommand(command: string, args: string[] = ['-v']): boolean {
   }
 }
 
-export const hasCcx = hasCommand('ccx', ['-v']);
+/** 実際に ccx を動かす結合テストは STUDIO_M_ENGINE_TESTS=1 のときだけ（npm run test:engines）。普段の npm run check を軽く保つため */
+export const hasCcx = process.env.STUDIO_M_ENGINE_TESTS === '1' && hasCommand('ccx', ['-v']);
 
 export interface TestContext extends AdapterContext {
   /** 記録したログ・進み具合 */

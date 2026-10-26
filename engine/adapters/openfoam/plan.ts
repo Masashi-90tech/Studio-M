@@ -55,7 +55,7 @@ export function readOptions(raw: JobRequest['options']): FoamOptions {
   const model = raw?.model;
   return {
     model: model === 'laminar' || model === 'les' || model === 'rans' ? model : 'auto',
-    flowThroughs: Math.min(100, Math.max(0.5, num(raw?.flowThroughs, 4))),
+    flowThroughs: Math.min(100, Math.max(0.5, num(raw?.flowThroughs, 2))),
     turbulenceIntensity: Math.min(20, Math.max(0.05, num(raw?.turbulenceIntensity, 1))),
   };
 }
