@@ -16,7 +16,7 @@ import { initMathCard } from './ui/math-card';
 import { initModeSwitch } from './ui/mode-switch';
 import { initialMode, loadUiState } from './ui/modes';
 import { initOverlayHost } from './ui/overlay-host';
-import { initKicadDrop } from './ui/pcb-open';
+import { initImportDrop } from './ui/import-drop';
 import { initPrefsPopover } from './ui/prefs-popover';
 import { PRESETS } from './ui/presets';
 import { sampleNearest } from './ui/probes';
@@ -72,8 +72,8 @@ const learnDrawer = initLearnDrawer({ store, runner, math: mathCard, drawer: $('
 // 以前に学んだ記録がある人には、OFF になっていることを 1 回だけ知らせる
 if (takeLearnHint({ enabled: learn.get() })) toast('学習機能は設定（⚙）から表示できます');
 
-// KiCad 基板ファイルを作図エリアにドロップしたら、取り込みダイアログを開く
-initKicadDrop({ target: $('canvasWrap'), store });
+// KiCad 基板（.kicad_pcb）・3D モデル（.stl・.obj）を作図エリアにドロップしたら、取り込みダイアログを開く
+initImportDrop({ target: $('canvasWrap'), store });
 
 // プロ専用の道具は、プロモードを初めて開くときに読み込む
 let proSuite: { update(): void } | null = null;

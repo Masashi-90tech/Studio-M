@@ -1,7 +1,8 @@
-// ヘッダー: プロジェクト名、新規・プリセット・ファイル（開く・KiCad基板を開く・保存）・Excel 出力。
+// ヘッダー: プロジェクト名、新規・プリセット・ファイル（開く・KiCad基板を開く・3Dモデルを開く・保存）・Excel 出力。
 import { clear, downloadBlob, h, toast } from './dom';
 import { attachMenu } from './menu';
 import { openPreset } from './open-preset';
+import { openMeshImport } from './mesh-open';
 import { openKicadImport } from './pcb-open';
 import { PRESETS } from './presets';
 import { safeFileName, sanitizeProject } from './project-utils';
@@ -54,9 +55,10 @@ export function initHeader(store: Store, runner: Runner): void {
   }
   attachMenu({ button: presetBtn, menu: presetMenu });
 
-  // ---------- ファイル（開く・KiCad基板を開く・保存） ----------
+  // ---------- ファイル（開く・KiCad基板を開く・3Dモデルを開く・保存） ----------
   attachMenu({ button: $('btnFile'), menu: $('fileMenu') });
   $('btnKicad').addEventListener('click', () => void openKicadImport({ store }));
+  $('btnMesh').addEventListener('click', () => void openMeshImport({ store }));
 
   // ---------- 保存 / 開く ----------
   $('btnSave').addEventListener('click', () => {

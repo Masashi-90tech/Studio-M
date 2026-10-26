@@ -1,0 +1,322 @@
+/* 「3D モデルを開く」ダイアログ。配色は style.css の変数を使う。作りは KiCad 基板のダイアログ（pcb/import-dialog.css）に合わせている。 */
+.m3d-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(38, 34, 28, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.m3d-dialog {
+  position: relative;
+  width: min(1040px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.m3d-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.m3d-head h2 {
+  margin: 0;
+  font-size: 16px;
+  flex: 1;
+  min-width: 0;
+}
+.m3d-close {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  line-height: 1;
+  font-size: 18px;
+}
+.m3d-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.m3d-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.m3d-h {
+  margin: 0;
+  font-size: 13px;
+}
+.m3d-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* 3D ビュー */
+.m3d-stage {
+  position: relative;
+  min-height: 200px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: #f7f5f1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.m3d-stage.drag {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.m3d-stage.has-model {
+  border-style: solid;
+  border-color: var(--line);
+}
+.m3d-view {
+  position: relative;
+  width: 100%;
+  height: min(46vh, 380px);
+  min-height: 240px;
+}
+.m3d-view[hidden] {
+  display: none;
+}
+.m3d-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+  outline-offset: -2px;
+}
+.m3d-canvas:active {
+  cursor: grabbing;
+}
+.m3d-gizmo {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  width: 72px;
+  height: 72px;
+  pointer-events: none;
+}
+.m3d-axis {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.m3d-message {
+  position: absolute;
+  inset: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.m3d-message[hidden] {
+  display: none;
+}
+.m3d-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.m3d-empty[hidden] {
+  display: none;
+}
+.m3d-empty strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+.m3d-sample-note {
+  font-size: 12px;
+  max-width: 34em;
+}
+.m3d-file-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.m3d-file-name {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.m3d-summary {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.m3d-fixes {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.m3d-warn {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  color: var(--warn-ink);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.m3d-warn[hidden],
+.m3d-fixes[hidden],
+.m3d-note[hidden] {
+  display: none;
+}
+.m3d-note {
+  color: var(--warn-ink);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* 切る面 */
+.m3d-segs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.m3d-seg {
+  flex: 1 1 90px;
+  min-height: 38px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.m3d-seg[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+.m3d-slide-row {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+}
+.m3d-slider {
+  width: 100%;
+  accent-color: var(--accent);
+  min-height: 28px;
+}
+.m3d-pos {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.m3d-pos input {
+  flex: 1;
+  min-width: 0;
+}
+.m3d-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.m3d-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.m3d-section-box {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+}
+.m3d-section {
+  display: block;
+  max-width: 100%;
+}
+.m3d-inline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.m3d-inline .field {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.m3d-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  flex-wrap: wrap;
+}
+.m3d-foot .btn {
+  min-height: 38px;
+  padding: 6px 16px;
+}
+
+/* 狭い画面: 1 カラム */
+@media (max-width: 760px) {
+  .m3d-backdrop {
+    padding: 6px;
+  }
+  .m3d-body {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 10px 12px;
+  }
+  .m3d-view {
+    height: 260px;
+  }
+  .m3d-foot .btn {
+    flex: 1 1 0;
+  }
+}

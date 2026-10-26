@@ -100,6 +100,22 @@ describe('画面（ハーネス）のシェル', () => {
     expect(files).toEqual(['ui/pcb-open.ts']);
   });
 
+  it('3D モデルの取り込み（src/mesh3d）は、画面から遅延 import か型としてだけ読み込む', () => {
+    // 静的な import（型以外・副作用だけの import も含む）で mesh3d を読むと、起動時に 3D ビューアや断面の計算一式が入ってしまう
+    const hits: string[] = [];
+    for (const f of shellFiles()) {
+      for (const m of strip(read(f)).matchAll(/^\s*import\s+(type\s+)?(?:[^;'"]*?from\s+)?['"]([^'"]*(?:^|\/)mesh3d(?:\/[^'"]*)?)['"]/gm)) {
+        if (!m[1]) hits.push(`${f}: ${m[2]}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('画面が 3D モデルの取り込みを読む入口は、遅延 import の 1 か所（mesh-open.ts）に集まっている', () => {
+    const files = shellFiles().filter((f) => /import\(\s*['"][^'"]*\/mesh3d\//.test(strip(read(f))));
+    expect(files).toEqual(['ui/mesh-open.ts']);
+  });
+
   it('src/learn は core だけに依存する（ui・workbench・solvers を import しない。テストは除く）', () => {
     const hits: string[] = [];
     const walk = (dir: string): string[] =>
