@@ -105,6 +105,9 @@ export function planJob(req: JobRequest): Plan {
     throw new Error('流入速度が 0 です。OpenFOAM では流れのない状態は解けないため、流入速度を 0 より大きくしてください。');
   }
   if (project.flow.inletVelocity < 0) notes.push('流入速度が負です。流れは常に +x 方向（左から右）として、大きさだけを使います。');
+  if (project.flow.thermal?.enabled === true) {
+    notes.push('温度の計算（流れ＋熱）は、PC の本計算（OpenFOAM）ではまだ行わず、流れだけを解いています。温度の結果は Lite の計算を見てください。');
+  }
 
   const re = (uInf * domain.length) / nu;
   const model: FlowModel = options.model === 'auto' ? pickModel(re) : options.model;

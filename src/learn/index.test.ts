@@ -6,7 +6,7 @@ describe('学びモードの入口', () => {
     for (const kind of ['flow', 'heat', 'stress', 'scalar', 'em'] as const) expect(getMathProvider(kind).kind).toBe(kind);
   });
   it('レッスンと学ぶ順、部品が公開されている', () => {
-    expect(LESSONS).toHaveLength(10);
+    expect(LESSONS).toHaveLength(11);
     expect(LEARNING_PATH).toHaveLength(3);
     expect(typeof renderMathWindow).toBe('function');
     expect(typeof renderLessonPanel).toBe('function');

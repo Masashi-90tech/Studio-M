@@ -79,7 +79,9 @@ export type VerdictAction =
   /** 基板の銅箔の厚さを factor 倍にする（熱。project.pcb の各層の thicknessUm） */
   | { kind: 'copper'; factor: number; label: string }
   /** 部品を選んで、発熱などを見直せるようにする（熱） */
-  | { kind: 'review'; shapeId: string; label: string };
+  | { kind: 'review'; shapeId: string; label: string }
+  /** 風を強くする（流れ＋熱。流入速度 [m/s] を speed にする） */
+  | { kind: 'wind'; speed: number; label: string };
 
 export interface Verdict {
   level: VerdictLevel;

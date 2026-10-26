@@ -74,6 +74,27 @@ function airfoil(): Project {
   return p;
 }
 
+// ---------- 3b. ファンで冷やすヒートシンク（流れ＋熱） ----------
+
+function fanHeatSink(): Project {
+  // ダクト（上下は壁面）の中に、アルミのくし形ヒートシンクと、その根元（下）で発熱する部品を置く。風は左から右へ。
+  // 2D の断面なので、フィンに直角に風が当たる向き（風はフィンの上を通り、フィンの間では渦を巻く）。
+  // 格子は細いフィン（3 mm）が切れるよう手動で固定し、ダクトをふさぎすぎて流れが不安定にならないよう、格子上の流入速度は少し小さめにしている
+  const p = blank('ファンで冷やすヒートシンク（8 W）', 130, 70, 200, 40);
+  p.domain.autoGrid = false;
+  const x0 = 35;
+  const baseW = 56;
+  const finW = 3;
+  const fins = 4;
+  const pitch = (baseW - finW) / (fins - 1);
+  const shapes: Shape[] = [shape('solid', 'ベース', rectMm(x0, 26, baseW, 6), 'al6061')];
+  for (let i = 0; i < fins; i++) shapes.push(shape('solid', `フィン ${i + 1}`, rectMm(x0 + i * pitch, 32, finW, 14), 'al6061'));
+  shapes.push(shape('heatSource', '発熱する部品 (8 W)', rectMm(x0 + 13, 18, 30, 8), 'c1100', { heatW: 8, maxTempC: 85 }));
+  p.shapes = shapes;
+  p.flow = { fluidId: 'air', inletVelocity: 0.8, walls: 'noslip', thermal: { enabled: true, inletTempC: 25 }, advanced: { latticeU: 0.06 } };
+  return p;
+}
+
 // ---------- 4. ヒートシンク ----------
 
 function heatSink(): Project {
@@ -235,6 +256,13 @@ export const PRESETS: Preset[] = [
     description: '対称翼型を8度傾けた流れ。上面の速い流れと渦度を見ます',
     analysis: 'flow',
     build: airfoil,
+  },
+  {
+    id: 'fan-heatsink',
+    title: 'ファンで冷やすヒートシンク',
+    description: 'ダクトの風（0.8 m/s）がアルミのフィンと 8 W の発熱部品を冷やします。風を強くすると部品が何℃下がるかを見ます（流れ＋温度。落ち着くまで数十秒）',
+    analysis: 'flow',
+    build: fanHeatSink,
   },
   {
     id: 'heatsink',

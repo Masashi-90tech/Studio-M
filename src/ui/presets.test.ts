@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { getMaterial } from '../core/materials';
 import { autoGrid } from '../core/auto';
 import { rasterize } from '../core/raster';
+import { createFlowSolver } from '../solvers/flow';
+import { getWorkbench } from '../workbench';
 import { polygonArea } from './geometry';
 import { beamHandCalc, halfWaveThicknessMm, nacaAirfoil, PRESETS } from './presets';
 import { sanitizeProject } from './project-utils';
@@ -53,9 +55,9 @@ describe('nacaAirfoil', () => {
 });
 
 describe('プリセット', () => {
-  it('10 個あり、ID が重ならない', () => {
-    expect(PRESETS).toHaveLength(10);
-    expect(new Set(PRESETS.map((p) => p.id)).size).toBe(10);
+  it('11 個あり、ID が重ならない', () => {
+    expect(PRESETS).toHaveLength(11);
+    expect(new Set(PRESETS.map((p) => p.id)).size).toBe(11);
   });
 
   for (const preset of PRESETS) {
@@ -129,11 +131,43 @@ describe('プリセット', () => {
     expect(r.solid[j * r.nx + i]).toBe(0);
   });
 
-  it('格子は片持ち梁だけ手動で固定し、ほかは自動', () => {
+  it('格子は片持ち梁と、細いフィンのあるファン冷却だけ手動で固定し、ほかは自動', () => {
     for (const pr of PRESETS) {
       const p = pr.build();
-      expect(p.domain.autoGrid, pr.id).toBe(pr.id === 'cantilever' ? false : true);
+      expect(p.domain.autoGrid, pr.id).toBe(pr.id === 'cantilever' || pr.id === 'fan-heatsink' ? false : true);
     }
+  });
+
+  it('ファンで冷やすヒートシンク: 温度を計算する流れのプリセットで、アルミのフィンと上限温度つきの発熱部品がある', () => {
+    const pr = PRESETS.find((x) => x.id === 'fan-heatsink')!;
+    expect(pr.analysis).toBe('flow');
+    const p = pr.build();
+    expect(p.flow.thermal).toEqual({ enabled: true, inletTempC: 25 });
+    expect(p.flow.inletVelocity).toBeGreaterThan(0);
+    expect(p.flow.walls).toBe('noslip'); // ダクトの中
+    const fins = p.shapes.filter((s) => s.role === 'solid' && s.name.startsWith('フィン'));
+    expect(fins.length).toBeGreaterThanOrEqual(4);
+    for (const f of [...fins, p.shapes.find((s) => s.name === 'ベース')!]) expect(f.materialId).toBe('al6061');
+    const chip = p.shapes.find((s) => s.role === 'heatSource')!;
+    expect(chip.heatW).toBe(8);
+    expect(chip.maxTempC).toBe(85);
+    // 格子化しても発熱が保存され、いちばん細いフィン（3 mm）が 3 セル以上で切れる
+    const r = rasterize(p);
+    expect(sum(r.heatGen) * r.h * r.h * p.thickness).toBeCloseTo(8, 3);
+    expect(0.003 / r.h).toBeGreaterThanOrEqual(3);
+    // 流れのワークベンチの先頭は、契約テストが使うカルマン渦のまま
+    expect(getWorkbench('flow')!.presets).toEqual(['karman', 'naca0012', 'fan-heatsink']);
+  });
+
+  it('ファンで冷やすヒートシンクは、少し動かしても温度が出て、部品ごとの結果にチップが載る', () => {
+    const p = PRESETS.find((x) => x.id === 'fan-heatsink')!.build();
+    const solver = createFlowSolver(p, rasterize(p));
+    solver.step(150);
+    const res = solver.result();
+    const temp = res.fields.find((f) => f.key === 'temp')!;
+    expect(temp).toBeDefined();
+    expect(Array.from(temp.data).every((v) => Number.isFinite(v))).toBe(true);
+    expect(res.perShape?.map((s) => s.label)).toEqual(['発熱する部品 (8 W)']);
   });
 
   it('電磁波の点波源は、どのプリセットでも解析範囲の中にある', () => {

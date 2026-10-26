@@ -20,9 +20,20 @@
 // - latticeU:       '格子単位の流入速度'
 // - tau:            '緩和時間 τ'
 // - smagorinskyCs:  'Smagorinsky 定数'
+//
+// 温度（project.flow.thermal.enabled が true のときだけ。省略・false なら温度の計算は一切せず、結果も今までと同じ）:
+// 同じ格子で温度の移流拡散を解く共役伝熱（flow-thermal.ts）。LBM の 1 ステップごとに熱を 1 ステップ進める。
+// - fields:  temp '温度'（°C。物体の中も有効なので mask なし）
+// - scalars: maxTemp '最高温度'（物体の最高）、heatOut '流出口から風が運び出す熱'（W。渦で脈打つので、流れが半分通り抜ける時間の移動平均）、
+//            heatIn '発熱の合計'（W）、
+//            温度固定の図形があるときは heatFixed '温度固定へ流れ込む熱'（W）
+// - history: maxTemp（最高温度の推移）
+// - perShape: 部品ごとの最高温度など（熱解析と同じ key・同じ形。raster.shapeIndex があるとき）
 
 import { getMaterial } from '../core/materials';
 import type { Field, History, Project, Raster, ResultSet, ScalarValue, Solver, SolverFactory, SolverStatus } from '../core/types';
+import { FlowThermal } from './flow-thermal';
+import { buildPartTemps } from './thermal-parts';
 
 // ---------- 定数 ----------
 
@@ -81,6 +92,8 @@ export interface FlowSolver extends Solver {
   readonly rePhysical: number;
   /** 実際に計算している（τの下限などで制限された後の）レイノルズ数 */
   readonly reEffective: number;
+  /** 温度も計算している（project.flow.thermal.enabled） */
+  readonly thermal: boolean;
 }
 
 // ---------- 実装 ----------
@@ -152,6 +165,20 @@ class FlowSolverImpl implements FlowSolver {
   private instabilityNote = '';
   private readonly baseWarnings: string[] = [];
 
+  // 温度（thermal が有効なときだけ。無効なら null のまま何もしない）
+  private readonly project: Project;
+  private readonly raster: Raster;
+  private readonly heat: FlowThermal | null;
+  /** LBM の速度（格子単位）。熱の移流に渡す */
+  private readonly thUx: Float32Array | null;
+  private readonly thUy: Float32Array | null;
+  private histMaxT: number[] = [];
+  private fTemp: Float32Array | null = null;
+  private thermalResets = 0;
+  /** 流出口の熱の流れの移動平均 [W]（渦で脈打つので、流れが半分通り抜ける時間ぶんをならす） */
+  private heatOutAvg = 0;
+  private readonly heatOutAlpha: number;
+
   // result() で使い回す出力バッファ
   private fSpeed: Float32Array;
   private fUx: Float32Array;
@@ -166,6 +193,8 @@ class FlowSolverImpl implements FlowSolver {
     this.ny = ny;
     this.n = n;
     this.h = h;
+    this.project = project;
+    this.raster = raster;
     this.solid = Uint8Array.from(raster.solid);
     this.fluidMask = new Uint8Array(n);
     for (let c = 0; c < n; c++) this.fluidMask[c] = this.solid[c] ? 0 : 1;
@@ -229,6 +258,7 @@ class FlowSolverImpl implements FlowSolver {
     // 2D の格子力 [ρ u² L / 奥行き] → 物理力 [N]
     this.forceScale = this.pressScale * h * this.thickness;
     this.sampleEvery = Math.max(1, Math.min(50, Math.round(this.lengthCells / (20 * uLat))));
+    this.heatOutAlpha = 1 / Math.max(10, (0.5 * nx) / uLat);
 
     if (this.hasObstacle && this.lengthCells < 8) {
       this.baseWarnings.push(`障害物の高さが格子 ${this.lengthCells} 個分しかなく、形状・抗力の精度が低くなります。格子数（nx）を増やしてください。`);
@@ -294,7 +324,22 @@ class FlowSolverImpl implements FlowSolver {
     this.fPress = new Float32Array(n);
     this.fVort = new Float32Array(n);
 
+    if (project.flow.thermal?.enabled === true) {
+      this.heat = new FlowThermal({ project, raster, dt: this.dt, velScale: this.velScale, uIn: this.uIn });
+      this.thUx = new Float32Array(n);
+      this.thUy = new Float32Array(n);
+      this.fTemp = new Float32Array(n);
+    } else {
+      this.heat = null;
+      this.thUx = null;
+      this.thUy = null;
+    }
+
     this.initState();
+  }
+
+  get thermal(): boolean {
+    return this.heat !== null;
   }
 
   // ---------- 初期化 ----------
@@ -356,6 +401,13 @@ class FlowSolverImpl implements FlowSolver {
     this.histT = [];
     this.histDrag = [];
     this.histLift = [];
+    this.histMaxT = [];
+    this.heatOutAvg = 0;
+    this.heat?.reset();
+    if (this.thUx && this.thUy) {
+      this.thUx.fill(0);
+      this.thUy.fill(0);
+    }
   }
 
   // ---------- 1ステップ（引き込み型の移流＋衝突） ----------
@@ -369,6 +421,8 @@ class FlowSolverImpl implements FlowSolver {
     const d0 = dst[0], d1 = dst[1], d2 = dst[2], d3 = dst[3], d4 = dst[4], d5 = dst[5], d6 = dst[6], d7 = dst[7], d8 = dst[8];
     const tau = this.tau;
     const cs2x18 = 18 * this.cs * this.cs;
+    const thUx = this.thUx;
+    const thUy = this.thUy;
 
     // 物体が受ける力（運動量交換法）: 物体へ向かう分布 f と跳ね返る分布の和 = 2 f
     let fx = 0;
@@ -420,6 +474,10 @@ class FlowSolverImpl implements FlowSolver {
         const ux = (f1 - f3 + f5 - f6 - f7 + f8) * inv;
         const uy = (f2 - f4 + f5 + f6 - f7 - f8) * inv;
         massSum += rho;
+        if (thUx !== null && thUy !== null) {
+          thUx[idx] = ux;
+          thUy[idx] = uy;
+        }
 
         // 平衡分布
         const usq = 1.5 * (ux * ux + uy * uy);
@@ -511,6 +569,9 @@ class FlowSolverImpl implements FlowSolver {
       if (!(mean > 0.5 && mean < 2)) return false;
     }
 
+    // 温度を 1 ステップ進める（速度は、流入列・流出列を境界条件に合わせて補う）
+    if (this.heat !== null && thUx !== null && thUy !== null) this.stepThermal(this.heat, thUx, thUy);
+
     // 履歴のサンプリング（区間平均した力を記録する）
     if (this.stepCount % this.sampleEvery === 0 && this.accN > 0) {
       this.lastFx = this.accFx / this.accN;
@@ -519,14 +580,45 @@ class FlowSolverImpl implements FlowSolver {
       this.histT.push(this.stepCount * this.dt);
       this.histDrag.push(this.lastFx * this.forceScale);
       this.histLift.push(this.lastFy * this.forceScale);
+      if (this.heat !== null) this.histMaxT.push(this.heat.maxTemp());
       if (this.histT.length > HISTORY_MAX + 200) {
         const cut = this.histT.length - HISTORY_MAX;
         this.histT.splice(0, cut);
         this.histDrag.splice(0, cut);
         this.histLift.splice(0, cut);
+        if (this.heat !== null) this.histMaxT.splice(0, cut);
       }
     }
     return true;
+  }
+
+  /** 温度の 1 ステップ。LBM の速度配列の流入列・流出列を境界条件どおりに埋めてから熱を進める */
+  private stepThermal(heat: FlowThermal, ux: Float32Array, uy: Float32Array): void {
+    const { nx, ny, solid } = this;
+    for (let j = 0; j < ny; j++) {
+      const a = j * nx;
+      const b = a + nx - 1;
+      if (solid[a] === 0) {
+        ux[a] = this.uIn;
+        uy[a] = 0;
+      }
+      if (solid[b] === 0) {
+        if (solid[b - 1] === 1) {
+          ux[b] = this.uIn;
+          uy[b] = 0;
+        } else {
+          ux[b] = ux[b - 1];
+          uy[b] = uy[b - 1];
+        }
+      }
+    }
+    heat.step(ux, uy);
+    this.heatOutAvg += (heat.heatOutW(ux) - this.heatOutAvg) * this.heatOutAlpha;
+    // 温度が壊れたら（数値の暴走）、温度だけ初期化してやり直す。流れは続ける
+    if (this.stepCount % 50 === 0 && !Number.isFinite(heat.maxTemp())) {
+      heat.reset();
+      this.thermalResets++;
+    }
   }
 
   /** 発散したときの復旧: τ を少し上げて初期状態からやり直す */
@@ -593,7 +685,48 @@ class FlowSolverImpl implements FlowSolver {
       );
     }
     if (this.instabilityNote) w.push(this.instabilityNote);
+    if (this.heat !== null) w.push(...this.thermalWarnings(this.heat));
     return w;
+  }
+
+  /** 温度の計算についての注意 */
+  private thermalWarnings(heat: FlowThermal): string[] {
+    const w: string[] = [
+      '温度は 2D の断面で計算しています。板の表裏の面からの放熱は入れていないため、熱はすべて風が運び出します（実機より高めの温度になります）。',
+      '固体は熱容量を持たない準定常で計算しているため、途中の温度の変化は実時間ではありません。温度が落ち着いたあとの値は、熱容量によらず同じです。',
+    ];
+    if (heat.slowed) {
+      w.push('風がとても遅く熱の拡散が支配的なため、温度の計算の時間を流れより遅らせています。途中の温度の変化は実時間と合いません。風を強くすると改善します。');
+    }
+    if (heat.floatingHeatW > 0) {
+      w.push(`放熱経路のない固体の中に ${heat.floatingHeatW.toPrecision(3)} W の発熱があります。温度が定まらないため、その部分は除いています。流体や温度固定の図形に接するようにしてください。`);
+    }
+    if (this.uIn === 0 && heat.heatInW > 0) {
+      w.push('流入速度が 0 のため、風は熱を運びません。熱は空気の熱伝導だけで逃げるので、温度は非常に高くなります。流入速度を上げてください。');
+    }
+    if (this.thermalResets > 0) {
+      w.push(`温度の計算が不安定になったため、温度だけ初期化してやり直しました（${this.thermalResets}回）。`);
+    }
+    return w;
+  }
+
+  /** 温度の結果（場・数値・履歴・部品ごと）。thermal が有効なときだけ呼ぶ */
+  private thermalResult(heat: FlowThermal): { field: Field; scalars: ScalarValue[]; history: History; perShape: ReturnType<typeof buildPartTemps> } {
+    const temp = this.fTemp!;
+    heat.fillTemp(temp);
+    const scalars: ScalarValue[] = [
+      { key: 'maxTemp', label: '最高温度', unit: '°C', value: heat.maxTemp() },
+      { key: 'heatOut', label: '流出口から風が運び出す熱（直近の平均）', unit: 'W', value: this.heatOutAvg },
+      { key: 'heatIn', label: '発熱の合計', unit: 'W', value: heat.heatInW },
+    ];
+    if (heat.hasFixed) scalars.push({ key: 'heatFixed', label: '温度固定へ流れ込む熱', unit: 'W', value: heat.heatToFixedW() });
+    return {
+      // 物体の中も温度が決まっているので mask はかけない
+      field: { key: 'temp', label: '温度', unit: '°C', data: temp },
+      scalars,
+      history: { key: 'maxTemp', label: '最高温度', unit: '°C', t: this.histT.slice(), values: this.histMaxT.slice() },
+      perShape: buildPartTemps({ project: this.project, raster: this.raster, temp: heat.temperature(), valid: heat.bodyMask }),
+    };
   }
 
   // ---------- 結果 ----------
@@ -669,13 +802,22 @@ class FlowSolverImpl implements FlowSolver {
     ];
     const st = this.hasObstacle && this.uIn > 0 ? this.estimateStrouhal(qa) : null;
     if (st !== null) scalars.push({ key: 'strouhal', label: 'ストローハル数', unit: '', value: st });
+    const th = this.heat !== null ? this.thermalResult(this.heat) : null;
+    if (th) {
+      fields.push(th.field);
+      scalars.push(...th.scalars);
+    }
 
     const history: History[] = [
       { key: 'drag', label: '抗力', unit: 'N', t: this.histT.slice(), values: this.histDrag.slice() },
       { key: 'lift', label: '揚力', unit: 'N', t: this.histT.slice(), values: this.histLift.slice() },
     ];
 
-    return { analysis: 'flow', nx, ny, h, fields, scalars, history, warnings: this.buildWarnings() };
+    if (th) history.push(th.history);
+
+    const result: ResultSet = { analysis: 'flow', nx, ny, h, fields, scalars, history, warnings: this.buildWarnings() };
+    if (th?.perShape) result.perShape = th.perShape;
+    return result;
   }
 
   /**

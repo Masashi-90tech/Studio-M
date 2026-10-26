@@ -80,6 +80,28 @@ describe('確認（check）が、アプリの状態で ✓ になる', () => {
     expect(runCheck(stepOf(L('heatsink'), 'practice'), { ...ctx, result: res })).toBe(true);
     expect(runCheck(stepOf(L('heatsink'), 'practice'), { ...ctx, result: { ...res, scalars: [{ key: 'avgTemp', label: '', unit: '°C', value: 61 }] } })).toBe(false);
   });
+  it('ファン冷却: 風を 1.2 m/s 以上にする / 温度が落ち着いて 75°C 以下になった結果', () => {
+    expect(runCheck(stepOf(L('fan-heatsink'), 'try'), ctxOf('fan-heatsink', (p) => (p.flow.inletVelocity = 1.2)))).toBe(true);
+    const ctx = ctxOf('fan-heatsink');
+    const res = (maxTemp: number, heatOut: number) => ({
+      analysis: 'flow' as const,
+      nx: 1,
+      ny: 1,
+      h: 1,
+      fields: [],
+      history: [],
+      warnings: [],
+      scalars: [
+        { key: 'maxTemp', label: '', unit: '°C', value: maxTemp },
+        { key: 'heatIn', label: '', unit: 'W', value: 8 },
+        { key: 'heatOut', label: '', unit: 'W', value: heatOut },
+      ],
+    });
+    const practice = stepOf(L('fan-heatsink'), 'practice');
+    expect(runCheck(practice, { ...ctx, result: res(71, 7.8) })).toBe(true);
+    expect(runCheck(practice, { ...ctx, result: res(83, 7.8) })).toBe(false); // まだ熱い
+    expect(runCheck(practice, { ...ctx, result: res(40, 2) })).toBe(false); // 計算の直後で、温度が上がりきっていない
+  });
   it('基板: 銅の面積が 900 mm² 以上', () => {
     const grow = ctxOf('board', (p) => {
       p.shapes.push({ id: 'x', name: '銅パッド追加', role: 'solid', materialId: 'c1100', geom: { kind: 'rect', x: 0.02, y: 0.045, w: 0.02, h: 0.012 } });

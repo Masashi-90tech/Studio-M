@@ -2,6 +2,7 @@
 import type { LearningStage, Lesson } from '../types';
 import { boardLesson } from './board';
 import { cantileverLesson } from './cantilever';
+import { fanHeatsinkLesson } from './fan-heatsink';
 import { heatsinkLesson } from './heatsink';
 import { karmanLesson } from './karman';
 import { lBracketLesson } from './l-bracket';
@@ -14,6 +15,7 @@ import { wifiRoomLesson } from './wifi-room';
 /** プリセットごとに 1 つ。id は presetId と同じ */
 export const LESSONS: Lesson[] = [
   heatsinkLesson,
+  fanHeatsinkLesson,
   boardLesson,
   lBracketLesson,
   cantileverLesson,
@@ -30,8 +32,8 @@ export const LEARNING_PATH: LearningStage[] = [
   {
     level: '中学',
     title: '比例と反比例で、熱と力を読む',
-    description: '中学の数学だけで、ヒートシンクや基板、ブラケットの「なぜ」が分かります。',
-    lessonIds: ['heatsink', 'board', 'l-bracket'],
+    description: '中学の数学だけで、ヒートシンクや風での冷却、基板、ブラケットの「なぜ」が分かります。',
+    lessonIds: ['heatsink', 'fan-heatsink', 'board', 'l-bracket'],
   },
   {
     level: '高校',

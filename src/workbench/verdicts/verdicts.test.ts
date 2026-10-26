@@ -6,7 +6,7 @@ import { DEFAULT_PREFS } from '../../ui/modes';
 import { getWorkbench } from '../index';
 import type { SlabFn, Verdict, VerdictInput } from '../types';
 import { emVerdict, findSlab, recommendSlab } from './em';
-import { flowVerdict, reynoldsWords } from './flow';
+import { applyFlowAction, flowThermalVerdict, flowVerdict, nextWindSpeed, reynoldsWords, tempSettled } from './flow';
 import { heatVerdict, marginLevel, materialTempLimits, nextCooling, partRows, partsVerdict } from './heat';
 import { stressVerdict } from './stress';
 
@@ -392,5 +392,135 @@ describe('applyAction（次の一手の反映）', () => {
     const g = p.shapes[0].geom;
     expect(g.kind === 'rect' && g.w).toBeCloseTo(0.002, 9);
     expect(g.kind === 'rect' && g.x + g.w / 2).toBeCloseTo(0.05 + 0.0037 / 2, 9);
+  });
+});
+
+describe('流れ＋熱（風で冷やす）の判定', () => {
+  const row = (label: string, maxC: number, limitC: number, heatW = 5) => ({ shapeId: label, label, heatW, maxC, avgC: maxC, limitC, marginC: limitC - maxC });
+  const base = { inletC: 25, settled: true, speed: 1, heatInW: 5, heatOutW: 5 };
+
+  it('余裕が 10 K 以上は OK、0〜10 K は注意、超えたら NG（熱の判定と同じ境界）', () => {
+    const ok = flowThermalVerdict({ ...base, maxC: 70, limited: [row('チップ', 70, 85)] });
+    expect(ok.level).toBe('ok');
+    expect(ok.headline).toContain('上限に収まっています');
+    const warn = flowThermalVerdict({ ...base, maxC: 80, limited: [row('チップ', 80, 85)] });
+    expect(warn.level).toBe('warn');
+    expect(warn.headline).toContain('ぎりぎり');
+    const ng = flowThermalVerdict({ ...base, maxC: 90, limited: [row('チップ', 90, 85)] });
+    expect(ng.level).toBe('ng');
+    expect(ng.headline).toContain('上限 85');
+    // 境界: ちょうど 10 K の余裕は OK、ちょうど上限は注意
+    expect(flowThermalVerdict({ ...base, maxC: 75, limited: [row('a', 75, 85)] }).level).toBe('ok');
+    expect(flowThermalVerdict({ ...base, maxC: 85, limited: [row('a', 85, 85)] }).level).toBe('warn');
+  });
+  it('いちばん余裕の少ない部品で判定し、ほかに余裕の少ない部品も知らせる', () => {
+    const v = flowThermalVerdict({ ...base, maxC: 90, limited: [row('CPU', 90, 85), row('レギュレータ', 80, 85), row('LED', 50, 85)] });
+    expect(v.headline).toContain('CPU');
+    expect(v.lines.join('\n')).toContain('レギュレータ');
+    expect(v.lines.join('\n')).not.toContain('LED（');
+  });
+  it('NG・注意のときは「風を強くする」と発熱の見直しを出す。OK では出さない', () => {
+    const ng = flowThermalVerdict({ ...base, maxC: 90, limited: [row('CPU', 90, 85)], hottestHeat: row('CPU', 90, 85, 6) });
+    expect(ng.actions.map((a) => a.kind)).toEqual(['wind', 'review']);
+    const wind = ng.actions[0];
+    expect(wind.kind === 'wind' && wind.speed).toBe(1.5);
+    expect(flowThermalVerdict({ ...base, maxC: 60, limited: [row('CPU', 60, 85)] }).actions).toEqual([]);
+  });
+  it('OK は温度が落ち着いてから。途中は「計算中」。注意・NG は途中でもすぐ出す', () => {
+    const early = flowThermalVerdict({ ...base, settled: false, maxC: 40, limited: [row('CPU', 40, 85)] });
+    expect(early.level).toBe('pending');
+    expect(early.headline).toContain('落ち着くまで');
+    expect(flowThermalVerdict({ ...base, settled: false, maxC: 90, limited: [row('CPU', 90, 85)] }).level).toBe('ng');
+    expect(flowThermalVerdict({ ...base, settled: false, maxC: 80, limited: [row('CPU', 80, 85)] }).level).toBe('warn');
+  });
+  it('上限のある部品がなければ目安（info）で、最高温度と風の温度との差を見せる', () => {
+    const v = flowThermalVerdict({ ...base, maxC: 62.5, limited: [] });
+    expect(v.level).toBe('info');
+    expect(v.headline).toContain('62.5');
+    expect(v.lines.join('\n')).toContain('38 K');
+  });
+  it('tempSettled: 最高温度の推移が平らになったら true。まだ上がっていれば false、サンプルが少なければ false', () => {
+    const hist = (values: number[]) => ({ key: 'maxTemp', label: '', unit: '°C', t: values.map((_, i) => i), values });
+    const rising = Array.from({ length: 100 }, (_, i) => 25 + i * 0.5);
+    const flat = Array.from({ length: 100 }, (_, i) => 25 + 40 * (1 - Math.exp(-i / 10)));
+    const noisy = flat.map((v, i) => v + (i % 2 ? 0.2 : -0.2));
+    expect(tempSettled(hist(rising), 25)).toBe(false);
+    expect(tempSettled(hist(flat), 25)).toBe(true);
+    expect(tempSettled(hist(noisy), 25)).toBe(true);
+    expect(tempSettled(hist(flat.slice(0, 10)), 25)).toBe(false);
+    expect(tempSettled(undefined, 25)).toBe(false);
+  });
+  it('nextWindSpeed は 1.5 倍（有効数字 2 桁）', () => {
+    expect(nextWindSpeed(1)).toBe(1.5);
+    expect(nextWindSpeed(0.8)).toBe(1.2);
+    expect(nextWindSpeed(3)).toBe(4.5);
+    expect(nextWindSpeed(0)).toBe(1.5);
+  });
+
+  describe('ワークベンチ経由（画面と同じ入口）', () => {
+    const running: SolverStatus = { done: false, progress: 0, iteration: 500 };
+    const project = (thermal: boolean) => {
+      const p = defaultProject();
+      p.flow = { ...p.flow, inletVelocity: 1, ...(thermal ? { thermal: { enabled: true, inletTempC: 25 } } : {}) };
+      return p;
+    };
+    const result = (maxTemp: number, limitC: number, settled: boolean): ResultSet => {
+      const n = 60;
+      const values = Array.from({ length: n }, (_, i) => (settled ? maxTemp : 25 + ((maxTemp - 25) * i) / n));
+      return {
+        analysis: 'flow',
+        nx: 1,
+        ny: 1,
+        h: 1,
+        fields: [],
+        warnings: [],
+        scalars: [
+          { key: 'Re', label: 'Re', unit: '', value: 100 },
+          { key: 'maxTemp', label: '', unit: '°C', value: maxTemp },
+          { key: 'heatIn', label: '', unit: 'W', value: 5 },
+          { key: 'heatOut', label: '', unit: 'W', value: 5 },
+        ],
+        history: [{ key: 'maxTemp', label: '', unit: '°C', t: values.map((_, i) => i), values }],
+        perShape: [
+          {
+            shapeId: 'chip',
+            label: 'チップ',
+            values: [
+              { key: 'maxTemp', label: '', unit: '°C', value: maxTemp },
+              { key: 'avgTemp', label: '', unit: '°C', value: maxTemp },
+              { key: 'heatW', label: '', unit: 'W', value: 5 },
+              { key: 'limitC', label: '', unit: '°C', value: limitC },
+              { key: 'marginC', label: '', unit: 'K', value: limitC - maxTemp },
+            ],
+          },
+        ],
+      };
+    };
+    const verdict = (thermal: boolean, r: ResultSet): Verdict =>
+      computeVerdict({ kind: 'flow', project: project(thermal), result: r, status: running, raster: null, prefs: DEFAULT_PREFS })!;
+
+    it('温度を計算していなければ、これまでどおり抗力・揚力の目安', () => {
+      const v = verdict(false, result(90, 85, true));
+      expect(v.level).toBe('info');
+      expect(v.headline).toContain('レイノルズ数');
+    });
+    it('温度を計算していれば、部品の上限温度で OK / 注意 / NG', () => {
+      expect(verdict(true, result(60, 85, true)).level).toBe('ok');
+      expect(verdict(true, result(80, 85, true)).level).toBe('warn');
+      expect(verdict(true, result(95, 85, true)).level).toBe('ng');
+      expect(verdict(true, result(60, 85, false)).level).toBe('pending');
+    });
+    it('次の一手「風を強くする」は流入速度に、「発熱を見直す」は部品の選択に反映される', () => {
+      const v = verdict(true, result(95, 85, true));
+      const p = project(true);
+      let selected: string | null = null;
+      for (const a of v.actions) getWorkbench('flow')!.applyAction!({ project: p, action: a, selectShape: (id) => (selected = id) });
+      expect(p.flow.inletVelocity).toBe(1.5);
+      expect(selected).toBe('chip');
+      // 風以外の種類は何もしない
+      const q = project(true);
+      applyFlowAction({ project: q, action: { kind: 'cooling', h: 25, label: '' } });
+      expect(q.flow.inletVelocity).toBe(1);
+    });
   });
 });

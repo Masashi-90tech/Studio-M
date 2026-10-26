@@ -424,6 +424,17 @@ describe('計画（plan）', () => {
     expect(plan.rho).toBeCloseTo(1.204);
   });
 
+  it('planJob: 温度（flow.thermal）が有効でも流れだけを解き、温度は本計算に含まれないと知らせる', () => {
+    const nu = 1.516e-5;
+    const p = cylinder({ inletVelocity: (100 * nu) / 0.1 });
+    p.flow = { ...p.flow, thermal: { enabled: true, inletTempC: 30 } };
+    const plan = planJob(req(p));
+    expect(plan.spec.model).toBe('laminar');
+    expect(plan.notes.some((n) => n.includes('温度') && n.includes('Lite'))).toBe(true);
+    const off = planJob(req(cylinder({ inletVelocity: (100 * nu) / 0.1 })));
+    expect(off.notes.some((n) => n.includes('温度'))).toBe(false);
+  });
+
   it('planJob: 高 Re は自動で RANS（反復回数 = 回数 × nx）、指定が優先される', () => {
     const fast = cylinder({ inletVelocity: 5 }); // Re ≈ 3 万
     const auto = planJob(req(fast));

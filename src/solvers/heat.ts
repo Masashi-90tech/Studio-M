@@ -7,9 +7,10 @@
 // - 解くのは周囲温度からの温度差 θ = T − ambientC（桁落ちを避け、残差の基準を物理的にするため）。
 // - 連立方程式は対称正定値なので、SSOR 前処理付き共役勾配法（linear.ts）で解く。
 
-import type { EdgeBC, Field, Project, Raster, ResultSet, ScalarValue, ShapeResult, Solver, SolverFactory, SolverStatus } from '../core/types';
+import type { EdgeBC, Field, Project, Raster, ResultSet, Solver, SolverFactory, SolverStatus } from '../core/types';
 import { getMaterial } from '../core/materials';
 import { PcgSolver, SampledSeries, createStencil, progressFromResidual, type Stencil5 } from './linear';
+import { buildPartTemps } from './thermal-parts';
 
 // 収束判定: 相対残差 ‖r‖/‖b‖ がこれを下回れば収束（自動の値。project.heat.advanced で上書きできる）
 const DEFAULT_TOLERANCE = 1e-7;
@@ -208,15 +209,6 @@ function assemble(project: Project, raster: Raster): HeatSystem {
   }
 
   return { stencil, k, usesKEff, fixed, lossG, lossGT, floating, totalHeat, warnings };
-}
-
-/** 材料の使用上限の目安 [°C]（なければ undefined） */
-function materialLimit(materialId: string): number | undefined {
-  try {
-    return getMaterial(materialId).maxTempC;
-  } catch {
-    return undefined;
-  }
 }
 
 class HeatSolver implements Solver {
@@ -426,50 +418,8 @@ class HeatSolver implements Solver {
         },
       ],
       warnings,
-      perShape: this.buildPerShape(temp, tMask),
+      perShape: buildPartTemps({ project: this.project, raster: this.raster, temp, valid: tMask }),
     };
-  }
-
-  /**
-   * 部品ごとの結果: 発熱体と、上限温度（shape.maxTempC）を持つ形状について、最高・平均温度、発熱、余裕を出す。
-   * raster.shapeIndex がなければ出さない。上限は shape.maxTempC ?? 材料の maxTempC
-   */
-  private buildPerShape(temp: Float64Array, tMask: Uint8Array): ShapeResult[] | undefined {
-    const { shapeIndex, heatGen, h } = this.raster;
-    if (!shapeIndex) return undefined;
-    const shapes = this.project.shapes;
-    const volume = h * h * this.project.thickness;
-    const wanted = new Map<number, { max: number; sum: number; heat: number; count: number }>();
-    shapes.forEach((s, i) => {
-      if (s.role === 'heatSource' || s.maxTempC !== undefined) wanted.set(i, { max: -Infinity, sum: 0, heat: 0, count: 0 });
-    });
-    if (wanted.size === 0) return undefined;
-    for (let c = 0; c < shapeIndex.length; c++) {
-      if (!tMask[c]) continue;
-      const acc = wanted.get(shapeIndex[c]);
-      if (!acc) continue;
-      if (temp[c] > acc.max) acc.max = temp[c];
-      acc.sum += temp[c];
-      acc.heat += heatGen[c] * volume;
-      acc.count += 1;
-    }
-    const out: ShapeResult[] = [];
-    for (const [i, acc] of wanted) {
-      if (acc.count === 0) continue; // 後から重ねた形に隠れた、または浮いていて温度が定まらない
-      const shape = shapes[i];
-      const values: ScalarValue[] = [
-        { key: 'maxTemp', label: '最高温度', unit: '°C', value: acc.max },
-        { key: 'avgTemp', label: '平均温度', unit: '°C', value: acc.sum / acc.count },
-        { key: 'heatW', label: '発熱', unit: 'W', value: acc.heat },
-      ];
-      const limit = shape.maxTempC ?? materialLimit(shape.materialId);
-      if (limit !== undefined) {
-        values.push({ key: 'limitC', label: '上限温度', unit: '°C', value: limit });
-        values.push({ key: 'marginC', label: '余裕（上限 − 最高）', unit: 'K', value: limit - acc.max });
-      }
-      out.push({ shapeId: shape.id, label: shape.name, values });
-    }
-    return out;
   }
 
   private hasHeatInFixed(): boolean {

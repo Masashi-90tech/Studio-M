@@ -208,6 +208,11 @@ export function sanitizeProject(raw: unknown): Project | null {
   };
 
   // プロ用の詳細設定（省略した項目はソルバーが自動で決める）
+  if (isObj(flow.thermal)) {
+    const th = flow.thermal;
+    const inletTempC = isNum(th.inletTempC) ? Math.min(2000, Math.max(-273, th.inletTempC)) : undefined;
+    out.flow.thermal = { enabled: th.enabled === true, ...(inletTempC !== undefined ? { inletTempC } : {}) };
+  }
   const flowAdv = sanitizeAdvanced(flow.advanced, { smagorinskyCs: [0, 1], latticeU: [0.005, 0.2], perturbation: [0, 1] });
   if (flowAdv) out.flow.advanced = flowAdv as FlowSettings['advanced'];
   const iter = { tolerance: [1e-12, 0.1], maxIterations: [10, 1e7] } as const;

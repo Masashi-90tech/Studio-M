@@ -1,14 +1,53 @@
 // 流れのパネル: 標準モードの設定カード、かんたんモードの質問、プロモードの詳細設定。
 // ワークベンチ（modules/flow.ts）が遅延 import で読み込む。
 import { getMaterial } from '../../core/materials';
-import { chipRow, cardPanel, plainNumber } from '../../ui/panel-kit';
-import { clear, h, numField, section, selectField } from '../../ui/dom';
+import type { FlowSettings, Project } from '../../core/types';
+import { chipRow, cardPanel, plainNumber, type PanelCtx } from '../../ui/panel-kit';
+import { checkField, clear, h, numField, section, selectField } from '../../ui/dom';
 import { noBodyHint } from '../../ui/easy-kit';
 import { FLOW_SPEEDS } from '../../ui/easy-logic';
 import { formatNumber, formatQuantity } from '../../ui/format';
-import { proPanel, type Spec } from '../../ui/pro-panel';
+import { proCard, type Spec } from '../../ui/pro-panel';
 import { characteristicLength, fluidMaterials } from '../../ui/project-utils';
-import { reynoldsWords } from '../verdicts/flow';
+import { inletTempOf, reynoldsWords } from '../verdicts/flow';
+
+// ---------- 温度も計算する（風で冷やす） ----------
+
+type Thermal = NonNullable<FlowSettings['thermal']>;
+
+/** 温度の設定を一部だけ書き換える（enabled が無ければ false から） */
+function patchThermal(project: Project, patch: Partial<Thermal>): void {
+  project.flow.thermal = { enabled: project.flow.thermal?.enabled === true, ...project.flow.thermal, ...patch };
+}
+
+const THERMAL_HINT =
+  '同じ格子で温度も解きます（流れ＋熱）。風上の風の温度から、発熱する部品や物体がどれだけ温まるかが分かります。ヒートシンクやケースの中の部品に。板の表裏からの放熱は入れず、熱はすべて風が運びます';
+
+/** 標準・プロで共通: 温度を計算するか、流入する風の温度 */
+function thermalFields(ctx: PanelCtx): HTMLElement[] {
+  const { store, change } = ctx;
+  const check = checkField('温度も計算する（風で冷やす）', store.project.flow.thermal?.enabled === true, (v) => change('thermal', () => patchThermal(store.project, { enabled: v })), THERMAL_HINT);
+  const box = check.querySelector('input');
+  const temp = numField({
+    label: '風の温度',
+    unit: '°C',
+    hint: '左から流れ込む空気（流体）の温度。部屋の温度や、ケースに入る前の空気の温度',
+    value: inletTempOf(store.project),
+    digits: 1,
+    min: -100,
+    max: 1000,
+    onChange: (v) => change('thermalT', () => patchThermal(store.project, { inletTempC: v })),
+  });
+  const sync = (): void => {
+    const on = store.project.flow.thermal?.enabled === true;
+    if (box) box.checked = on;
+    temp.root.hidden = !on;
+    temp.set(inletTempOf(store.project));
+  };
+  ctx.onRefresh(sync);
+  sync();
+  return [check, temp.root];
+}
 
 /** 標準モード: 流れの設定 */
 export const flowSettings = cardPanel((ctx) => {
@@ -56,6 +95,7 @@ export const flowSettings = cardPanel((ctx) => {
       (v) => change('walls', () => (store.project.flow.walls = v === 'noslip' ? 'noslip' : 'slip')),
       'すべる壁は、広い空間の中に物体があるイメージ',
     ).root,
+    ...thermalFields(ctx),
     re,
   );
 });
@@ -74,9 +114,30 @@ export const flowEasy = cardPanel((ctx) => {
     min: 0,
     onChange: (v) => ctx.change('easy:speed', () => (store.project.flow.inletVelocity = v)),
   });
+  const thermal = chipRow(
+    '温度も調べる？',
+    [
+      { value: 'off', label: '流れだけ' },
+      { value: 'on', label: '温度も（風で冷やす）', hint: '発熱する部品が、風でどれだけ冷えるかを調べます' },
+    ],
+    (v) => ctx.change('easy:thermal', () => patchThermal(store.project, { enabled: v === 'on' })),
+  );
+  const inletTemp = plainNumber({
+    label: '風の温度',
+    unit: '°C',
+    value: inletTempOf(p),
+    min: -100,
+    max: 1000,
+    hint: '部屋の温度など。左から流れ込む空気の温度',
+    onChange: (v) => ctx.change('easy:thermalT', () => patchThermal(store.project, { inletTempC: v })),
+  });
   const words = h('div', { class: 'readout' });
   const sync = (): void => {
     const f = store.project.flow;
+    const on = f.thermal?.enabled === true;
+    thermal.set(on ? 'on' : 'off');
+    inletTemp.root.hidden = !on;
+    inletTemp.set(inletTempOf(store.project));
     fluid.set(f.fluidId);
     speed.set(FLOW_SPEEDS.find((x) => Math.abs(x.speed - f.inletVelocity) < 1e-9)?.speed ?? null);
     num.set(f.inletVelocity);
@@ -102,7 +163,7 @@ export const flowEasy = cardPanel((ctx) => {
     clear(warn);
     if (ws.length > 0) warn.append(h('p', null, 'この条件についての注意'), ...ws.map((w) => h('p', null, w)));
   };
-  card.append(fluid.root, speed.root, num.root, words, warn);
+  card.append(fluid.root, speed.root, num.root, thermal.root, inletTemp.root, words, warn);
   if (!p.shapes.some((s) => s.role === 'solid')) card.append(noBodyHint());
   return { root: card, update };
 });
@@ -142,5 +203,9 @@ const FLOW_SPECS: Spec[] = [
   },
 ];
 
-/** プロモード: 詳細設定 */
-export const flowPro = proPanel({ kind: 'flow', specs: FLOW_SPECS });
+/** プロモード: 詳細設定（先頭に温度の設定） */
+export const flowPro = cardPanel((ctx) => {
+  const card = proCard(ctx, 'flow', FLOW_SPECS);
+  card.querySelector('p.hint')?.after(...thermalFields(ctx));
+  return card;
+});

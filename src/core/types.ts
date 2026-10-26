@@ -96,6 +96,14 @@ export interface FlowSettings {
   inletVelocity: number;
   /** 上下の壁: slip = 対称（動画と同じ）、noslip = 壁面 */
   walls: 'slip' | 'noslip';
+  /**
+   * 温度も同時に計算する（流れ＋熱の連成。風で冷やす）。省略または enabled が false なら、今までと同じ流れだけの計算
+   */
+  thermal?: {
+    enabled: boolean;
+    /** 流入する流体の温度 [°C]。省略時 25 */
+    inletTempC?: number;
+  };
   advanced?: {
     /** Smagorinsky 定数（乱流の渦粘性モデル）。0 で無効 */
     smagorinskyCs?: number;

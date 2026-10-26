@@ -65,6 +65,26 @@ describe('sanitizeProject', () => {
   });
 });
 
+describe('sanitizeProject: 流れの温度（thermal）', () => {
+  const base = { domain: { width: 1, height: 0.5, nx: 100 }, shapes: [] };
+  it('省略したら省略のまま（今までのプロジェクトと同じ）', () => {
+    expect(sanitizeProject({ ...base, flow: { inletVelocity: 1 } })!.flow.thermal).toBeUndefined();
+    expect(sanitizeProject({ ...base, flow: { inletVelocity: 1, thermal: 'x' } })!.flow.thermal).toBeUndefined();
+  });
+  it('有効・無効と流入温度を読み込み、範囲外や不正な値は整える', () => {
+    expect(sanitizeProject({ ...base, flow: { thermal: { enabled: true, inletTempC: 30 } } })!.flow.thermal).toEqual({ enabled: true, inletTempC: 30 });
+    expect(sanitizeProject({ ...base, flow: { thermal: { enabled: true } } })!.flow.thermal).toEqual({ enabled: true });
+    expect(sanitizeProject({ ...base, flow: { thermal: { enabled: 'yes', inletTempC: 'hot' } } })!.flow.thermal).toEqual({ enabled: false });
+    expect(sanitizeProject({ ...base, flow: { thermal: { enabled: true, inletTempC: -9999 } } })!.flow.thermal).toEqual({ enabled: true, inletTempC: -273 });
+    expect(sanitizeProject({ ...base, flow: { thermal: { enabled: true, inletTempC: 1e9 } } })!.flow.thermal).toEqual({ enabled: true, inletTempC: 2000 });
+  });
+  it('保存して読み込んでも同じ', () => {
+    const p = defaultProject();
+    p.flow.thermal = { enabled: true, inletTempC: 18.5 };
+    expect(sanitizeProject(JSON.parse(JSON.stringify(p)))).toEqual(p);
+  });
+});
+
 describe('その他', () => {
   it('ensureRoleDefaults は役割に必要な値を補う', () => {
     const s: Shape = { id: 'a', name: 'a', geom: { kind: 'rect', x: 0, y: 0, w: 1, h: 1 }, role: 'load', materialId: 'x' };
