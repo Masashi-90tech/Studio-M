@@ -49,9 +49,11 @@ export async function runCcx(
   ctx.progress(opts.progressFrom, opts.message, 'running');
   const res = await ctx.run('ccx', ['-i', job], {
     timeoutMs: CCX_TIMEOUT_MS,
-    // 応力の計算（RESULTS）だけは 1 スレッドにする: CalculiX 2.21 は応力の計算を複数スレッドで走らせると、
-    // CPU が混み合ったときに、まれに応力が壊れた値になる（変位は正しい）ことを確認したため
-    env: { OMP_NUM_THREADS: threads, CCX_NPROC_EQUATION_SOLVER: threads, CCX_NPROC_STIFFNESS: threads, CCX_NPROC_RESULTS: '1' },
+    // 応力の計算（RESULTS）と剛性行列の組み立て（STIFFNESS）は 1 スレッドにする: CalculiX 2.21 は、これらを複数スレッドで
+    // 走らせると、まれに（4 スレッドで 40 回に 1〜2 回ほど）応力が桁違いに壊れた値になる（変位は正しい）ことを確認したため。
+    // 1 スレッドにした実測（50 回 × 2 通り）では壊れなかった。連立方程式の解き（EQUATION_SOLVER）は、時間の大半を占める
+    // 大きなモデルのために、複数スレッドのままにしてある
+    env: { OMP_NUM_THREADS: threads, CCX_NPROC_EQUATION_SOLVER: threads, CCX_NPROC_STIFFNESS: '1', CCX_NPROC_RESULTS: '1' },
     onLine: (line) => {
       lines.push(line);
       const m = /actual total time=\s*(\S+)/i.exec(line);

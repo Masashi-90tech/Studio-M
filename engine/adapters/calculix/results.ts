@@ -23,6 +23,29 @@ export interface MappedResults {
   yieldedArea: number;
 }
 
+/**
+ * 支持が受け止める力。ccx の RF は「支持の節点の K·u」で、支持の節点に直接かかっている荷重（自重など）を含まない。
+ * 支持が受け止める力は、全荷重の和と釣り合う力なので、その分を足す（Lite の反力と同じ数え方）。
+ */
+export function computeReaction(
+  blocks: DatBlock[],
+  supportNodes: number[],
+  nodalLoads: Map<number, { fx: number; fy: number }>,
+  loadScale: number,
+): { rx: number; ry: number; found: boolean } {
+  const rf = lastBlock(blocks, 'totalForce', 'NSUP');
+  let directX = 0;
+  let directY = 0;
+  for (const n of supportNodes) {
+    const f = nodalLoads.get(n);
+    if (f) {
+      directX += f.fx * loadScale;
+      directY += f.fy * loadScale;
+    }
+  }
+  return { rx: (rf?.values[0] ?? 0) - directX, ry: (rf?.values[1] ?? 0) - directY, found: rf !== undefined };
+}
+
 export function mapResults(mesh: Mesh, blocks: DatBlock[], opts: { plasticity: boolean; loadScale?: number }): MappedResults {
   const { nx, ny } = mesh;
   const nCells = nx * ny;
@@ -122,22 +145,8 @@ export function mapResults(mesh: Mesh, blocks: DatBlock[], opts: { plasticity: b
   const yieldedArea = nElem > 0 ? yielded / nElem : 0;
 
   // 反力
-  const rf = lastBlock(blocks, 'totalForce', 'NSUP');
-  // ccx の RF は「支持の節点の K·u」で、支持の節点に直接かかっている荷重（自重など）を含まない。
-  // 支持が受け止める力は、全荷重の和と釣り合う力なので、その分を足す（Lite の反力と同じ数え方）
-  let directX = 0;
-  let directY = 0;
-  const scale = opts.loadScale ?? 1;
-  for (const n of mesh.supportNodes) {
-    const f = mesh.nodalLoads.get(n);
-    if (f) {
-      directX += f.fx * scale;
-      directY += f.fy * scale;
-    }
-  }
-  const rx = (rf?.values[0] ?? 0) - directX;
-  const ry = (rf?.values[1] ?? 0) - directY;
-  if (!rf) notes.push('支持の反力を結果から読み取れませんでした。');
+  const { rx, ry, found } = computeReaction(blocks, mesh.supportNodes, mesh.nodalLoads, opts.loadScale ?? 1);
+  if (!found) notes.push('支持の反力を結果から読み取れませんでした。');
 
   const scalars: ScalarValue[] = [
     { key: 'maxVonMises', label: '最大ミーゼス応力', unit: 'Pa', value: maxVm },

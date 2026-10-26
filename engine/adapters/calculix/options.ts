@@ -10,10 +10,14 @@ export type PlaneStressElement = 'CPS4' | 'CPS4R' | 'CPS8R';
 /** 画面で選べる値。auto = 弾性は CPS4（Lite と同じ形）、塑性は CPS8R */
 export type ElementChoice = 'auto' | PlaneStressElement;
 
+/** メッシュの作り方。grid = Lite と同じ正方格子（既定）、gmsh = gmsh で作る、形に沿った三角形のメッシュ */
+export type MesherChoice = 'grid' | 'gmsh';
+
 export interface StressOptions {
   plasticity: boolean;
   largeDeformation: boolean;
   elementType: ElementChoice;
+  mesher: MesherChoice;
   /** 塑性ありのとき、プロジェクトの荷重に掛けて最終的にかける倍率 */
   loadFactor: number;
   /** 降伏後の硬化係数（E に対する割合 [%]）。0 で完全弾塑性 */
@@ -22,6 +26,8 @@ export interface StressOptions {
 
 /** 要素数の上限（格子を細かくしすぎたときの安全弁） */
 export const MAX_CELLS = 250_000;
+/** 形に沿ったメッシュ（gmsh）の要素数の上限の目安（2 次の三角形は 1 つあたりの計算が重いので、格子より少なめ） */
+export const MAX_SHAPED_ELEMENTS = 60_000;
 
 export const STRESS_OPTION_SPECS: EngineOptionSpec[] = [
   {
@@ -55,8 +61,19 @@ export const STRESS_OPTION_SPECS: EngineOptionSpec[] = [
     hint: '変形で形が変わる効果を入れます。たわみが部材の寸法の 1 割を超えるようなときに有効です（時間は少し長くなります）。',
   },
   {
+    key: 'mesher',
+    label: 'メッシュ（要素の作り方）',
+    kind: 'select',
+    default: 'grid',
+    choices: [
+      { value: 'grid', label: '格子（Lite と同じ四角の格子）' },
+      { value: 'gmsh', label: '形に沿ったメッシュ（gmsh が必要）' },
+    ],
+    hint: '格子は円や斜めの辺が階段状になり、穴のまわりの応力集中が小さめに出ます。形に沿ったメッシュは、gmsh で 2 次の三角形（CPS6）を作って解きます（gmsh は別に入れる必要があります。入れ方は設定の「PCのエンジン」に出ます）。',
+  },
+  {
     key: 'elementType',
-    label: '要素の種類',
+    label: '要素の種類（格子のとき）',
     kind: 'select',
     default: 'auto',
     choices: [
@@ -65,7 +82,7 @@ export const STRESS_OPTION_SPECS: EngineOptionSpec[] = [
       { value: 'CPS4R', label: 'CPS4R（4 節点・低減積分）' },
       { value: 'CPS8R', label: 'CPS8R（8 節点・低減積分。曲げに強い）' },
     ],
-    hint: 'Lite と比べたいときは CPS4。塑性では CPS4 が実際より硬くなる（体積ロッキング）ので、おまかせでは CPS8R を使います。',
+    hint: '格子のメッシュのときだけ使います（形に沿ったメッシュは CPS6 になります）。Lite と比べたいときは CPS4。塑性では CPS4 が実際より硬くなる（体積ロッキング）ので、おまかせでは CPS8R を使います。',
   },
 ];
 
@@ -88,6 +105,7 @@ export function parseStressOptions(options: JobRequest['options']): StressOption
     plasticity: asBool(o.plasticity, false),
     largeDeformation: asBool(o.largeDeformation, false),
     elementType: et === 'CPS4' || et === 'CPS4R' || et === 'CPS8R' ? et : 'auto',
+    mesher: String(o.mesher ?? 'grid').toLowerCase() === 'gmsh' ? 'gmsh' : 'grid',
     loadFactor: Math.max(0.01, asNumber(o.loadFactor, 1)),
     hardeningPercent: Math.max(0, asNumber(o.hardeningPercent, 0)),
   };

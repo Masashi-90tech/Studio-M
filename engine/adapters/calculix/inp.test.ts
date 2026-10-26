@@ -1,5 +1,7 @@
 import { rasterize } from '../../../src/core/raster';
 import { writeInp } from './inp';
+import { stripMesh } from '../gmsh/test-meshes';
+import { buildShapedMesh } from './gmsh-mesh';
 import { buildMesh } from './mesh';
 import { makeProject, rect, shape } from './test-projects';
 
@@ -114,5 +116,22 @@ describe('writeInp', () => {
     const { inp } = make({}, 'CPS8R');
     expect(inp).toContain('*ELEMENT, TYPE=CPS8R, ELSET=EALL');
     expect(section(inp, '*ELEMENT')[0].split(',')).toHaveLength(9);
+  });
+
+  it('形に沿ったメッシュ（CPS6）は 6 節点の要素行になり、積分点の座標（COORD）の出力を付けられる', () => {
+    const shaped = buildShapedMesh({
+      project: makeProject({ width: 0.4, height: 0.2, nx: 40, thickness: 0.01, shapes: [shape('solid', rect(0, 0, 0.4, 0.2)), shape('support', rect(0, 0, 0.1, 0.2))] }),
+      gmsh: stripMesh({ w: 0.4, h: 0.2, nx: 4, ny: 2 }),
+      grid: { nx: 40, ny: 20, h: 0.01 },
+    });
+    const base = { plasticity: false, largeDeformation: false, loadScale: 1, hardeningPercent: 0 };
+    const inp = writeInp(shaped, base);
+    expect(inp).toContain('*ELEMENT, TYPE=CPS6, ELSET=EALL');
+    expect(section(inp, '*ELEMENT')).toHaveLength(16);
+    expect(section(inp, '*ELEMENT')[0].split(',')).toHaveLength(7);
+    expect(section(inp, '*NODE,')).toHaveLength(shaped.nodeCount);
+    expect(section(inp, '*EL PRINT')).toEqual(['S']);
+    expect(section(writeInp(shaped, { ...base, integrationPointCoords: true }), '*EL PRINT')).toEqual(['S, COORD']);
+    expect(section(writeInp(shaped, { ...base, plasticity: true, integrationPointCoords: true }), '*EL PRINT')).toEqual(['S, PEEQ, COORD']);
   });
 });

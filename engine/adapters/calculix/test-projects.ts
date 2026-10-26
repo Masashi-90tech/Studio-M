@@ -89,3 +89,34 @@ export function heatPlate(opts: { material?: string; surfaceH?: number; faceCool
   p.heat.faceCooling = opts.faceCooling ?? true;
   return p;
 }
+
+/**
+ * 中央に円孔のある帯板の引張（応力集中の照合用）。長さ L = 300 mm（x）、幅 w = 100 mm（y）、孔の直径 d = 20 mm、厚さ 10 mm の鉄（SS400）。
+ * 左端 1 セル列を固定、右端 1 セル列に +x 向きの合計荷重 P。格子は nx = 120（セル 2.5 mm）。
+ * 公称応力（正味断面）σnom = P / ((w − d) t)
+ */
+export const HOLE_PLATE = { L: 0.3, W: 0.1, D: 0.02, T: 0.01, nx: 120 };
+
+export function holePlate(opts: { P: number; nx?: number }): Project {
+  const { L, W, D, T } = HOLE_PLATE;
+  const nx = opts.nx ?? HOLE_PLATE.nx;
+  const cell = L / nx;
+  return makeProject({
+    width: L,
+    height: W,
+    nx,
+    thickness: T,
+    shapes: [
+      shape('solid', rect(0, 0, L, W)),
+      shape('hole', { kind: 'circle', cx: L / 2, cy: W / 2, r: D / 2 }),
+      shape('support', rect(0, 0, cell, W)),
+      shape('load', rect(L - cell, 0, cell, W), { force: { fx: opts.P, fy: 0 } }),
+    ],
+  });
+}
+
+/** 中央に円孔のある有限幅の帯板の応力集中係数（正味断面の公称応力に対する）。Heywood の式 Kt = 2 + (1 − d/w)³ */
+export const heywoodKt = (dOverW: number): number => 2 + (1 - dOverW) ** 3;
+
+/** 同じく Peterson の線図の近似式 Ktn = 3.00 − 3.13 (d/w) + 3.66 (d/w)² − 1.53 (d/w)³ */
+export const petersonKt = (r: number): number => 3.0 - 3.13 * r + 3.66 * r ** 2 - 1.53 * r ** 3;

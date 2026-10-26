@@ -272,12 +272,13 @@
     },
     {
       "name": "gmsh",
-      "role": "メッシング",
+      "role": "メッシング（形に沿った 2D メッシュ）",
       "license": "GPL-2.0-or-later",
       "usage": "separate-process",
       "commercial": "conditions",
       "source": "https://gmsh.info",
-      "checked": "2026-10-24"
+      "checked": "2026-10-26",
+      "notes": "PC 上の Studio M Engine から別プロセスとして呼ぶ（pip 版 4.15.2 で動作確認）。CalculiX 強度のオプション「メッシュ = gmsh」で、形に沿った 2 次の三角形のメッシュ（msh 2.2 の ASCII）を作る。Studio M には同梱しない"
     },
     {
       "name": "FreeCAD",

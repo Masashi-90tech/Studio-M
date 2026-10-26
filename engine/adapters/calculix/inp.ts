@@ -5,6 +5,14 @@
 
 import type { Mesh } from './mesh';
 
+/** .inp に書く要素の種類。CPS6 = 6 節点の三角形（辺の中点にも節点。gmsh の形に沿ったメッシュ） */
+export type InpElementType = Mesh['elementType'] | 'CPS6';
+
+/** .inp を書くのに要る最小限のメッシュ（格子のメッシュ Mesh も、gmsh のメッシュもこの形を満たす） */
+export type InpMesh = Pick<Mesh, 'thickness' | 'nodeCount' | 'coords' | 'connectivity' | 'nodesPerElement' | 'materials' | 'supportNodes' | 'nodalLoads'> & {
+  elementType: InpElementType;
+};
+
 export interface InpOptions {
   /** 塑性（*PLASTIC）を入れるか。入れると荷重を増分で少しずつ掛ける */
   plasticity: boolean;
@@ -15,6 +23,8 @@ export interface InpOptions {
   hardeningPercent: number;
   /** 先頭に入れる説明（日本語可。ccx は読み飛ばす） */
   title?: string;
+  /** 要素の積分点の座標（COORD）も .dat に出す（三角形のメッシュで、応力を節点や格子に戻すため） */
+  integrationPointCoords?: boolean;
 }
 
 /** 数値を ccx が読める形にする（有効数字 12 桁） */
@@ -31,7 +41,7 @@ function listLines(ids: ArrayLike<number>): string[] {
   return out;
 }
 
-export function writeInp(mesh: Mesh, opts: InpOptions): string {
+export function writeInp(mesh: InpMesh, opts: InpOptions): string {
   const L: string[] = [];
   const t = mesh.thickness;
   L.push('** Studio M Engine が書いた CalculiX の入力（単位: m, N, Pa, kg）');
@@ -46,8 +56,8 @@ export function writeInp(mesh: Mesh, opts: InpOptions): string {
 
   // ----- 要素 -----
   L.push(`*ELEMENT, TYPE=${mesh.elementType}, ELSET=EALL`);
-  const nElem = mesh.elementCell.length;
   const npe = mesh.nodesPerElement;
+  const nElem = Math.floor(mesh.connectivity.length / npe);
   for (let e = 0; e < nElem; e++) {
     const row = [e + 1];
     for (let a = 0; a < npe; a++) row.push(mesh.connectivity[e * npe + a]);
@@ -96,7 +106,8 @@ export function writeInp(mesh: Mesh, opts: InpOptions): string {
   const freq = nonlinear ? ', FREQUENCY=1000' : '';
   L.push(`*NODE PRINT, NSET=NALL${freq}`, 'U');
   if (mesh.supportNodes.length > 0) L.push(`*NODE PRINT, NSET=NSUP, TOTALS=ONLY${freq}`, 'RF');
-  L.push(`*EL PRINT, ELSET=EALL${freq}`, opts.plasticity ? 'S, PEEQ' : 'S');
+  const elPrint = [opts.plasticity ? 'S, PEEQ' : 'S', ...(opts.integrationPointCoords ? ['COORD'] : [])].join(', ');
+  L.push(`*EL PRINT, ELSET=EALL${freq}`, elPrint);
   L.push(`*NODE FILE${freq}`, 'U, RF');
   L.push(`*EL FILE${freq}`, opts.plasticity ? 'S, PEEQ' : 'S');
   L.push('*END STEP');

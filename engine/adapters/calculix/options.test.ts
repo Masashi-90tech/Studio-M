@@ -7,6 +7,7 @@ describe('parseStressOptions', () => {
       plasticity: false,
       largeDeformation: false,
       elementType: 'auto',
+      mesher: 'grid',
       loadFactor: 1,
       hardeningPercent: 0,
     });
@@ -16,13 +17,15 @@ describe('parseStressOptions', () => {
     const o = parseStressOptions({ plasticity: 'true', largeDeformation: 1, elementType: 'cps8r', loadFactor: '2.5', hardeningPercent: -3 });
     expect(o).toMatchObject({ plasticity: true, largeDeformation: true, elementType: 'CPS8R', loadFactor: 2.5, hardeningPercent: 0 });
     expect(parseStressOptions({ elementType: 'xyz', loadFactor: 'abc' })).toMatchObject({ elementType: 'auto', loadFactor: 1 });
+    expect(parseStressOptions({ mesher: 'GMSH' }).mesher).toBe('gmsh');
+    expect(parseStressOptions({ mesher: 'tri' }).mesher).toBe('grid');
   });
 
   it('画面に出す項目の既定値と、読み取りの既定値が揃っている', () => {
     const parsed = parseStressOptions(Object.fromEntries(STRESS_OPTION_SPECS.map((s) => [s.key, s.default])));
     expect(parsed).toEqual(parseStressOptions(undefined));
     expect(STRESS_OPTION_SPECS.map((s) => s.key)).toEqual(
-      expect.arrayContaining(['plasticity', 'largeDeformation', 'elementType']),
+      expect.arrayContaining(['plasticity', 'largeDeformation', 'elementType', 'mesher']),
     );
   });
 });
