@@ -345,8 +345,8 @@ export interface PcbInfo {
 // Lite（ブラウザ）はボクセル（立方体のセル）で解き、PC のエンジン（CalculiX）は四面体で解く。
 // どちらの結果も、同じボクセル格子（grid3d.ts の voxelGrid）に載せた ResultSet3D にそろえ、並べて比べられるようにする。
 
-/** 3D の解析の種類。今は熱（定常熱伝導）と強度（線形弾性） */
-export type Analysis3DKind = 'heat' | 'stress';
+/** 3D の解析の種類。熱（定常熱伝導）、強度（線形弾性）、流れ（部品のまわりの空気や水の流れ。非定常） */
+export type Analysis3DKind = 'heat' | 'stress' | 'flow';
 
 /** 三角形メッシュ。positions は [x, y, z] の並び [m]、indices は 3 つずつで 1 つの三角形（面は外向き） */
 export interface Mesh3D {
@@ -400,12 +400,41 @@ export interface Study3D {
     /** 自重を考慮するか（重力は -z 方向） */
     selfWeight: boolean;
   };
+  /** 流れの設定（analysis が 'flow' のとき使う）。省略時は flow3DDefaults()（grid3d.ts） */
+  flow?: Flow3DSettings;
   /** 格子の細かさ。省略時は自動（voxelGrid が決める） */
   grid?: {
     /** セルの一辺 [m] */
     cell?: number;
     /** セル数の上限（省略時 grid3d.ts の既定） */
     maxCells?: number;
+  };
+}
+
+/** 風（流れ）の向き。'+x' = x の正の向きへ流れる（-x 側の面から流れ込む） */
+export type FlowDirection3D = '+x' | '-x' | '+y' | '-y' | '+z' | '-z';
+
+/**
+ * 3D の流れの設定。部品を「風洞」（直方体の空間）の中に置き、一様な流れを当てる。
+ * 風洞の大きさは、部品の大きさ D（流れに垂直な面での最大の寸法）に対する倍率で決める（grid3d.ts の flowBounds）
+ */
+export interface Flow3DSettings {
+  /** 流体の材料ID（air・water など。materials.ts の fluid） */
+  fluidId: string;
+  direction: FlowDirection3D;
+  /** 流入する一様流の速さ [m/s] */
+  inletVelocity: number;
+  /** 風洞の側面: slip = 壁の影響なし（対称）、noslip = 壁面（ダクトの中） */
+  walls: 'slip' | 'noslip';
+  /** 風洞の余白（D に対する倍率）。省略時 上流 1.5・下流 4・側方 1.5 */
+  domain?: { upstream?: number; downstream?: number; side?: number };
+  /** 温度も解く（流れ＋熱。部品の発熱は Study3D.regions の heatFlux と heat.bodyHeatW）。省略時は流れだけ */
+  thermal?: { enabled: boolean; inletTempC?: number };
+  advanced?: {
+    /** Smagorinsky 定数（0 で無効）。省略時は自動 */
+    smagorinskyCs?: number;
+    /** 格子単位の流入速度（0.02〜0.15）。省略時は自動 */
+    latticeU?: number;
   };
 }
 
@@ -426,7 +455,7 @@ export interface Field3D {
   unit: string;
   /** 長さ nx·ny·nz */
   data: Float32Array;
-  /** 値が意味を持つセル（1 = 部品の中）。長さ nx·ny·nz */
+  /** 値が意味を持つセル。長さ nx·ny·nz。熱・強度では 1 = 部品の中、流れの速さ・圧力では 1 = 流体のセル */
   mask: Uint8Array;
   diverging?: boolean;
 }
@@ -435,7 +464,10 @@ export interface ResultSet3D {
   analysis: Analysis3DKind;
   grid: Grid3D;
   fields: Field3D[];
-  /** 代表値。key は 2D の ResultSet とそろえる（熱: maxTemp、強度: maxMises・maxDisp・minSafety など） */
+  /**
+   * 代表値。key は 2D の ResultSet とそろえる（熱: maxTemp、強度: maxMises・maxDisp・minSafety など、
+   * 流れ: Re・drag・Cd・time など）
+   */
   scalars: ScalarValue[];
   history: History[];
   warnings: string[];

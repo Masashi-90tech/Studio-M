@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellCenter3D, cellIndex3D, GRID3D_DEFAULT_LONG_CELLS, mesh3DBounds, sampleField3D, voxelGrid } from './grid3d';
+import { cellCenter3D, cellIndex3D, flowAxis, flowBounds, GRID3D_DEFAULT_LONG_CELLS, GRID3D_FLOW_DEFAULT_MAX_CELLS, mesh3DBounds, sampleField3D, studyGrid, voxelGrid } from './grid3d';
 
 const box = (x: number, y: number, z: number) => ({ min: [0, 0, 0] as [number, number, number], max: [x, y, z] as [number, number, number] });
 
@@ -70,5 +70,45 @@ describe('sampleField3D', () => {
   it('近くに部品がなければ NaN', () => {
     const empty = new Uint8Array(64);
     expect(sampleField3D(g, data, empty, [2, 2, 2])).toBeNaN();
+  });
+});
+
+describe('流れの風洞（flowBounds・studyGrid）', () => {
+  const cube = { min: [0, 0, 0] as [number, number, number], max: [0.02, 0.01, 0.01] as [number, number, number] };
+
+  it('上流・下流・側方へ D（流れに垂直な寸法の最大）の倍率だけ広げる', () => {
+    const b = flowBounds(cube, { fluidId: 'air', direction: '+x', inletVelocity: 1, walls: 'slip' });
+    // D = max(0.01, 0.01) = 0.01。上流 1.5D、下流 4D、側方 1.5D
+    expect(b.min[0]).toBeCloseTo(-0.015, 9);
+    expect(b.max[0]).toBeCloseTo(0.06, 9);
+    expect(b.min[1]).toBeCloseTo(-0.015, 9);
+    expect(b.max[2]).toBeCloseTo(0.025, 9);
+  });
+
+  it('逆向き（-z）の流れでは、+z 側が上流になる', () => {
+    const b = flowBounds(cube, { fluidId: 'air', direction: '-z', inletVelocity: 1, walls: 'slip', domain: { upstream: 1, downstream: 2, side: 0.5 } });
+    // D = max(0.02, 0.01) = 0.02
+    expect(b.max[2]).toBeCloseTo(0.01 + 0.02, 9);
+    expect(b.min[2]).toBeCloseTo(-0.04, 9);
+    expect(b.min[0]).toBeCloseTo(-0.01, 9);
+  });
+
+  it('流れの格子は風洞全体を覆い、セル数の上限に収まる', () => {
+    const study = {
+      version: 1 as const,
+      name: 't',
+      analysis: 'flow' as const,
+      mesh: { positions: Float32Array.from([0, 0, 0, 0.02, 0, 0, 0, 0.01, 0.01]), indices: Uint32Array.from([0, 1, 2]) },
+      materialId: 'a6061',
+      regions: [],
+      heat: { ambientC: 25, surfaceH: 8 },
+      stress: { selfWeight: false },
+    };
+    const g = studyGrid(study);
+    expect(g.nx * g.ny * g.nz).toBeLessThanOrEqual(GRID3D_FLOW_DEFAULT_MAX_CELLS);
+    expect(g.nx * g.ny * g.nz).toBeGreaterThan(GRID3D_FLOW_DEFAULT_MAX_CELLS * 0.8);
+    expect(g.origin[0]).toBeLessThanOrEqual(-0.015 + 1e-9);
+    expect(g.origin[0] + g.nx * g.h).toBeGreaterThanOrEqual(0.06 - 1e-9);
+    expect(flowAxis('-y')).toEqual({ axis: 1, sign: -1 });
   });
 });

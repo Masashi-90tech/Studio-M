@@ -1,6 +1,6 @@
 // 3D 解析のボクセル格子を決める。Lite（ブラウザ）と PC のエンジンの両方が同じ関数で格子を決めるので、
 // 結果を同じ格子に載せて比べられる（契約は types.ts の Grid3D・ResultSet3D）。
-import type { Grid3D, Mesh3D, Study3D } from './types';
+import type { Flow3DSettings, FlowDirection3D, Grid3D, Mesh3D, Study3D } from './types';
 
 /** セル数の上限の既定（ブラウザで数秒〜数十秒で解ける大きさ） */
 export const GRID3D_DEFAULT_MAX_CELLS = 300_000;
@@ -8,6 +8,10 @@ export const GRID3D_DEFAULT_MAX_CELLS = 300_000;
 export const GRID3D_DEFAULT_LONG_CELLS = 64;
 /** 部品のまわりに足す余白 [セル]（面の外側のセルで放熱・条件を扱うため） */
 export const GRID3D_MARGIN_CELLS = 1;
+/** 流れのセル数の上限の既定（風洞全体。ブラウザで 1 秒に数十ステップ進められる大きさ） */
+export const GRID3D_FLOW_DEFAULT_MAX_CELLS = 250_000;
+/** 流れの風洞の余白の既定（部品の大きさ D に対する倍率） */
+export const FLOW3D_DEFAULT_DOMAIN = { upstream: 1.5, downstream: 4, side: 1.5 } as const;
 
 export interface Box3D {
   min: [number, number, number];
@@ -56,10 +60,56 @@ export function voxelGrid(opts: { bounds: Box3D; cell?: number; maxCells?: numbe
   return { nx: n[0], ny: n[1], nz: n[2], h, origin };
 }
 
-/** Study3D の格子（Lite もエンジンもこれを使う）。形が空なら日本語のエラー */
+/** 流れの設定の既定値（Study3D.flow を省略したとき） */
+export function flow3DDefaults(): Flow3DSettings {
+  return { fluidId: 'air', direction: '+x', inletVelocity: 1, walls: 'slip' };
+}
+
+/** 向き → 軸の番号（0 = x, 1 = y, 2 = z）と符号 */
+export function flowAxis(direction: FlowDirection3D): { axis: 0 | 1 | 2; sign: 1 | -1 } {
+  const axis = direction[1] === 'x' ? 0 : direction[1] === 'y' ? 1 : 2;
+  return { axis, sign: direction[0] === '+' ? 1 : -1 };
+}
+
+/**
+ * 流れの風洞の範囲。部品の外接箱を、流れの上流・下流・側方へ D の倍率だけ広げる。
+ * D は流れに垂直な 2 方向の寸法の大きい方（部品が流れを受ける幅）
+ */
+export function flowBounds(bounds: Box3D, flow: Flow3DSettings): Box3D {
+  const { axis, sign } = flowAxis(flow.direction);
+  const size = [0, 1, 2].map((a) => bounds.max[a] - bounds.min[a]);
+  const cross = [0, 1, 2].filter((a) => a !== axis).map((a) => size[a]);
+  const d = Math.max(...cross, 1e-9);
+  const up = (flow.domain?.upstream ?? FLOW3D_DEFAULT_DOMAIN.upstream) * d;
+  const down = (flow.domain?.downstream ?? FLOW3D_DEFAULT_DOMAIN.downstream) * d;
+  const side = (flow.domain?.side ?? FLOW3D_DEFAULT_DOMAIN.side) * d;
+  const min = [...bounds.min] as [number, number, number];
+  const max = [...bounds.max] as [number, number, number];
+  for (let a = 0; a < 3; a++) {
+    if (a === axis) {
+      min[a] -= sign > 0 ? up : down;
+      max[a] += sign > 0 ? down : up;
+    } else {
+      min[a] -= side;
+      max[a] += side;
+    }
+  }
+  return { min, max };
+}
+
+/**
+ * Study3D の格子（Lite もエンジンもこれを使う）。形が空なら日本語のエラー。
+ * 流れ（analysis = 'flow'）は風洞全体を覆う格子で、セル数の上限まで細かくする
+ */
 export function studyGrid(study: Study3D): Grid3D {
   const bounds = mesh3DBounds(study.mesh);
   if (!bounds) throw new Error('3D モデルに三角形がありません。STL / OBJ を読み込み直してください。');
+  if (study.analysis === 'flow') {
+    const tunnel = flowBounds(bounds, study.flow ?? flow3DDefaults());
+    const longest = Math.max(...[0, 1, 2].map((a) => tunnel.max[a] - tunnel.min[a]));
+    // 細かいところから始めて、上限に収まるまでセルを大きくする（voxelGrid の中で）
+    return voxelGrid({ bounds: tunnel, cell: study.grid?.cell ?? longest / 1000, maxCells: study.grid?.maxCells ?? GRID3D_FLOW_DEFAULT_MAX_CELLS });
+  }
   return voxelGrid({ bounds, cell: study.grid?.cell, maxCells: study.grid?.maxCells });
 }
 
