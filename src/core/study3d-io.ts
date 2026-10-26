@@ -5,7 +5,18 @@
 // { "$typed": "f32" | "u32" | "u8", length, b64 } に直す。受け取った側で元の型に戻す（NaN も壊れない）。
 // 読み込みでは中身を検査し、壊れていたら何が悪いかを書いた日本語の Error を投げる。
 import { base64ToBytes, bytesToBase64, decodeHistory, decodeScalars, encodeF32, encodeU8 } from './engine-wire';
-import type { Analysis3DKind, Field3D, Grid3D, Region3D, Region3DRole, ResultSet3D, ShapeResult, Study3D } from './types';
+import type {
+  Analysis3DKind,
+  Field3D,
+  Flow3DSettings,
+  FlowDirection3D,
+  Grid3D,
+  Region3D,
+  Region3DRole,
+  ResultSet3D,
+  ShapeResult,
+  Study3D,
+} from './types';
 
 /** ファイルの種類の印。別の JSON を取り違えないために入れる */
 export const STUDY3D_FILE_KIND = 'studio-m-study3d';
@@ -16,8 +27,10 @@ interface WireU32 {
   b64: string;
 }
 
-const ANALYSES: readonly Analysis3DKind[] = ['heat', 'stress'];
+const ANALYSES: readonly Analysis3DKind[] = ['heat', 'stress', 'flow'];
 const REGION_ROLES: readonly Region3DRole[] = ['heatFlux', 'fixedTemp', 'convection', 'insulated', 'support', 'load'];
+const FLOW_DIRECTIONS: readonly FlowDirection3D[] = ['+x', '-x', '+y', '-y', '+z', '-z'];
+const FLOW_WALLS: readonly Flow3DSettings['walls'][] = ['slip', 'noslip'];
 
 // ---------- 検査の小さな部品 ----------
 
@@ -56,6 +69,20 @@ function needPositive(v: unknown, what: string): number {
   const x = needNum(v, what);
   if (x <= 0) throw new Error(`${what}は 0 より大きい数にしてください（${x}）`);
   return x;
+}
+
+/** 0 以上の有限の数 */
+function needNonNeg(v: unknown, what: string): number {
+  const x = needNum(v, what);
+  if (x < 0) throw new Error(`${what}は 0 以上の数にしてください（${x}）`);
+  return x;
+}
+
+/** 空でない文字列 */
+function needNonEmptyStr(v: unknown, what: string): string {
+  const s = needStr(v, what);
+  if (s === '') throw new Error(`${what}が空です。値を入れてください`);
+  return s;
 }
 
 function needPositiveInt(v: unknown, what: string): number {
@@ -140,6 +167,41 @@ function decodeRegion(raw: unknown, n: number, triCount: number): Region3D {
   return out;
 }
 
+/** 3D の流れの設定（flow）。省略可能な項目は、あれば残し、なければ付けない */
+function decodeFlow3D(raw: unknown): Flow3DSettings {
+  const f = needObj(raw, '3D の流れの設定（flow）');
+  const flow: Flow3DSettings = {
+    fluidId: needNonEmptyStr(f.fluidId, '流体の材料 ID（flow.fluidId）'),
+    direction: needOneOf(f.direction, FLOW_DIRECTIONS, '風の向き（flow.direction）'),
+    inletVelocity: needNonNeg(f.inletVelocity, '流入の速さ（flow.inletVelocity）[m/s]'),
+    walls: needOneOf(f.walls, FLOW_WALLS, '風洞の側面（flow.walls）'),
+  };
+  if (f.domain !== undefined) {
+    const d = needObj(f.domain, '風洞の余白（flow.domain）');
+    const domain: NonNullable<Flow3DSettings['domain']> = {};
+    if (d.upstream !== undefined) domain.upstream = needPositive(d.upstream, '風洞の上流の余白（flow.domain.upstream）');
+    if (d.downstream !== undefined) domain.downstream = needPositive(d.downstream, '風洞の下流の余白（flow.domain.downstream）');
+    if (d.side !== undefined) domain.side = needPositive(d.side, '風洞の側方の余白（flow.domain.side）');
+    flow.domain = domain;
+  }
+  if (f.thermal !== undefined) {
+    const t = needObj(f.thermal, '温度の設定（flow.thermal）');
+    const thermal: NonNullable<Flow3DSettings['thermal']> = {
+      enabled: needBool(t.enabled, '温度を解くか（flow.thermal.enabled）'),
+    };
+    if (t.inletTempC !== undefined) thermal.inletTempC = needNum(t.inletTempC, '流入の温度（flow.thermal.inletTempC）[°C]');
+    flow.thermal = thermal;
+  }
+  if (f.advanced !== undefined) {
+    const a = needObj(f.advanced, '詳しい設定（flow.advanced）');
+    const advanced: NonNullable<Flow3DSettings['advanced']> = {};
+    if (a.smagorinskyCs !== undefined) advanced.smagorinskyCs = needNonNeg(a.smagorinskyCs, 'Smagorinsky 定数（flow.advanced.smagorinskyCs）');
+    if (a.latticeU !== undefined) advanced.latticeU = needPositive(a.latticeU, '格子単位の流入速度（flow.advanced.latticeU）');
+    flow.advanced = advanced;
+  }
+  return flow;
+}
+
 /** JSON から来た値 → Study3D。壊れていたら日本語のエラーを投げる */
 export function decodeStudy3D(raw: unknown): Study3D {
   const r = needObj(raw, '3D の検討（Study3D）');
@@ -186,6 +248,7 @@ export function decodeStudy3D(raw: unknown): Study3D {
     stress: { selfWeight: needBool(stress.selfWeight, '自重の考慮（stress.selfWeight）') },
   };
   if (r.source !== undefined) study.source = needStr(r.source, '取り込み元（source）');
+  if (r.flow !== undefined) study.flow = decodeFlow3D(r.flow);
   if (r.grid !== undefined) {
     const g = needObj(r.grid, '格子の細かさ（grid）');
     const grid: NonNullable<Study3D['grid']> = {};
@@ -209,6 +272,7 @@ export function encodeStudy3D(study: Study3D): unknown {
     stress: study.stress,
   };
   if (study.source !== undefined) out.source = study.source;
+  if (study.flow !== undefined) out.flow = study.flow;
   if (study.grid !== undefined) out.grid = study.grid;
   return out;
 }

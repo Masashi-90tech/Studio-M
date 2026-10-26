@@ -9,7 +9,7 @@ import {
   STUDY3D_FILE_KIND,
   studyFileJson,
 } from './study3d-io';
-import type { ResultSet3D, Study3D } from './types';
+import type { Flow3DSettings, ResultSet3D, Study3D } from './types';
 
 // JSON を一度通す（ファイルや通信と同じ経路）
 const viaJson = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
@@ -61,8 +61,24 @@ const wireF32 = (a: number[]) => ({ $typed: 'f32', length: a.length, b64: bytesT
 const wireU32 = (a: number[]) => ({ $typed: 'u32', length: a.length, b64: bytesToBase64(new Uint8Array(Uint32Array.from(a).buffer)) });
 const wireU8 = (a: number[]) => ({ $typed: 'u8', length: a.length, b64: bytesToBase64(Uint8Array.from(a)) });
 
+/** 流れの設定の全部入り（domain・thermal・advanced あり） */
+function sampleFlow(): Flow3DSettings {
+  return {
+    fluidId: 'air',
+    direction: '+x',
+    inletVelocity: 2.5,
+    walls: 'noslip',
+    domain: { upstream: 1.5, downstream: 4, side: 1.5 },
+    thermal: { enabled: true, inletTempC: 25 },
+    advanced: { smagorinskyCs: 0.1, latticeU: 0.05 },
+  };
+}
+
+const flowStudy = (flow: Flow3DSettings = sampleFlow()): Study3D => ({ ...sampleStudy(), analysis: 'flow', flow });
+
 type Wire = Record<string, any>;
 const studyWire = (): Wire => viaJson(encodeStudy3D(sampleStudy())) as Wire;
+const flowWire = (): Wire => viaJson(encodeStudy3D(flowStudy())) as Wire;
 const resultWire = (): Wire => viaJson(encodeResultSet3D(sampleResult())) as Wire;
 
 describe('study3d-io: Study3D', () => {
@@ -90,7 +106,7 @@ describe('study3d-io: Study3D', () => {
   it('壊れた検討は、何が悪いかが分かる日本語のエラーになる', () => {
     const cases: [string, (w: Wire) => void, RegExp][] = [
       ['version が 1 でない', (w) => { w.version = 2; }, /version.*1 ではありません/],
-      ['analysis が heat / stress でない', (w) => { w.analysis = 'flow'; }, /analysis.*heat \/ stress/],
+      ['analysis が heat / stress / flow のどれでもない', (w) => { w.analysis = 'em'; }, /analysis.*heat \/ stress \/ flow/],
       ['indices が 3 の倍数でない', (w) => { w.mesh.indices = wireU32([0, 1, 2, 0]); }, /3 の倍数/],
       ['indices が頂点の数を超える', (w) => { w.mesh.indices = wireU32([0, 1, 2, 0, 1, 4]); }, /頂点の数（4）を超えて/],
       ['positions が 3 の倍数でない', (w) => { w.mesh.positions = wireF32([0, 0, 0, 1]); }, /positions.*3 の倍数/],
@@ -114,9 +130,82 @@ describe('study3d-io: Study3D', () => {
     }
     expect(() => decodeStudy3D(null)).toThrow('読めません');
   });
+
+  it('flow ありの往復で元と同じ（domain・thermal・advanced あり / なし）', () => {
+    const full = flowStudy();
+    const backFull = decodeStudy3D(viaJson(encodeStudy3D(full)));
+    expect(backFull).toEqual(full);
+    expect(backFull.analysis).toBe('flow');
+    expect(backFull.flow).toEqual(sampleFlow());
+
+    const bare = flowStudy({ fluidId: 'water', direction: '-z', inletVelocity: 0, walls: 'slip' });
+    const backBare = decodeStudy3D(viaJson(encodeStudy3D(bare)));
+    expect(backBare).toEqual(bare);
+    expect('domain' in backBare.flow!).toBe(false);
+    expect('thermal' in backBare.flow!).toBe(false);
+    expect('advanced' in backBare.flow!).toBe(false);
+  });
+
+  it('flow の省略可能な項目は、一部だけあってもそのまま残る。flow が無ければ付けない', () => {
+    const partial = flowStudy({
+      fluidId: 'air',
+      direction: '+y',
+      inletVelocity: 1,
+      walls: 'slip',
+      domain: { upstream: 2 },
+      thermal: { enabled: false },
+      advanced: {},
+    });
+    const back = decodeStudy3D(viaJson(encodeStudy3D(partial)));
+    expect(back).toEqual(partial);
+    expect(back.flow?.domain).toEqual({ upstream: 2 });
+    expect(back.flow?.thermal).toEqual({ enabled: false });
+
+    const none = decodeStudy3D(viaJson(encodeStudy3D(sampleStudy())));
+    expect('flow' in none).toBe(false);
+  });
+
+  it('flow は .studiom3d.json のファイルでも往復する', () => {
+    const study = flowStudy();
+    expect(parseStudyFile(studyFileJson(study))).toEqual(study);
+  });
+
+  it('壊れた flow は、何が悪いかが分かる日本語のエラーになる', () => {
+    const cases: [string, (w: Wire) => void, RegExp][] = [
+      ['flow が配列・文字列などオブジェクトでない', (w) => { w.flow = 'air'; }, /3D の流れの設定（flow）が読めません/],
+      ['fluidId が空文字', (w) => { w.flow.fluidId = ''; }, /flow\.fluidId.*空です/],
+      ['fluidId が無い', (w) => { delete w.flow.fluidId; }, /flow\.fluidId.*文字列/],
+      ['direction が 6 つのどれでもない', (w) => { w.flow.direction = '+w'; }, /flow\.direction.*のどれでも/],
+      ['direction が無い', (w) => { delete w.flow.direction; }, /flow\.direction/],
+      ['inletVelocity が負', (w) => { w.flow.inletVelocity = -1; }, /flow\.inletVelocity.*0 以上/],
+      ['inletVelocity が文字列', (w) => { w.flow.inletVelocity = 'fast'; }, /flow\.inletVelocity.*数ではありません/],
+      ['inletVelocity が NaN（JSON では null になる）', (w) => { w.flow.inletVelocity = null; }, /flow\.inletVelocity.*数ではありません/],
+      ['walls が slip / noslip でない', (w) => { w.flow.walls = 'wall'; }, /flow\.walls.*slip \/ noslip/],
+      ['domain がオブジェクトでない', (w) => { w.flow.domain = 2; }, /風洞の余白（flow\.domain）が読めません/],
+      ['domain.upstream が 0', (w) => { w.flow.domain.upstream = 0; }, /flow\.domain\.upstream.*0 より大きい/],
+      ['domain.downstream が文字列', (w) => { w.flow.domain.downstream = 'x'; }, /flow\.domain\.downstream.*数ではありません/],
+      ['domain.side が負', (w) => { w.flow.domain.side = -1; }, /flow\.domain\.side.*0 より大きい/],
+      ['thermal.enabled が真偽値でない', (w) => { w.flow.thermal.enabled = 1; }, /flow\.thermal\.enabled.*true か false/],
+      ['thermal.inletTempC が文字列', (w) => { w.flow.thermal.inletTempC = 'hot'; }, /flow\.thermal\.inletTempC.*数ではありません/],
+      ['advanced.smagorinskyCs が負', (w) => { w.flow.advanced.smagorinskyCs = -0.1; }, /smagorinskyCs.*0 以上/],
+      ['advanced.latticeU が 0', (w) => { w.flow.advanced.latticeU = 0; }, /latticeU.*0 より大きい/],
+    ];
+    for (const [name, mutate, re] of cases) {
+      const w = flowWire();
+      mutate(w);
+      expect(() => decodeStudy3D(w), name).toThrow(re);
+    }
+  });
 });
 
 describe('study3d-io: ResultSet3D', () => {
+  it('analysis = flow の ResultSet3D も往復で元と同じ', () => {
+    const rs: ResultSet3D = { ...sampleResult(), analysis: 'flow' };
+    const back = decodeResultSet3D(viaJson(encodeResultSet3D(rs)));
+    expect(back).toEqual(rs);
+    expect(back.analysis).toBe('flow');
+  });
+
   it('往復で元と同じ。NaN を含む data も壊れない', () => {
     const rs = sampleResult();
     const back = decodeResultSet3D(viaJson(encodeResultSet3D(rs)));
