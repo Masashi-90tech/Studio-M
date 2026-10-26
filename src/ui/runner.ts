@@ -6,6 +6,7 @@ import type { AnalysisKind, Field, Project, Raster, ResultSet, Solver, SolverFac
 import { getWorkbench, loadSolverFactory, peekSolverFactory } from '../workbench';
 import { withLoading } from './lazy';
 import { projectForFormula } from './project-utils';
+import { RemoteResults, type RemoteEntry } from './remote-results';
 import type { Store } from './state';
 
 /** 1 フレームで計算に使う時間 [ms] */
@@ -22,11 +23,12 @@ export interface LogEntry {
   message?: string;
 }
 
+/** 本計算の結果を表示しているときの状態（判定カードなどが「計算済み」とみなせるように） */
+const REMOTE_STATUS: SolverStatus = { done: true, progress: 1, iteration: 1, message: '本計算の結果' };
+
 export class Runner {
   solver: Solver | null = null;
   raster: Raster | null = null;
-  status: SolverStatus | null = null;
-  result: ResultSet | null = null;
   /** ソルバーを作れなかった・実行中に失敗したときのメッセージ */
   error: string | null = null;
   /** UI 側で気づいた注意（支持がない、など） */
@@ -38,12 +40,19 @@ export class Runner {
   /** 反復ごとの残差の記録（プロの「ソルバーログ」用） */
   log: LogEntry[] = [];
   running = true;
-  /** result が更新されるたびに増える */
+  /** result が更新されるたび（Lite の計算が進む・本計算の結果を切り替える）に増える */
   resultVersion = 0;
+  /** PC のエンジンで計算した結果（形や条件が変わると古い扱いになる） */
+  readonly remote = new RemoteResults();
   /** ソルバーを作り直すたびに増える（流線などの描画状態のリセット用） */
   generation = 0;
 
   private rev = 0;
+  /** Lite（ブラウザの中の計算）の結果と状態。result / status は、本計算を表示中はそちらに差し替わる */
+  private lite: ResultSet | null = null;
+  private liteStatus: SolverStatus | null = null;
+  /** 利用者が「本計算」の表示を選んでいるか */
+  private wantRemote = false;
   private kind: AnalysisKind;
   private timer: number | undefined;
   private cache = new Map<AnalysisKind, { rev: number; result: ResultSet }>();
@@ -55,23 +64,84 @@ export class Runner {
     store.on('load', () => {
       this.rev++;
       this.cache.clear();
+      this.wantRemote = false;
       this.rebuild();
     });
     store.on('analysis', (src) => {
       if (src === 'load') return; // load で作り直し済み
+      this.wantRemote = false;
       this.stash();
       this.rebuild();
     });
   }
 
+  /** 表示する結果。本計算を選んでいて、それが古くなければ本計算、そうでなければ Lite */
+  get result(): ResultSet | null {
+    return this.shownRemote()?.result ?? this.lite;
+  }
+
+  /** 表示する結果の状態。本計算を表示中は「計算済み」 */
+  get status(): SolverStatus | null {
+    return this.shownRemote() ? REMOTE_STATUS : this.liteStatus;
+  }
+
+  /**
+   * 表示中の結果と同じ格子の Raster。本計算の結果は Lite と格子の大きさが違うことがあるので、
+   * 合わないときは null（判定などが、別の格子の配列を読み違えないように）
+   */
+  get shownRaster(): Raster | null {
+    const r = this.result;
+    return this.raster && r && this.raster.nx === r.nx && this.raster.ny === r.ny ? this.raster : null;
+  }
+
+  /** Lite（ブラウザの中の計算）の結果。本計算を表示中でも Lite の結果を返す（比較表に使う） */
+  get liteResult(): ResultSet | null {
+    return this.lite;
+  }
+
+  /** 形や条件が変わるたびに増える番号。本計算の結果が今のプロジェクトのものかを見分けるのに使う */
+  get revision(): number {
+    return this.rev;
+  }
+
+  /** いま本計算の結果を表示しているか */
+  get viewingRemote(): boolean {
+    return this.shownRemote() !== null;
+  }
+
+  /** 今の解析の、古くない本計算の結果 */
+  currentRemote(): RemoteEntry | null {
+    return this.remote.get(this.kind, this.rev);
+  }
+
+  private shownRemote(): RemoteEntry | null {
+    return this.wantRemote ? this.currentRemote() : null;
+  }
+
+  /** 本計算の結果を受け取る。rev は計算を始めたときの revision（その後に変更があれば古い結果になる） */
+  setRemote(opts: { kind: AnalysisKind; result: ResultSet; label: string; rev: number; show?: boolean }): void {
+    this.remote.set(opts);
+    if (opts.show && opts.kind === this.kind && opts.rev === this.rev) this.wantRemote = true;
+    this.resultVersion++;
+  }
+
+  /** Lite ⇄ 本計算の表示を切り替える（本計算の結果がないときは Lite のまま） */
+  showRemote(on: boolean): void {
+    const next = on && this.currentRemote() !== null;
+    if (next === this.wantRemote) return;
+    this.wantRemote = next;
+    this.resultVersion++;
+  }
+
   /** 現在の結果を、解析を切り替える前に退避する（Excel 出力用） */
   private stash(): void {
-    if (this.result) this.cache.set(this.kind, { rev: this.rev, result: this.result });
+    if (this.lite) this.cache.set(this.kind, { rev: this.rev, result: this.lite });
   }
 
   private onProjectChanged(labelOnly: boolean): void {
     if (labelOnly) return;
     this.rev++;
+    this.wantRemote = false; // 古くなった本計算は表示しない（Lite に戻る）
     this.cache.clear();
     window.clearTimeout(this.timer);
     this.timer = window.setTimeout(() => this.rebuild(), REBUILD_DELAY_MS);
@@ -84,8 +154,8 @@ export class Runner {
     this.kind = this.store.analysis;
     this.generation++;
     this.error = null;
-    this.status = null;
-    this.result = null;
+    this.liteStatus = null;
+    this.lite = null;
     this.solver = null;
     this.log = [];
     this.grid = null;
@@ -119,7 +189,7 @@ export class Runner {
     const start = (factory: SolverFactory): void => {
       try {
         this.solver = factory(project, raster);
-        this.result = this.solver.result();
+        this.lite = this.solver.result();
       } catch (e) {
         this.solver = null;
         this.error = `計算を始められませんでした: ${message(e)}`;
@@ -156,11 +226,12 @@ export class Runner {
   /** 1 フレーム分だけ計算を進める。結果が更新されたら true */
   tick(): boolean {
     if (!this.solver || !this.running || document.hidden) return false;
-    if (this.status?.done) return false;
+    if (this.viewingRemote) return false; // 本計算を見ているあいだ、Lite は止めておく
+    if (this.liteStatus?.done) return false;
     try {
-      this.status = this.solver.step(STEP_BUDGET_MS);
-      this.result = this.solver.result();
-      this.record(this.status);
+      this.liteStatus = this.solver.step(STEP_BUDGET_MS);
+      this.lite = this.solver.result();
+      this.record(this.liteStatus);
       this.resultVersion++;
       return true;
     } catch (e) {
@@ -179,16 +250,21 @@ export class Runner {
     if (this.log.length > LOG_LIMIT) this.log = this.log.filter((_, i) => i % 2 === 0 || i === this.log.length - 1);
   }
 
-  /** いまの形状・条件で計算済みの結果すべて（現在のタブ + 退避済みのもの） */
+  /**
+   * いまの形状・条件で計算済みの結果すべて（現在のタブ + 退避済みのもの）。
+   * 本計算の結果があれば、Lite の結果のすぐ後に label つきで続ける（Excel で並べて見られる）
+   */
   collectResults(): ResultSet[] {
     const out: ResultSet[] = [];
     for (const k of ANALYSIS_KINDS) {
       if (k === this.kind) {
-        if (this.result) out.push(this.result);
+        if (this.lite) out.push(this.lite);
       } else {
         const c = this.cache.get(k);
         if (c && c.rev === this.rev) out.push(c.result);
       }
+      const r = this.remote.get(k, this.rev);
+      if (r) out.push(r.result);
     }
     return out;
   }

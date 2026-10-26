@@ -117,6 +117,19 @@ describe('exportResultsWorkbook', () => {
     expect(ws.getCell(FIELD_HEADER_ROWS + 1, 150).value).not.toBeNull();
     expect(String(ws.getCell(3, 1).value)).toContain('間引');
   });
+
+  it('label つきの結果（PC のエンジンの本計算）は、Lite とは別のシートに入る', async () => {
+    const remote: ResultSet = { ...rs, label: 'CalculiX 本計算' };
+    const wb = await load(await exportResultsWorkbook(project, [rs, remote]));
+    const names = wb.worksheets.map((w) => w.name);
+    expect(names).toContain('流れ_流速');
+    expect(names).toContain('流れ本計算_流速');
+    expect(names).toContain('履歴_流れ本計算');
+    for (const n of names) expect(n.length).toBeLessThanOrEqual(31);
+    const text: string[] = [];
+    wb.getWorksheet('概要')!.eachRow((r) => r.eachCell((c) => text.push(String(c.value))));
+    expect(text.join('\n')).toContain('流れ・CalculiX 本計算');
+  });
 });
 
 describe('exportFormulaWorkbook', () => {

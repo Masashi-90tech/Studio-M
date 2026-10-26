@@ -1269,6 +1269,9 @@ pre.log {
 }
 .prefs-pop {
   padding: 12px 14px;
+  width: min(380px, calc(100vw - 24px));
+  max-height: calc(100dvh - 70px);
+  overflow-y: auto;
 }
 .pop-title {
   font-weight: 700;

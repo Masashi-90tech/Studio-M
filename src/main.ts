@@ -6,6 +6,7 @@ import { getWorkbench } from './workbench';
 import { downloadBlob, toast } from './ui/dom';
 import { initEasyPanel } from './ui/easy-panel';
 import { Editor } from './ui/editor';
+import { initEngineUi } from './ui/engine-open';
 import { formatNumber, formatQuantity } from './ui/format';
 import { initHeader } from './ui/header';
 import { initLearnDrawer } from './ui/learn-drawer';
@@ -62,7 +63,9 @@ const verdict = initVerdictCard(store, runner, $('verdict'));
 // 学習機能（数学の窓・学ぶ）の表示設定。既定は OFF で、OFF のあいだは学びモードを読み込まない
 const learn = createLearnSwitch({ initial: loadLearnEnabled() });
 learn.subscribe(saveLearnEnabled);
-initPrefsPopover({ button: $('btnPrefs'), panel: $('prefsPopover'), learn });
+// PC のエンジン（本計算）。設定（⚙）に接続の欄、結果の下に本計算カード。使うときまで何も読み込まない
+const engine = initEngineUi({ store, runner, resultsHost: $('engine') });
+initPrefsPopover({ button: $('btnPrefs'), panel: $('prefsPopover'), learn, engine });
 // 数学の窓（判定カードの下）と「学ぶ」ドロワー。中身の学びモードは開いたときに遅延 import する
 const mathCard = initMathCard({ store, runner, host: $('mathWindow'), learn });
 const learnDrawer = initLearnDrawer({ store, runner, math: mathCard, drawer: $('learnDrawer'), button: $<HTMLButtonElement>('btnLearn'), chipHost: $('learnChip'), learn });
@@ -181,6 +184,7 @@ function frame(now: number): void {
   const stepped = runner.tick();
   results.update();
   verdict.update();
+  engine.update();
   mathCard.update();
   learnDrawer.update();
   settings.update();
