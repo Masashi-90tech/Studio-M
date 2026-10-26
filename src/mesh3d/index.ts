@@ -11,6 +11,8 @@ export type { MeshInfo, CleanReport, WatertightReport } from './mesh';
 export { sliceMesh, sliceAxes, sectionSegments3D } from './slice';
 export type { SliceOptions, SliceResult, SliceLoop } from './slice';
 export { buildMeshProject, domainMargins } from './build';
+export { buildStudy3D, STUDY3D_DEFAULT_AMBIENT_C, STUDY3D_DEFAULT_SURFACE_H } from './build3d';
+export type { BuildStudy3DOptions } from './build3d';
 export type { BuildOptions, BuildResult } from './build';
 export { MeshParseError, AXIS_NAMES, UNIT_LABEL, UNIT_TO_M } from './types';
 export type { TriMesh, Box3, Axis, LengthUnit } from './types';

@@ -15,6 +15,20 @@ export interface Box3 {
 /** 切る軸（0 = X、1 = Y、2 = Z） */
 export type Axis = 0 | 1 | 2;
 
+/** 切り口に貼る画像（結果の色）。u は軸 (axis + 1) % 3、v は軸 (axis + 2) % 3。rgba は width × height × 4 で、行 0 が v0 側 */
+export interface SectionImage {
+  axis: Axis;
+  /** モデルの単位での切る位置 */
+  position: number;
+  u0: number;
+  u1: number;
+  v0: number;
+  v1: number;
+  width: number;
+  height: number;
+  rgba: Uint8Array;
+}
+
 export const AXIS_NAMES = ['X', 'Y', 'Z'] as const;
 
 /** モデルの単位。長さを m にするときの倍率は UNIT_TO_M */

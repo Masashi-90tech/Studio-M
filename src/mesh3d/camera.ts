@@ -39,6 +39,14 @@ export function wheelFactor(deltaY: number): number {
   return Math.exp(clamp(deltaY, -400, 400) * 0.0015);
 }
 
+/**
+ * 縦長の画面（スマホなど）では、モデルが横にはみ出さないよう、その分だけ遠ざける。
+ * 描画と、クリックの光線（screenRay）で同じものを使う
+ */
+export function fitOrbit(s: OrbitState, aspect: number): OrbitState {
+  return aspect >= 1 ? s : { ...s, dist: s.dist / Math.max(aspect, 0.4) };
+}
+
 export function cameraPosition(s: OrbitState): Vec3 {
   const cp = Math.cos(s.pitch);
   return [s.dist * cp * Math.cos(s.yaw), s.dist * cp * Math.sin(s.yaw), s.dist * Math.sin(s.pitch)];
@@ -148,4 +156,28 @@ export function rotationOnly(view: Mat4): Mat4 {
   m[13] = 0;
   m[14] = 0;
   return m;
+}
+
+export interface Ray3 {
+  origin: Vec3;
+  /** 向き（単位ベクトル） */
+  dir: Vec3;
+}
+
+/**
+ * 画面の位置を通る光線。ndcX・ndcY は -1〜1（右が +x、上が +y）。
+ * 座標は orbitMatrices と同じ正規化した座標（注視点が原点）。クリックした場所を調べる（選ぶ）ときに使う
+ */
+export function screenRay(s: OrbitState, aspect: number, ndcX: number, ndcY: number): Ray3 {
+  const eye = cameraPosition(s);
+  const back = normalize(eye); // 注視点は原点なので、カメラ → 原点の逆向き
+  const right = normalize(cross([0, 0, 1], back));
+  const up = cross(back, right);
+  const t = Math.tan(FOV_Y / 2);
+  const dir = normalize([
+    -back[0] + ndcX * t * aspect * right[0] + ndcY * t * up[0],
+    -back[1] + ndcX * t * aspect * right[1] + ndcY * t * up[1],
+    -back[2] + ndcX * t * aspect * right[2] + ndcY * t * up[2],
+  ]);
+  return { origin: eye, dir };
 }

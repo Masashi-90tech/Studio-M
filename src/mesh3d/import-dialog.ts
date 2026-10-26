@@ -4,9 +4,10 @@
 import './import-dialog.css';
 import { ANALYSIS_KINDS, DEFAULT_ANALYSIS, analysisLabel } from '../core/analyses';
 import { MATERIALS } from '../core/materials';
-import type { AnalysisKind, Project } from '../core/types';
+import type { AnalysisKind, Project, Study3D } from '../core/types';
 import { fieldRow, h, numField, selectField, toast } from '../ui/dom';
 import { DEFAULT_MATERIAL_ID, buildMeshProject } from './build';
+import { buildStudy3D } from './build3d';
 import { parseMeshFile } from './load';
 import { analyzeMesh, type MeshInfo } from './mesh';
 import { sampleMesh } from './primitives';
@@ -25,6 +26,11 @@ export interface MeshImportResult {
 
 export interface MeshImportOptions {
   onImport: (result: MeshImportResult) => void;
+  /**
+   * 「3D のまま解析する（熱）」を選んだとき。ダイアログを閉じてから呼ぶ。
+   * 省略すると、そのボタンを出さない（mesh3d は 3D 解析の画面を知らない。開くのは画面側）
+   */
+  onAnalyze3D?: (study: Study3D, info: { warnings: string[] }) => void;
   /** 最初から読み込むファイル（画面へのドロップなどで渡す）。省略時は選んでもらう */
   file?: File;
 }
@@ -143,6 +149,11 @@ export function openMeshImport(opts: MeshImportOptions): () => void {
   });
 
   const importBtn = h('button', { type: 'button', class: 'btn primary', disabled: true, onClick: () => doImport() }, '取り込む');
+  const analyze3dBtn = h(
+    'button',
+    { type: 'button', class: 'btn', disabled: true, hidden: !opts.onAnalyze3D, title: '断面を切らずに、3D モデルをそのまま 3D で解きます（熱）', onClick: () => doAnalyze3D() },
+    '3D のまま解析する（熱）',
+  );
   const cancelBtn = h('button', { type: 'button', class: 'btn', onClick: () => close() }, 'キャンセル');
   const closeBtn = h('button', { type: 'button', class: 'btn m3d-close', 'aria-label': '閉じる', onClick: () => close() }, '×');
 
@@ -177,7 +188,7 @@ export function openMeshImport(opts: MeshImportOptions): () => void {
     { class: 'm3d-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId },
     h('div', { class: 'm3d-head' }, h('h2', { id: titleId }, '3D モデルを開く（STL・OBJ）'), closeBtn),
     h('div', { class: 'm3d-body' }, left, right),
-    h('div', { class: 'm3d-foot' }, cancelBtn, importBtn),
+    h('div', { class: 'm3d-foot' }, cancelBtn, analyze3dBtn, importBtn),
     fileInput,
   );
   const backdrop = h('div', { class: 'm3d-backdrop' }, dialog);
@@ -191,6 +202,7 @@ export function openMeshImport(opts: MeshImportOptions): () => void {
   function updateImportState(): void {
     const ok = !!slice && slice.loops.some((l) => !l.hole);
     importBtn.disabled = !ok;
+    analyze3dBtn.disabled = !info;
   }
 
   function drawPreview(): void {
@@ -458,6 +470,19 @@ export function openMeshImport(opts: MeshImportOptions): () => void {
       opts.onImport({ project: built.project, analysis, warnings });
     } catch (e) {
       toast(e instanceof Error ? e.message : '取り込めませんでした', 'error');
+    }
+  }
+
+  function doAnalyze3D(): void {
+    if (analyze3dBtn.disabled || !info || !opts.onAnalyze3D) return;
+    try {
+      const study = buildStudy3D({ mesh: info.mesh, fileName, unit, materialId });
+      const warnings = [...info.warnings];
+      const cb = opts.onAnalyze3D;
+      close();
+      cb(study, { warnings });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '3D 解析を始められませんでした', 'error');
     }
   }
 

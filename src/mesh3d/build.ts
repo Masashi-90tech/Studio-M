@@ -49,7 +49,7 @@ export function domainMargins(analysis: AnalysisKind, W: number, H: number): { l
   return { left: pad, right: pad, bottom: pad, top: pad };
 }
 
-function baseName(name: string): string {
+export function baseName(name: string): string {
   const base = name.replace(/^.*[\\/]/, '').replace(/\.(stl|obj)$/i, '').replace(/（サンプル）$/, '');
   return base || '3D モデル';
 }

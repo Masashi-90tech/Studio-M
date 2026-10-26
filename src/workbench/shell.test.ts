@@ -116,6 +116,28 @@ describe('画面（ハーネス）のシェル', () => {
     expect(files).toEqual(['ui/mesh-open.ts']);
   });
 
+  it('3D 解析（src/sim3d）は、画面から遅延 import か型としてだけ読み込む', () => {
+    // 静的な import（型以外・副作用だけの import も含む）で sim3d を読むと、起動時に 3D 解析の画面・計算の部品一式が入ってしまう
+    const hits: string[] = [];
+    for (const f of shellFiles()) {
+      for (const m of strip(read(f)).matchAll(/^\s*import\s+(type\s+)?(?:[^;'"]*?from\s+)?['"]([^'"]*(?:^|\/)sim3d(?:\/[^'"]*)?)['"]/gm)) {
+        if (!m[1]) hits.push(`${f}: ${m[2]}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('画面が 3D 解析を読む入口は、遅延 import の 1 か所（sim3d-open.ts）に集まっている', () => {
+    const files = shellFiles().filter((f) => /import\(\s*['"][^'"]*\/sim3d\//.test(strip(read(f))));
+    expect(files).toEqual(['ui/sim3d-open.ts']);
+  });
+
+  it('3D の取り込みダイアログから 3D 解析を開くのは、画面側の入口（mesh-open.ts）がコールバックで渡している', () => {
+    expect(strip(read('ui/mesh-open.ts'))).toMatch(/onAnalyze3D[\s\S]*openSim3D/);
+    // 取り込みダイアログ自身は sim3d を import しない
+    expect(strip(read('mesh3d/import-dialog.ts'))).not.toMatch(/sim3d/);
+  });
+
   it('src/learn は core だけに依存する（ui・workbench・solvers を import しない。テストは除く）', () => {
     const hits: string[] = [];
     const walk = (dir: string): string[] =>

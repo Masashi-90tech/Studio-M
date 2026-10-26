@@ -1,0 +1,466 @@
+/* 3D 解析の画面（全画面）。配色は style.css の変数を使う。見た目は「3D モデルを開く」ダイアログ（mesh3d/import-dialog.css）に合わせている。 */
+.s3d-root {
+  position: fixed;
+  inset: 0;
+  z-index: 46;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+}
+.s3d-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.s3d-head h2 {
+  margin: 0;
+  font-size: 16px;
+  white-space: nowrap;
+}
+.s3d-title-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.s3d-close {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  line-height: 1;
+  font-size: 18px;
+}
+.s3d-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+}
+
+/* 左: 3D ビュー */
+.s3d-view-col {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0 10px 12px;
+}
+.s3d-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.s3d-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.s3d-spacer {
+  flex: 1;
+}
+.s3d-stage {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7f5f1;
+  overflow: hidden;
+}
+.s3d-view {
+  position: absolute;
+  inset: 0;
+}
+.s3d-view .m3d-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+  outline-offset: -2px;
+}
+.s3d-view .m3d-gizmo {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  width: 72px;
+  height: 72px;
+  pointer-events: none;
+}
+.s3d-view .m3d-axis {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.s3d-view .m3d-message,
+.s3d-message {
+  position: absolute;
+  inset: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.s3d-view .m3d-message[hidden] {
+  display: none;
+}
+
+/* 凡例（カラーバー） */
+.s3d-legend {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  bottom: 10px;
+  width: 76px;
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  grid-template-rows: auto auto auto 1fr auto;
+  column-gap: 6px;
+  align-items: stretch;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  pointer-events: none;
+  max-height: 320px;
+  background: rgba(255, 253, 249, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.s3d-legend[hidden] {
+  display: none;
+}
+.s3d-legend-unit {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+.s3d-legend-stale {
+  grid-column: 1 / -1;
+  font-size: 10.5px;
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-bottom: 2px;
+  justify-self: start;
+}
+.s3d-legend-stale[hidden] {
+  display: none;
+}
+.s3d-legend-max {
+  grid-column: 1 / -1;
+}
+.s3d-legend-min {
+  grid-column: 1 / -1;
+}
+.s3d-legend-bar {
+  grid-column: 1;
+  grid-row: 4;
+  border-radius: 3px;
+  border: 1px solid var(--line-strong);
+  min-height: 60px;
+}
+
+/* 右: パネル */
+.s3d-panel {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 12px;
+  border-left: 1px solid var(--line);
+}
+.s3d-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.s3d-card {
+  padding: 10px 12px 12px;
+  gap: 8px;
+}
+.s3d-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.s3d-note,
+.s3d-selinfo {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.s3d-warn {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  color: var(--warn-ink);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.s3d-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.s3d-adds .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+}
+
+/* 面の条件の一覧 */
+.s3d-regions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.s3d-empty {
+  padding: 4px 2px;
+}
+.s3d-region {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.s3d-region.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.s3d-region-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.s3d-region .s3d-name {
+  flex: 1 1 100px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 3px 6px;
+}
+.s3d-role {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.s3d-valbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.s3d-region .s3d-val {
+  width: 76px;
+  min-height: 32px;
+  padding: 3px 6px;
+}
+.s3d-del {
+  min-height: 32px;
+}
+.s3d-region-meta {
+  margin-top: 2px;
+  padding-left: 16px;
+}
+
+/* 細かさ・断面の選択ボタン */
+.s3d-segs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.s3d-seg {
+  flex: 1 1 70px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.s3d-seg[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+.s3d-seg:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.s3d-run {
+  min-height: 40px;
+  padding: 6px 20px;
+}
+.s3d-cancel {
+  min-height: 40px;
+}
+.s3d-cancel[hidden],
+.s3d-progress[hidden],
+.s3d-runinfo[hidden],
+.s3d-result[hidden] {
+  display: none;
+}
+.s3d-progress {
+  width: 100%;
+  height: 10px;
+  accent-color: var(--accent);
+}
+.s3d-runinfo.error {
+  background: var(--err-bg);
+  color: var(--err-ink);
+}
+
+/* 結果 */
+.s3d-result.stale .s3d-verdict,
+.s3d-result.stale .s3d-kvs,
+.s3d-result.stale .s3d-table {
+  opacity: 0.55;
+}
+.s3d-stale {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  color: var(--warn-ink);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.s3d-verdict {
+  border: 1px solid var(--line);
+  border-left-width: 6px;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.s3d-verdict .verdict-head {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.s3d-kvs {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+.s3d-kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  padding: 2px 0;
+  border-bottom: 1px dashed var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.s3d-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.s3d-table th,
+.s3d-table td {
+  text-align: right;
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.s3d-table th:first-child,
+.s3d-table td:first-child {
+  text-align: left;
+}
+
+/* 断面 */
+.s3d-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.s3d-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.s3d-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.s3d-section-body.off {
+  opacity: 0.55;
+}
+.s3d-slider {
+  width: 100%;
+  accent-color: var(--accent);
+  min-height: 28px;
+}
+
+/* 狭い画面: 3D ビューの下にパネルを縦に並べ、全体をスクロールする */
+@media (max-width: 760px) {
+  .s3d-body {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .s3d-view-col {
+    flex: none;
+    padding: 8px 10px 0;
+  }
+  .s3d-stage {
+    flex: none;
+    height: 52vh;
+    min-height: 260px;
+  }
+  .s3d-panel {
+    overflow: visible;
+    border-left: 0;
+    padding: 10px;
+  }
+  .s3d-legend {
+    width: 56px;
+    max-height: 200px;
+  }
+  .s3d-head {
+    padding: 6px 10px;
+  }
+}

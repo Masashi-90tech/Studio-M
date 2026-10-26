@@ -3,14 +3,34 @@
 // 法線は頂点に持たず、フラグメントシェーダーで画面上の微分（dFdx / dFdy）から求める。
 // そのため、頂点を共有したままのメッシュ（数十万三角形）をそのまま GPU に渡せて、固まらない。
 // 取り込みダイアログ（import-dialog.ts）から使う画面側のファイル。
-import { DEFAULT_ORBIT, type Mat4, type OrbitState, multiply, orbitBy, orbitMatrices, ortho, rotationOnly, wheelFactor, zoomBy, project } from './camera';
-import type { Axis, Box3, TriMesh } from './types';
+import { DEFAULT_ORBIT, type Mat4, type OrbitState, type Ray3, fitOrbit, multiply, orbitBy, orbitMatrices, ortho, rotationOnly, screenRay, wheelFactor, zoomBy, project } from './camera';
+import type { Axis, Box3, SectionImage, TriMesh } from './types';
+
+export type { SectionImage } from './types';
 
 export interface ViewerColors {
   /** 切る平面と断面の線の色（#rrggbb） */
   accent: string;
   /** 背景（#rrggbb） */
   background: string;
+  /** 画面読み上げ用の説明（省略時は取り込みダイアログ用の文） */
+  label?: string;
+}
+
+/** 三角形の組を、色をつけて重ねて表示する（面の選択・条件を置いた面の強調）。triangles は setMesh に渡したメッシュの三角形の番号 */
+export interface ViewerHighlight {
+  triangles: ArrayLike<number>;
+  /** 0〜1 の RGB */
+  color: [number, number, number];
+  /** 不透明度（省略時 0.6） */
+  alpha?: number;
+}
+
+/** 画面のクリック（ドラッグしていない）。ray はモデルの単位の光線 */
+export interface ViewerPick {
+  ray: Ray3;
+  /** Shift / Ctrl（Mac は ⌘）を押しながら */
+  additive: boolean;
 }
 
 export interface Viewer {
@@ -22,6 +42,16 @@ export interface Viewer {
   setSection(lines: Float32Array | null): void;
   /** 切る平面より上（軸の正の側）を隠して、中を見えるようにする */
   setClipAbove(on: boolean): void;
+  /** 平面で切って片側を隠す（hide: 1 で軸の正の側、-1 で負の側）。null で切らない。setClipAbove より優先する */
+  setClip(clip: { axis: Axis; position: number; hide: 1 | -1 } | null): void;
+  /** 頂点ごとの色（r, g, b の並び、0〜1）。頂点の数 × 3。null で一色の表示に戻す */
+  setVertexColors(colors: Float32Array | null): void;
+  /** 三角形の組を色つきで重ねる。空配列で消す */
+  setHighlights(groups: ViewerHighlight[]): void;
+  /** 切り口に結果の色の画像を貼る。null で消す（画像があるあいだ、切る平面の半透明の面は描かない） */
+  setSectionImage(image: SectionImage | null): void;
+  /** クリックされたとき（ドラッグでの回転とは区別する）。null で解除 */
+  setPickHandler(handler: ((pick: ViewerPick) => void) | null): void;
   resetView(): void;
   /** 親の大きさが変わったとき */
   resize(): void;
@@ -44,7 +74,7 @@ const PRECISION = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#e
 /** WebGL 1 / 2 の両方で使えるよう、シェーダーの書き方の違いを前置きの定義で吸収する */
 function shaderSource(gl2: boolean, stage: 'vs' | 'fs', body: string): string {
   if (gl2) {
-    const pre = stage === 'vs' ? '#define attribute in\n#define varying out\n' : '#define varying in\nout vec4 fragColor;\n#define gl_FragColor fragColor\n';
+    const pre = stage === 'vs' ? '#define attribute in\n#define varying out\n' : '#define varying in\nout vec4 fragColor;\n#define gl_FragColor fragColor\n#define texture2D texture\n';
     return `#version 300 es\n${stage === 'fs' ? PRECISION : ''}${pre}${body}`;
   }
   return `${stage === 'fs' ? `#extension GL_OES_standard_derivatives : enable\n${PRECISION}` : ''}${body}`;
@@ -52,32 +82,86 @@ function shaderSource(gl2: boolean, stage: 'vs' | 'fs', body: string): string {
 
 const MESH_VS = `
 attribute vec3 aPos;
+attribute vec3 aColor;
 uniform mat4 uView;
 uniform mat4 uProj;
 varying vec3 vView;
 varying vec3 vModel;
+varying vec3 vColor;
 void main() {
   vec4 v = uView * vec4(aPos, 1.0);
   vView = v.xyz;
   vModel = aPos;
+  vColor = aColor;
   gl_Position = uProj * v;
 }`;
 
+// uClipSide: 1 で軸の正の側を隠す、-1 で負の側を隠す、0 で切らない
 const MESH_FS = `
 uniform vec3 uBase;
 uniform vec3 uAxisMask;
 uniform float uClipPos;
-uniform float uClipOn;
+uniform float uClipSide;
+uniform float uUseColor;
 varying vec3 vView;
 varying vec3 vModel;
+varying vec3 vColor;
 void main() {
-  if (uClipOn > 0.5 && dot(vModel, uAxisMask) > uClipPos) discard;
+  if (uClipSide != 0.0 && uClipSide * (dot(vModel, uAxisMask) - uClipPos) > 0.0) discard;
   vec3 n = normalize(cross(dFdx(vView), dFdy(vView)));
   if (n.z < 0.0) n = -n;
   vec3 l = normalize(vec3(0.35, 0.55, 0.75));
   float d = max(dot(n, l), 0.0);
+  if (uUseColor > 0.5) {
+    // 結果の色は、色の読み取りを邪魔しないよう陰影を弱くする
+    gl_FragColor = vec4(vColor * (0.7 + 0.3 * d), 1.0);
+    return;
+  }
   float rim = 0.12 * (1.0 - n.z);
   gl_FragColor = vec4(uBase * (0.32 + 0.62 * d) + rim, 1.0);
+}`;
+
+// 面の強調: メッシュと同じ頂点に、半透明の色を重ねる（切って隠した側には描かない）
+const HL_VS = `
+attribute vec3 aPos;
+uniform mat4 uView;
+uniform mat4 uProj;
+varying vec3 vModel;
+void main() {
+  vModel = aPos;
+  gl_Position = uProj * uView * vec4(aPos, 1.0);
+}`;
+
+const HL_FS = `
+uniform vec4 uColor;
+uniform vec3 uAxisMask;
+uniform float uClipPos;
+uniform float uClipSide;
+varying vec3 vModel;
+void main() {
+  if (uClipSide != 0.0 && uClipSide * (dot(vModel, uAxisMask) - uClipPos) > 0.0) discard;
+  gl_FragColor = uColor;
+}`;
+
+// 切り口の画像
+const TEX_VS = `
+attribute vec3 aPos;
+attribute vec3 aColor;
+uniform mat4 uView;
+uniform mat4 uProj;
+varying vec2 vUv;
+void main() {
+  vUv = aColor.xy;
+  gl_Position = uProj * uView * vec4(aPos, 1.0);
+}`;
+
+const TEX_FS = `
+uniform sampler2D uTex;
+varying vec2 vUv;
+void main() {
+  vec4 c = texture2D(uTex, vUv);
+  if (c.a < 0.01) discard;
+  gl_FragColor = vec4(c.rgb, 1.0);
 }`;
 
 const FLAT_VS = `
@@ -95,7 +179,7 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
   canvas.className = 'm3d-canvas';
   canvas.tabIndex = 0;
   canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', '取り込む 3D モデル。ドラッグで回転、ホイールで拡大縮小、矢印キーでも回せます');
+  canvas.setAttribute('aria-label', colors.label ?? '取り込む 3D モデル。ドラッグで回転、ホイールで拡大縮小、矢印キーでも回せます');
   const attrs: WebGLContextAttributes = { antialias: true, alpha: false, powerPreference: 'high-performance' };
   let gl: GL | null = null;
   try {
@@ -125,15 +209,20 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
     g.attachShader(p, compile(g.VERTEX_SHADER, shaderSource(isGl2, 'vs', vs)));
     g.attachShader(p, compile(g.FRAGMENT_SHADER, shaderSource(isGl2, 'fs', fs)));
     g.bindAttribLocation(p, 0, 'aPos');
+    g.bindAttribLocation(p, 1, 'aColor');
     g.linkProgram(p);
     if (!g.getProgramParameter(p, g.LINK_STATUS)) throw new Error(g.getProgramInfoLog(p) ?? 'シェーダーのリンクに失敗しました');
     return p;
   };
   let meshProg: WebGLProgram;
   let flatProg: WebGLProgram;
+  let hlProg: WebGLProgram;
+  let texProg: WebGLProgram;
   try {
     meshProg = link(MESH_VS, MESH_FS);
     flatProg = link(FLAT_VS, FLAT_FS);
+    hlProg = link(HL_VS, HL_FS);
+    texProg = link(TEX_VS, TEX_FS);
   } catch (e) {
     console.error(e);
     return { error: '3D 表示の準備に失敗しました。ブラウザを最新にするか、ページを開き直してください。断面の位置は、右の数値と 2D の図で指定できます。' };
@@ -145,10 +234,20 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
     mBase: uni(meshProg, 'uBase'),
     mMask: uni(meshProg, 'uAxisMask'),
     mClipPos: uni(meshProg, 'uClipPos'),
-    mClipOn: uni(meshProg, 'uClipOn'),
+    mClipSide: uni(meshProg, 'uClipSide'),
+    mUseColor: uni(meshProg, 'uUseColor'),
     fView: uni(flatProg, 'uView'),
     fProj: uni(flatProg, 'uProj'),
     fColor: uni(flatProg, 'uColor'),
+    hView: uni(hlProg, 'uView'),
+    hProj: uni(hlProg, 'uProj'),
+    hColor: uni(hlProg, 'uColor'),
+    hMask: uni(hlProg, 'uAxisMask'),
+    hClipPos: uni(hlProg, 'uClipPos'),
+    hClipSide: uni(hlProg, 'uClipSide'),
+    tView: uni(texProg, 'uView'),
+    tProj: uni(texProg, 'uProj'),
+    tTex: uni(texProg, 'uTex'),
   };
 
   // ---------- 状態 ----------
@@ -160,7 +259,15 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
   let bounds: Box3 | null = null;
   let plane: { axis: Axis; position: number } | null = null;
   let clipAbove = false;
+  let clip: { axis: Axis; position: number; hide: 1 | -1 } | null = null;
   let indexCount = 0;
+  let meshIndices: Uint32Array | null = null;
+  let useColor = false;
+  let highlights: { buf: WebGLBuffer; count: number; color: [number, number, number]; alpha: number }[] = [];
+  let sectionTex: { tex: WebGLTexture; hasImage: boolean } | null = null;
+  const texQuadBuf = g.createBuffer()!;
+  const colorBuf = g.createBuffer()!;
+  let pickHandler: ((pick: ViewerPick) => void) | null = null;
   let disposed = false;
   let lost = false;
   let raf = 0;
@@ -211,7 +318,7 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
     g.clearColor(bg[0], bg[1], bg[2], 1);
     g.clear(g.COLOR_BUFFER_BIT | g.DEPTH_BUFFER_BIT);
     if (!bounds || indexCount === 0) return;
-    const { view, proj } = orbitMatrices(orbit, w / h);
+    const { view, proj } = orbitMatrices(fitOrbit(orbit, w / h), w / h);
 
     g.enable(g.DEPTH_TEST);
     g.disable(g.BLEND);
@@ -219,15 +326,73 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
     g.uniformMatrix4fv(U.mView, false, view);
     g.uniformMatrix4fv(U.mProj, false, proj);
     g.uniform3f(U.mBase, 0.66, 0.72, 0.8);
-    const planePos = plane ? (plane.position - center[plane.axis]) * scale : 0;
-    g.uniform3f(U.mMask, plane?.axis === 0 ? 1 : 0, plane?.axis === 1 ? 1 : 0, plane?.axis === 2 ? 1 : 0);
-    g.uniform1f(U.mClipPos, planePos);
-    g.uniform1f(U.mClipOn, clipAbove && plane ? 1 : 0);
+    // 切る向き: setClip があればそれ、なければ従来どおり「切る平面より上を隠す」
+    const cut = clip ?? (clipAbove && plane ? { axis: plane.axis, position: plane.position, hide: 1 as const } : null);
+    const cutPos = cut ? (cut.position - center[cut.axis]) * scale : 0;
+    const cutMask: [number, number, number] = [cut?.axis === 0 ? 1 : 0, cut?.axis === 1 ? 1 : 0, cut?.axis === 2 ? 1 : 0];
+    g.uniform3f(U.mMask, ...cutMask);
+    g.uniform1f(U.mClipPos, cutPos);
+    g.uniform1f(U.mClipSide, cut ? cut.hide : 0);
+    g.uniform1f(U.mUseColor, useColor ? 1 : 0);
     g.bindBuffer(g.ARRAY_BUFFER, posBuf);
     g.enableVertexAttribArray(0);
     g.vertexAttribPointer(0, 3, g.FLOAT, false, 0, 0);
+    if (useColor) {
+      g.bindBuffer(g.ARRAY_BUFFER, colorBuf);
+      g.enableVertexAttribArray(1);
+      g.vertexAttribPointer(1, 3, g.FLOAT, false, 0, 0);
+    } else {
+      g.disableVertexAttribArray(1);
+    }
     g.bindBuffer(g.ELEMENT_ARRAY_BUFFER, idxBuf);
     g.drawElements(g.TRIANGLES, indexCount, g.UNSIGNED_INT, 0);
+    g.disableVertexAttribArray(1);
+
+    // 切り口の画像（結果の色）
+    if (sectionTex?.hasImage) {
+      g.useProgram(texProg);
+      g.uniformMatrix4fv(U.tView, false, view);
+      g.uniformMatrix4fv(U.tProj, false, proj);
+      g.activeTexture(g.TEXTURE0);
+      g.bindTexture(g.TEXTURE_2D, sectionTex.tex);
+      g.uniform1i(U.tTex, 0);
+      g.bindBuffer(g.ARRAY_BUFFER, texQuadBuf);
+      g.enableVertexAttribArray(0);
+      g.vertexAttribPointer(0, 3, g.FLOAT, false, 24, 0);
+      g.enableVertexAttribArray(1);
+      g.vertexAttribPointer(1, 3, g.FLOAT, false, 24, 12);
+      g.drawArrays(g.TRIANGLE_FAN, 0, 4);
+      g.disableVertexAttribArray(1);
+    }
+
+    // 面の強調（半透明。同じ位置の面に重ねるので、深さの比較を少し手前に寄せる）
+    if (highlights.length > 0) {
+      g.useProgram(hlProg);
+      g.uniformMatrix4fv(U.hView, false, view);
+      g.uniformMatrix4fv(U.hProj, false, proj);
+      g.uniform3f(U.hMask, ...cutMask);
+      g.uniform1f(U.hClipPos, cutPos);
+      g.uniform1f(U.hClipSide, cut ? cut.hide : 0);
+      g.enable(g.BLEND);
+      g.blendFunc(g.SRC_ALPHA, g.ONE_MINUS_SRC_ALPHA);
+      g.depthFunc(g.LEQUAL);
+      g.depthMask(false);
+      g.enable(g.POLYGON_OFFSET_FILL);
+      g.polygonOffset(-1.5, -1.5);
+      g.bindBuffer(g.ARRAY_BUFFER, posBuf);
+      g.enableVertexAttribArray(0);
+      g.vertexAttribPointer(0, 3, g.FLOAT, false, 0, 0);
+      for (const hl of highlights) {
+        if (hl.count === 0) continue;
+        g.uniform4f(U.hColor, hl.color[0], hl.color[1], hl.color[2], hl.alpha);
+        g.bindBuffer(g.ELEMENT_ARRAY_BUFFER, hl.buf);
+        g.drawElements(g.TRIANGLES, hl.count, g.UNSIGNED_INT, 0);
+      }
+      g.disable(g.POLYGON_OFFSET_FILL);
+      g.depthMask(true);
+      g.depthFunc(g.LESS);
+      g.disable(g.BLEND);
+    }
 
     // 切る平面（半透明）と、断面の線。メッシュの中に隠れないよう、深さの判定を切って重ねる
     g.useProgram(flatProg);
@@ -238,10 +403,12 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
     g.blendFunc(g.SRC_ALPHA, g.ONE_MINUS_SRC_ALPHA);
     g.enableVertexAttribArray(0);
     if (plane) {
-      g.uniform4f(U.fColor, accent[0], accent[1], accent[2], 0.2);
-      g.bindBuffer(g.ARRAY_BUFFER, quadBuf);
-      g.vertexAttribPointer(0, 3, g.FLOAT, false, 0, 0);
-      g.drawArrays(g.TRIANGLE_FAN, 0, 4);
+      if (!sectionTex?.hasImage) {
+        g.uniform4f(U.fColor, accent[0], accent[1], accent[2], 0.2);
+        g.bindBuffer(g.ARRAY_BUFFER, quadBuf);
+        g.vertexAttribPointer(0, 3, g.FLOAT, false, 0, 0);
+        g.drawArrays(g.TRIANGLE_FAN, 0, 4);
+      }
       g.uniform4f(U.fColor, accent[0], accent[1], accent[2], 0.9);
       g.bindBuffer(g.ARRAY_BUFFER, outlineBuf);
       g.vertexAttribPointer(0, 3, g.FLOAT, false, 0, 0);
@@ -290,9 +457,15 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
   // ---------- 入力 ----------
   const pointers = new Map<number, { x: number; y: number }>();
   let pinchDist = 0;
+  // クリックの判定: 1 本の指（ボタン）だけで、ほとんど動かさずに離したとき
+  let tap: { id: number; x: number; y: number; t: number; moved: boolean; multi: boolean } | null = null;
+  const TAP_MOVE_PX = 5;
+  const TAP_MS = 700;
   const onDown = (e: PointerEvent): void => {
     canvas.setPointerCapture?.(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) tap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), moved: false, multi: false };
+    else if (tap) tap.multi = true;
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -303,6 +476,7 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
     if (!p) return;
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
+    if (tap && e.pointerId === tap.id && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_MOVE_PX) tap.moved = true;
     p.x = e.clientX;
     p.y = e.clientY;
     if (pointers.size === 1) {
@@ -318,6 +492,21 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
   const onUp = (e: PointerEvent): void => {
     pointers.delete(e.pointerId);
     pinchDist = 0;
+    if (tap && e.pointerId === tap.id) {
+      const t = tap;
+      tap = null;
+      if (e.type === 'pointerup' && !t.moved && !t.multi && performance.now() - t.t < TAP_MS && pickHandler && bounds) {
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const r = screenRay(fitOrbit(orbit, rect.width / rect.height), rect.width / rect.height, ((e.clientX - rect.left) / rect.width) * 2 - 1, 1 - ((e.clientY - rect.top) / rect.height) * 2);
+          const ray: Ray3 = {
+            origin: [r.origin[0] / scale + center[0], r.origin[1] / scale + center[1], r.origin[2] / scale + center[2]],
+            dir: r.dir,
+          };
+          pickHandler({ ray, additive: e.shiftKey || e.ctrlKey || e.metaKey });
+        }
+      }
+    }
   };
   const onWheel = (e: WheelEvent): void => {
     e.preventDefault();
@@ -387,6 +576,26 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
     g.bufferData(g.ARRAY_BUFFER, quad, g.DYNAMIC_DRAW);
   }
 
+  let sectionImg: SectionImage | null = null;
+  /** 切り口の画像を貼る四角形（位置 xyz + 画像の座標 uv0 を交互に） */
+  function updateSectionQuad(): void {
+    const im = sectionImg;
+    if (!im || !bounds) return;
+    const a = im.axis;
+    const u = ((a + 1) % 3) as Axis;
+    const v = ((a + 2) % 3) as Axis;
+    const corner = (cu: number, cv: number, tu: number, tv: number): number[] => {
+      const c: [number, number, number] = [0, 0, 0];
+      c[a] = im.position;
+      c[u] = cu;
+      c[v] = cv;
+      return [...norm(c), tu, tv, 0];
+    };
+    const quad = new Float32Array([...corner(im.u0, im.v0, 0, 0), ...corner(im.u1, im.v0, 1, 0), ...corner(im.u1, im.v1, 1, 1), ...corner(im.u0, im.v1, 0, 1)]);
+    g.bindBuffer(g.ARRAY_BUFFER, texQuadBuf);
+    g.bufferData(g.ARRAY_BUFFER, quad, g.DYNAMIC_DRAW);
+  }
+
   const viewer: Viewer = {
     setMesh(mesh, b) {
       bounds = b;
@@ -405,7 +614,12 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
       g.bindBuffer(g.ELEMENT_ARRAY_BUFFER, idxBuf);
       g.bufferData(g.ELEMENT_ARRAY_BUFFER, mesh.indices, g.STATIC_DRAW);
       indexCount = mesh.indices.length;
+      meshIndices = mesh.indices;
+      useColor = false;
+      for (const hl of highlights) g.deleteBuffer(hl.buf);
+      highlights = [];
       updatePlane();
+      updateSectionQuad();
       schedule();
     },
     setPlane(p) {
@@ -434,6 +648,64 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
       clipAbove = on;
       schedule();
     },
+    setClip(c) {
+      clip = c;
+      schedule();
+    },
+    setVertexColors(colors) {
+      if (!colors) {
+        useColor = false;
+      } else {
+        g.bindBuffer(g.ARRAY_BUFFER, colorBuf);
+        g.bufferData(g.ARRAY_BUFFER, colors, g.STATIC_DRAW);
+        useColor = true;
+      }
+      schedule();
+    },
+    setHighlights(groups) {
+      for (const hl of highlights) g.deleteBuffer(hl.buf);
+      highlights = [];
+      const idx = meshIndices;
+      if (idx) {
+        for (const grp of groups) {
+          const tri = grp.triangles;
+          if (tri.length === 0) continue;
+          const out = new Uint32Array(tri.length * 3);
+          for (let i = 0; i < tri.length; i++) {
+            out[i * 3] = idx[tri[i] * 3];
+            out[i * 3 + 1] = idx[tri[i] * 3 + 1];
+            out[i * 3 + 2] = idx[tri[i] * 3 + 2];
+          }
+          const buf = g.createBuffer()!;
+          g.bindBuffer(g.ELEMENT_ARRAY_BUFFER, buf);
+          g.bufferData(g.ELEMENT_ARRAY_BUFFER, out, g.STATIC_DRAW);
+          highlights.push({ buf, count: out.length, color: grp.color, alpha: grp.alpha ?? 0.6 });
+        }
+      }
+      schedule();
+    },
+    setSectionImage(image) {
+      sectionImg = image;
+      if (!image) {
+        if (sectionTex) sectionTex.hasImage = false;
+        schedule();
+        return;
+      }
+      if (!sectionTex) sectionTex = { tex: g.createTexture()!, hasImage: false };
+      g.bindTexture(g.TEXTURE_2D, sectionTex.tex);
+      g.pixelStorei(g.UNPACK_ALIGNMENT, 1);
+      g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, image.width, image.height, 0, g.RGBA, g.UNSIGNED_BYTE, image.rgba);
+      g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.NEAREST);
+      g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.NEAREST);
+      g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
+      g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
+      sectionTex.hasImage = true;
+      updateSectionQuad();
+      schedule();
+    },
+    setPickHandler(handler) {
+      pickHandler = handler;
+    },
     resetView() {
       orbit = { ...DEFAULT_ORBIT };
       schedule();
@@ -452,9 +724,13 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
       canvas.removeEventListener('keydown', onKey);
       canvas.removeEventListener('dblclick', onDouble);
       canvas.removeEventListener('webglcontextlost', onLost);
-      for (const b of [posBuf, idxBuf, quadBuf, outlineBuf, sectionBuf, gizmoBuf]) g.deleteBuffer(b);
+      for (const b of [posBuf, idxBuf, quadBuf, outlineBuf, sectionBuf, gizmoBuf, texQuadBuf, colorBuf]) g.deleteBuffer(b);
+      for (const hl of highlights) g.deleteBuffer(hl.buf);
+      if (sectionTex) g.deleteTexture(sectionTex.tex);
       g.deleteProgram(meshProg);
       g.deleteProgram(flatProg);
+      g.deleteProgram(hlProg);
+      g.deleteProgram(texProg);
       g.getExtension('WEBGL_lose_context')?.loseContext();
       canvas.remove();
       gizmoBox.remove();

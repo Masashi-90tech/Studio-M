@@ -4,6 +4,7 @@ import type { MeshImportResult } from '../mesh3d/import-dialog';
 import { toast } from './dom';
 import { importToasts, toastMsFor } from './import-toast';
 import { withLoading } from './lazy';
+import { openSim3D } from './sim3d-open';
 import type { Store } from './state';
 
 /** ドロップされたファイルから 3D モデル（.stl / .obj）を選ぶ */
@@ -27,6 +28,8 @@ export async function openMeshImport(opts: { store: Store; file?: File }): Promi
         opts.store.loadProject(project, analysis); // 「開く」と同じく、元に戻すで前の内容に戻せる
         for (const text of importToasts(warnings)) toast(text, 'info', { ms: toastMsFor(text) });
       },
+      // 断面を切らず、3D のまま解く。ダイアログは閉じたあとなので、3D 解析の画面を開く
+      onAnalyze3D: (study, { warnings }) => void openSim3D({ study, warnings }),
     });
   } finally {
     opening = false;
