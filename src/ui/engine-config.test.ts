@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ENGINE_URL, ENGINE_CONFIG_KEY, hasSavedEngineToken, loadEngineConfig, normalizeEngineUrl, saveEngineConfig } from './engine-config';
+import { DEFAULT_ENGINE_URL, ENGINE_CONFIG_KEY, ENGINE_RUNS_KEY, hasSavedEngineToken, loadEngineConfig, loadEngineRuns, normalizeEngineUrl, saveEngineConfig, saveEngineRuns } from './engine-config';
+import type { EngineRunRecord } from './engine-logic';
 
 function memory(initial: Record<string, string> = {}) {
   const m = new Map(Object.entries(initial));
@@ -29,5 +30,21 @@ describe('engine-config', () => {
     const throwing = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); }, removeItem: () => undefined };
     expect(loadEngineConfig(throwing)).toEqual({ url: DEFAULT_ENGINE_URL, token: '' });
     expect(saveEngineConfig({ url: 'x', token: 'y' }, throwing)).toBe(false);
+  });
+  it('本計算の実績は保存して読み戻せる。壊れた項目は捨て、使えない環境では空', () => {
+    const good: EngineRunRecord = { analysis: 'stress', engine: 'calculix', cells: 5000, quality: 'standard', seconds: 12.5, at: 1700000000000 };
+    const st = memory();
+    expect(loadEngineRuns(st)).toEqual([]);
+    expect(saveEngineRuns([good], st)).toBe(true);
+    expect(loadEngineRuns(st)).toEqual([good]);
+    const mixed = memory({ [ENGINE_RUNS_KEY]: JSON.stringify([good, { analysis: 'nope' }, 'x', null]) });
+    expect(loadEngineRuns(mixed)).toEqual([good]);
+    expect(loadEngineRuns(memory({ [ENGINE_RUNS_KEY]: '{broken' }))).toEqual([]);
+    expect(loadEngineRuns(memory({ [ENGINE_RUNS_KEY]: '{"not":"array"}' }))).toEqual([]);
+    expect(loadEngineRuns(null)).toEqual([]);
+    expect(saveEngineRuns([good], null)).toBe(false);
+    const throwing = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); }, removeItem: () => undefined };
+    expect(loadEngineRuns(throwing)).toEqual([]);
+    expect(saveEngineRuns([good], throwing)).toBe(false);
   });
 });

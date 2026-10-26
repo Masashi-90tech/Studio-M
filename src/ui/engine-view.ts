@@ -1,9 +1,9 @@
 // 結果ボックスの下の「本計算（PC のエンジン）」カード。
 // 接続済みで、いまの解析を解けるエンジンがあるときだけ出る（解析の種類は見分けず、サーバーの capabilities を見る）。
 import './engine.css';
-import type { EngineCapability, JobFile } from '../core/engine-protocol';
+import type { EngineCapability, JobFile, JobQuality } from '../core/engine-protocol';
 import { clear, h } from './dom';
-import { capabilitiesFor, compareScalars, engineInfo, engineName, formatBytes, formatDiffPct, JOB_STATUS_TEXT, QUALITY_CHOICES, STALE_MESSAGE } from './engine-logic';
+import { capabilitiesFor, compareScalars, engineInfo, engineName, estimateEngineSeconds, formatBytes, formatDiffPct, formatDuration, formatElapsed, JOB_STATUS_TEXT, QUALITY_CHOICES, STALE_MESSAGE } from './engine-logic';
 import type { EngineSession, RemoteRun } from './engine-session';
 import { formatNumber, formatQuantity } from './format';
 import type { Runner } from './runner';
@@ -23,6 +23,20 @@ export function mountEngineView(opts: { store: Store; runner: Runner; session: E
   let sig = '';
   let logOpen = false;
   let pickedEngine = '';
+  /** 計算中の経過時間を 1 秒ごとに直す timer（render のたびに止めてから作り直す） */
+  let elapsedTimer: number | undefined;
+
+  function stopElapsed(): void {
+    window.clearInterval(elapsedTimer);
+    elapsedTimer = undefined;
+  }
+
+  /** 所要時間の目安の文言（セル数は画面の格子 nx × ny。実績がなければ既定の目安） */
+  function estimateText(cap: EngineCapability, cells: number, quality: JobQuality): string {
+    const e = estimateEngineSeconds({ analysis: cap.analysis, engine: cap.engine, cells, quality, history: session.history });
+    if (!e) return '';
+    return `目安: ${formatDuration(e.seconds)}${e.basis === 'history' ? '（前回の実績から）' : ''}`;
+  }
 
   function launch(caps: EngineCapability[], run: RemoteRun | undefined): HTMLElement {
     const status = session.status;
@@ -30,6 +44,7 @@ export function mountEngineView(opts: { store: Store; runner: Runner; session: E
     pickedEngine = cap.engine;
     const info = engineInfo(status, cap.engine);
     const name = engineName(status, cap.engine);
+    const cells = runner.raster ? runner.raster.nx * runner.raster.ny : 0;
     const root = h('div', { class: 'engine-launch' });
 
     if (caps.length > 1) {
@@ -47,6 +62,7 @@ export function mountEngineView(opts: { store: Store; runner: Runner; session: E
     quality.addEventListener('change', () => {
       session.quality = quality.value as typeof session.quality;
       qualityHint.textContent = QUALITY_CHOICES.find((q) => q.value === session.quality)?.hint ?? '';
+      estimate.textContent = available ? estimateText(cap, cells, session.quality) : '';
     });
     const qualityHint = h('span', { class: 'hint' }, QUALITY_CHOICES.find((q) => q.value === session.quality)?.hint ?? '');
     root.append(h('label', { class: 'field' }, h('span', { class: 'field-label' }, '計算の細かさ'), quality, qualityHint));
@@ -86,7 +102,8 @@ export function mountEngineView(opts: { store: Store; runner: Runner; session: E
       { class: 'btn primary engine-solve', type: 'button', disabled: !available || !!(run && (run.phase === 'submitting' || run.phase === 'active')), onclick: () => void session.start(cap) },
       run?.phase === 'done' ? `もう一度本計算する（${name}）` : `本計算で解く（${name}）`,
     );
-    root.append(btn);
+    const estimate = h('span', { class: 'hint engine-estimate' }, available ? estimateText(cap, cells, session.quality) : '');
+    root.append(h('div', { class: 'engine-solve-row' }, btn, estimate));
     if (!available) root.append(h('p', { class: 'notice warn' }, `${name} はこの PC で見つかりません。${info?.note ?? 'docs/ENGINE.md の手順で入れてください'}`));
     else root.append(h('span', { class: 'hint' }, cap.label + (info?.version ? `（${name} ${info.version}${info.via === 'docker' ? '・Docker' : ''}）` : '')));
     return root;
@@ -97,10 +114,13 @@ export function mountEngineView(opts: { store: Store; runner: Runner; session: E
     const frac = run.phase === 'submitting' ? 0 : Math.min(1, Math.max(0, job?.progress ?? 0));
     const statusText = run.cancelling ? '中止しています' : run.phase === 'submitting' ? 'エンジンに送っています' : JOB_STATUS_TEXT[job?.status ?? 'queued'];
     const bar = h('div', { class: 'progress-bar', style: `width:${Math.round(frac * 100)}%` });
+    const elapsed = h('span', { class: 'status-text engine-elapsed' }, `経過 ${formatElapsed(Date.now() - run.startedAt)}`);
+    // 1 秒ごとに数え直す（render のたびに作り直すので、止め忘れや重なりは起きない）
+    elapsedTimer = window.setInterval(() => (elapsed.textContent = `経過 ${formatElapsed(Date.now() - run.startedAt)}`), 1000);
     const root = h(
       'div',
       { class: 'engine-run' },
-      h('div', { class: 'status-row' }, h('span', { class: 'badge run' }, statusText), h('span', { class: 'status-text' }, `${run.engineName} ・ ${Math.round(frac * 100)}%`)),
+      h('div', { class: 'status-row' }, h('span', { class: 'badge run' }, statusText), h('span', { class: 'status-text' }, `${run.engineName} ・ ${Math.round(frac * 100)}%`), elapsed),
       h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(frac * 100)) }, bar),
       h('div', { class: 'status-msg hint' }, job?.message ?? ''),
     );
@@ -180,6 +200,7 @@ export function mountEngineView(opts: { store: Store; runner: Runner; session: E
   }
 
   function render(): void {
+    stopElapsed();
     clear(body);
     const kind = runner.analysis;
     const caps = capabilitiesFor(session.status, kind);

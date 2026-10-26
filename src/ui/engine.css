@@ -22,6 +22,18 @@
 .engine-solve {
   align-self: flex-start;
 }
+.engine-solve-row {
+  display: flex;
+  align-items: center;
+  gap: 4px 10px;
+  flex-wrap: wrap;
+}
+.engine-estimate {
+  font-variant-numeric: tabular-nums;
+}
+.engine-elapsed {
+  font-variant-numeric: tabular-nums;
+}
 .engine-toggle-row {
   display: flex;
   align-items: center;

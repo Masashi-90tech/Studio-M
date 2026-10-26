@@ -5,8 +5,8 @@ import type { EngineStatusResponse } from '../core/engine-wire';
 import type { AnalysisKind } from '../core/types';
 import { downloadBlob, toast } from './dom';
 import { createEngineClient, EngineClientError, type EngineClient } from './engine-client';
-import { loadEngineConfig, saveEngineConfig, type EngineConfig } from './engine-config';
-import { engineName } from './engine-logic';
+import { loadEngineConfig, loadEngineRuns, saveEngineConfig, saveEngineRuns, type EngineConfig } from './engine-config';
+import { engineName, recordEngineRun, type EngineRunRecord } from './engine-logic';
 import type { Runner } from './runner';
 
 const POLL_MS = 600;
@@ -29,6 +29,12 @@ export interface RemoteRun {
   engineName: string;
   /** 計算を始めたときのプロジェクトの revision */
   rev: number;
+  /** 計算を始めた時刻（ミリ秒。経過時間の表示に使う） */
+  startedAt: number;
+  /** 計算を始めたときの格子のセル数（Raster の nx × ny。0 なら実績として残さない） */
+  cells: number;
+  /** 計算を始めたときの細かさ */
+  quality: JobQuality;
   phase: 'submitting' | 'active' | 'done' | 'failed' | 'cancelled';
   jobId?: string;
   job?: JobState;
@@ -46,6 +52,8 @@ export class EngineSession {
   optionValues = new Map<string, Record<string, OptionValue>>();
   /** 画面が変化を見つけるための番号（変わるたびに増える） */
   version = 0;
+  /** 完了した本計算の実績（所要時間の目安に使う）。閲覧者ごとに保存する */
+  history: EngineRunRecord[] = [];
 
   private client: EngineClient | null = null;
   private runs = new Map<AnalysisKind, RemoteRun>();
@@ -60,6 +68,7 @@ export class EngineSession {
     },
   ) {
     this.config = loadEngineConfig();
+    this.history = loadEngineRuns();
   }
 
   subscribe(fn: () => void): () => void {
@@ -140,11 +149,23 @@ export class EngineSession {
     }
     const prev = this.runs.get(cap.analysis);
     if (prev && (prev.phase === 'submitting' || prev.phase === 'active')) return;
-    const run: RemoteRun = { kind: cap.analysis, engine: cap.engine, engineName: engineName(this.status, cap.engine), rev: runner.revision, phase: 'submitting', files: [], cancelling: false };
+    const raster = runner.raster;
+    const run: RemoteRun = {
+      kind: cap.analysis,
+      engine: cap.engine,
+      engineName: engineName(this.status, cap.engine),
+      rev: runner.revision,
+      startedAt: Date.now(),
+      cells: raster ? raster.nx * raster.ny : 0,
+      quality: this.quality,
+      phase: 'submitting',
+      files: [],
+      cancelling: false,
+    };
     this.runs.set(cap.analysis, run);
     this.changed();
     try {
-      const { id } = await this.makeClient().submit({ analysis: cap.analysis, engine: cap.engine, project, quality: this.quality, options: { ...this.options(cap) } });
+      const { id } = await this.makeClient().submit({ analysis: cap.analysis, engine: cap.engine, project, quality: run.quality, options: { ...this.options(cap) } });
       run.jobId = id;
       run.phase = 'active';
       this.changed();
@@ -217,7 +238,9 @@ export class EngineSession {
   private applyJob(run: RemoteRun, job: JobState): void {
     run.files = job.files ?? run.files;
     if (job.status === 'done' && job.result) {
+      const first = run.phase !== 'done';
       run.phase = 'done';
+      if (first) this.recordRun(run, job);
       this.opts.runner.setRemote({ kind: run.kind, result: job.result, label: `${run.engineName} 本計算`, rev: run.rev, show: true });
       if (run.rev !== this.opts.runner.revision) toast('計算中に形や条件が変わったため、この結果は使えません。もう一度本計算してください', 'error');
       else toast(`${run.engineName} の計算が終わりました`);
@@ -227,6 +250,14 @@ export class EngineSession {
     } else if (job.status === 'cancelled') {
       run.phase = 'cancelled';
     }
+  }
+
+  /** 完了した本計算の実際の秒数を、所要時間の目安の実績として残す（失敗・中止は残さない） */
+  private recordRun(run: RemoteRun, job: JobState): void {
+    const ms = job.startedAt && job.finishedAt ? job.finishedAt - job.startedAt : Date.now() - run.startedAt;
+    if (run.cells <= 0 || !(ms > 0)) return;
+    this.history = recordEngineRun(this.history, { analysis: run.kind, engine: run.engine, cells: run.cells, quality: run.quality, seconds: ms / 1000, at: Date.now() });
+    saveEngineRuns(this.history);
   }
 
   private fail(run: RemoteRun, e: unknown): void {

@@ -1,5 +1,6 @@
-// PC のエンジンへの接続設定（URL と合言葉）。閲覧者ごとに localStorage へ保存する。DOM に触れない。
+// PC のエンジンへの接続設定（URL と合言葉）と、本計算の実績（所要時間の目安用）。閲覧者ごとに localStorage へ保存する。DOM に触れない。
 import { ENGINE_DEFAULT_PORT } from '../core/engine-protocol';
+import { isEngineRunRecord, type EngineRunRecord } from './engine-logic';
 
 export interface EngineConfig {
   url: string;
@@ -7,6 +8,7 @@ export interface EngineConfig {
 }
 
 export const ENGINE_CONFIG_KEY = 'studio-m-lite:engine:v1';
+export const ENGINE_RUNS_KEY = 'studio-m-lite:engine-runs:v1';
 export const DEFAULT_ENGINE_URL = `http://127.0.0.1:${ENGINE_DEFAULT_PORT}`;
 
 interface StorageLike {
@@ -77,6 +79,28 @@ export function clearEngineConfig(storage: StorageLike | null = defaultStorage()
     storage?.removeItem(ENGINE_CONFIG_KEY);
   } catch {
     // 消せなくても何もしない
+  }
+}
+
+/** 保存された本計算の実績を読む（壊れた項目は捨てる。読めなければ空） */
+export function loadEngineRuns(storage: StorageLike | null = defaultStorage()): EngineRunRecord[] {
+  if (!storage) return [];
+  try {
+    const raw: unknown = JSON.parse(storage.getItem(ENGINE_RUNS_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw.filter(isEngineRunRecord) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 本計算の実績を保存する。保存できない環境でも画面は動く（目安が毎回既定の値になるだけ） */
+export function saveEngineRuns(list: EngineRunRecord[], storage: StorageLike | null = defaultStorage()): boolean {
+  if (!storage) return false;
+  try {
+    storage.setItem(ENGINE_RUNS_KEY, JSON.stringify(list));
+    return true;
+  } catch {
+    return false;
   }
 }
 
