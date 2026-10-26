@@ -9,7 +9,7 @@ import type { Field, History, ResultSet, ScalarValue, ShapeResult } from './type
 /** GET /status の返事。合言葉がないとき（または違うとき）は authorized が false で、エンジンの一覧は空 */
 export type EngineStatusResponse = EngineStatus & { authorized: boolean };
 
-interface WireTyped {
+export interface WireTyped {
   $typed: 'f32' | 'u8';
   length: number;
   b64: string;
@@ -34,11 +34,11 @@ export function base64ToBytes(b64: string): Uint8Array {
 
 // ---------- 配列 ----------
 
-function encodeF32(a: Float32Array): WireTyped {
+export function encodeF32(a: Float32Array): WireTyped {
   return { $typed: 'f32', length: a.length, b64: bytesToBase64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength)) };
 }
 
-function encodeU8(a: Uint8Array): WireTyped {
+export function encodeU8(a: Uint8Array): WireTyped {
   return { $typed: 'u8', length: a.length, b64: bytesToBase64(a) };
 }
 
@@ -81,12 +81,12 @@ export function encodeResultSet(rs: ResultSet): unknown {
 const num = (v: unknown): number => (typeof v === 'number' ? v : NaN);
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
-function decodeScalars(raw: unknown): ScalarValue[] {
+export function decodeScalars(raw: unknown): ScalarValue[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((s: Record<string, unknown>) => ({ key: str(s.key), label: str(s.label), unit: str(s.unit), value: num(s.value) }));
 }
 
-function decodeHistory(raw: unknown): History[] {
+export function decodeHistory(raw: unknown): History[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((x: Record<string, unknown>) => ({
     key: str(x.key),
