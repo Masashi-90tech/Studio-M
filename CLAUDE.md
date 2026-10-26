@@ -10,9 +10,8 @@ npm run check       # 型チェック + テスト + ライセンス確認（コ�
 npm test            # テストだけ
 npm run licenses    # OSS 台帳と依存パッケージの突き合わせ
 npm run test:engines  # PC に入っている CalculiX・OpenFOAM を実際に動かす結合テスト（STUDIO_M_ENGINE_TESTS=1。npm run check では飛ばす）
-npm run engine      # Studio M Engine（PC 上の計算サーバー）を起動
+npm run engine      # Studio M Engine（PC 上の計算サーバー）を起動（本計算。docs/ENGINE.md）
 npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML を作る
-npm run engine      # PC 上の Studio M Engine を起動（本計算。docs/ENGINE.md）
 ```
 
 ## 層と依存の向き
