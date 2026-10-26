@@ -337,3 +337,119 @@ export interface PcbInfo {
   substrateId: string;
   layers: CopperLayer[];
 }
+
+// ---------- 3D 解析（v0.6。3D モデルをそのまま解く） ----------
+//
+// 2D の Project とは別の「3D の検討（Study3D）」として持つ。2D の画面・ソルバーには影響しない。
+// 座標系: 単位はメートル。z が上。形は閉じた三角形メッシュ（水密）。
+// Lite（ブラウザ）はボクセル（立方体のセル）で解き、PC のエンジン（CalculiX）は四面体で解く。
+// どちらの結果も、同じボクセル格子（grid3d.ts の voxelGrid）に載せた ResultSet3D にそろえ、並べて比べられるようにする。
+
+/** 3D の解析の種類。今は熱（定常熱伝導）と強度（線形弾性） */
+export type Analysis3DKind = 'heat' | 'stress';
+
+/** 三角形メッシュ。positions は [x, y, z] の並び [m]、indices は 3 つずつで 1 つの三角形（面は外向き） */
+export interface Mesh3D {
+  positions: Float32Array;
+  indices: Uint32Array;
+}
+
+/**
+ * 面に置く条件。faces は Study3D.mesh の三角形の番号（indices を 3 で割った番号）。
+ * 画面で面をクリックして選ぶ（同じ平面・同じ曲面の三角形をまとめて選ぶ）。
+ * - heatFlux:   選んだ面から合計 heatW [W] を入れる（部品が面に載っている、など）。熱のみ
+ * - fixedTemp:  選んだ面を tempC [°C] に固定する。熱のみ
+ * - convection: 選んだ面の熱伝達率を h [W/(m²·K)] にする（ファンが当たる面など）。熱のみ
+ * - insulated:  選んだ面から熱を逃がさない（断熱）。熱のみ
+ * - support:    選んだ面を完全固定する。強度のみ
+ * - load:       選んだ面に合計 force [N] を面積に比例して配分する。強度のみ
+ */
+export type Region3DRole = 'heatFlux' | 'fixedTemp' | 'convection' | 'insulated' | 'support' | 'load';
+
+export interface Region3D {
+  id: string;
+  name: string;
+  role: Region3DRole;
+  faces: number[];
+  heatW?: number;
+  tempC?: number;
+  h?: number;
+  force?: { fx: number; fy: number; fz: number };
+}
+
+export interface Study3D {
+  version: 1;
+  name: string;
+  analysis: Analysis3DKind;
+  /** 形（m 単位に直したもの） */
+  mesh: Mesh3D;
+  /** 材料ID（materials.ts の solid）。部品は 1 つの材料でできているとみなす */
+  materialId: string;
+  /** 取り込み元（ファイル名など）。表示にだけ使う */
+  source?: string;
+  regions: Region3D[];
+  heat: {
+    /** 周囲の温度 [°C] */
+    ambientC: number;
+    /** 条件を置いていない面の熱伝達率 [W/(m²·K)]。自然対流でおよそ 5〜10、ファンで 20〜100 */
+    surfaceH: number;
+    /** 部品全体が均等に発熱する量 [W]（省略時 0） */
+    bodyHeatW?: number;
+  };
+  stress: {
+    /** 自重を考慮するか（重力は -z 方向） */
+    selfWeight: boolean;
+  };
+  /** 格子の細かさ。省略時は自動（voxelGrid が決める） */
+  grid?: {
+    /** セルの一辺 [m] */
+    cell?: number;
+    /** セル数の上限（省略時 grid3d.ts の既定） */
+    maxCells?: number;
+  };
+}
+
+/** ボクセル格子。セル (i, j, k) の中心は origin + h·(i + ½, j + ½, k + ½)、配列の番号は (k·ny + j)·nx + i */
+export interface Grid3D {
+  nx: number;
+  ny: number;
+  nz: number;
+  /** セルの一辺 [m] */
+  h: number;
+  /** 格子の角（最小の x, y, z）[m] */
+  origin: [number, number, number];
+}
+
+export interface Field3D {
+  key: string;
+  label: string;
+  unit: string;
+  /** 長さ nx·ny·nz */
+  data: Float32Array;
+  /** 値が意味を持つセル（1 = 部品の中）。長さ nx·ny·nz */
+  mask: Uint8Array;
+  diverging?: boolean;
+}
+
+export interface ResultSet3D {
+  analysis: Analysis3DKind;
+  grid: Grid3D;
+  fields: Field3D[];
+  /** 代表値。key は 2D の ResultSet とそろえる（熱: maxTemp、強度: maxMises・maxDisp・minSafety など） */
+  scalars: ScalarValue[];
+  history: History[];
+  warnings: string[];
+  /** 出どころの表示名（例: 「CalculiX 本計算」）。省略時は Lite */
+  label?: string;
+  /** 面の条件ごとの結果（熱: 面の最高温度・平均温度など）。key は Region3D.id */
+  perRegion?: ShapeResult[];
+}
+
+/** 3D のソルバー。2D と同じく少しずつ進める */
+export interface Solver3D {
+  readonly analysis: Analysis3DKind;
+  step(budgetMs: number): SolverStatus;
+  result(): ResultSet3D;
+}
+
+export type Solver3DFactory = (study: Study3D) => Solver3D;
