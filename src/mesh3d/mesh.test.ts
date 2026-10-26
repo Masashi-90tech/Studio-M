@@ -119,3 +119,16 @@ describe('水密性の確認', () => {
     expect(empty.warnings[0]).toMatch(/使える三角形がありません/);
   });
 });
+
+describe('押し出しの三角形分割', () => {
+  it('一直線に並ぶ頂点のある形（くし形のヒートシンク）でも、つぶれた三角形を作らず閉じた立体になる', () => {
+    const comb: [number, number][] = [[0, 0], [50, 0], [50, 5]];
+    for (const x of [45, 30.5, 16, 2]) comb.push([x + 3, 5], [x + 3, 25], [x, 25], [x, 5]);
+    comb.push([0, 5]);
+    const info = analyzeMesh(extrudePolygon(comb, 0, 40));
+    expect(info.clean.removedDegenerate).toBe(0);
+    expect(info.watertight.watertight).toBe(true);
+    // 断面積 = ベース 50 × 5 + フィン 4 枚 × 3 × 20 = 490 mm²
+    expect(info.volume).toBeCloseTo(490 * 40, 3);
+  });
+});

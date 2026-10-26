@@ -9,7 +9,8 @@ export function triangulate(poly: readonly Pt[]): [number, number, number][] {
   const out: [number, number, number][] = [];
   const idx = poly.map((_, i) => i);
   const cross = (a: Pt, b: Pt, c: Pt): number => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-  const inside = (p: Pt, a: Pt, b: Pt, c: Pt): boolean => cross(a, b, p) > 1e-12 && cross(b, c, p) > 1e-12 && cross(c, a, p) > 1e-12;
+  // 切り取る対角線 c→a の上にある頂点も「中」とみなす（一直線に並ぶ頂点をまたぐと、面積 0 の三角形ができて立体に穴があく）
+  const inside = (p: Pt, a: Pt, b: Pt, c: Pt): boolean => cross(a, b, p) > 1e-12 && cross(b, c, p) > 1e-12 && cross(c, a, p) >= -1e-12;
   let guard = 0;
   while (idx.length > 3 && guard++ < 10000) {
     let cut = -1;
