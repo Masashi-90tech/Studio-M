@@ -24,6 +24,12 @@ describe('voxelGrid', () => {
     expect(g.nz).toBe(3);
   });
 
+  it('float32 に丸めた寸法（0.1 m → 0.10000000149 m）でも、割り切れる寸法ならセルが 1 つ増えない', () => {
+    const x = Math.fround(0.1);
+    const g = voxelGrid({ bounds: box(x, x, x), cell: 0.001, maxCells: 2_000_000 });
+    expect([g.nx, g.ny, g.nz]).toEqual([102, 102, 102]);
+  });
+
   it('大きさ 0 なら日本語のエラー', () => {
     expect(() => voxelGrid({ bounds: box(0, 0, 0) })).toThrow(/大きさが 0/);
   });

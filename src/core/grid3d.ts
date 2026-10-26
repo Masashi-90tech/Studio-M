@@ -43,11 +43,14 @@ export function voxelGrid(opts: { bounds: Box3D; cell?: number; maxCells?: numbe
   if (!(longest > 0) || !Number.isFinite(longest)) throw new Error('形の大きさが 0 です。3D モデルが正しく読み込めているか確かめてください。');
   const maxCells = Math.max(1000, Math.floor(opts.maxCells ?? GRID3D_DEFAULT_MAX_CELLS));
   const m = GRID3D_MARGIN_CELLS;
-  const count = (h: number): number => size.reduce((n, s) => n * (Math.max(1, Math.ceil(s / h - 1e-9)) + 2 * m), 1);
+  // メッシュの座標は float32 なので、0.1 m は 0.10000000149 m になる。セルの一辺でちょうど割り切れる寸法で
+  // セルが 1 つ増えないよう、割り算の結果を float32 の精度（相対 1e-6）で丸めてから切り上げる
+  const cellsAlong = (s: number, h: number): number => Math.max(1, Math.ceil(s / h - 1e-6 * Math.max(1, s / h)));
+  const count = (h: number): number => size.reduce((n, s) => n * (cellsAlong(s, h) + 2 * m), 1);
   let h = opts.cell !== undefined && opts.cell > 0 && Number.isFinite(opts.cell) ? opts.cell : longest / GRID3D_DEFAULT_LONG_CELLS;
   // セル数が上限を超えるあいだ、セルを少しずつ大きくする
   for (let guard = 0; count(h) > maxCells && guard < 200; guard++) h *= 1.05;
-  const n = size.map((s) => Math.max(1, Math.ceil(s / h - 1e-9)) + 2 * m);
+  const n = size.map((s) => cellsAlong(s, h) + 2 * m);
   // 形を格子の真ん中に置く
   const origin = [0, 1, 2].map((a) => (min[a] + max[a]) / 2 - (n[a] * h) / 2) as [number, number, number];
   return { nx: n[0], ny: n[1], nz: n[2], h, origin };
