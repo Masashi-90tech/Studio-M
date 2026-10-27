@@ -2,6 +2,7 @@
 import { toast } from './dom';
 import { openMeshImport, pickMeshFile } from './mesh-open';
 import { openKicadImport, pickKicadFile } from './pcb-open';
+import type { Runner } from './runner';
 import type { Store } from './state';
 
 /** ドロップされたファイルから、取り込める最初のファイルとその種類を選ぶ（KiCad 基板を優先） */
@@ -18,8 +19,8 @@ export const DROP_ERROR_MESSAGE =
   'ここに置けるのは、KiCad の基板ファイル（.kicad_pcb）か、3D モデル（.stl・.obj）です。プロジェクトファイルは「ファイル」→「開く」から開いてください';
 
 /** 作図エリアに .kicad_pcb / .stl / .obj をドロップしたら、対応する取り込みダイアログをそのファイルで開く */
-export function initImportDrop(opts: { target: HTMLElement; store: Store }): void {
-  const { target, store } = opts;
+export function initImportDrop(opts: { target: HTMLElement; store: Store; runner?: Runner }): void {
+  const { target, store, runner } = opts;
   const hasFiles = (e: DragEvent): boolean => Array.from(e.dataTransfer?.types ?? []).includes('Files');
   target.addEventListener('dragover', (e) => {
     if (!hasFiles(e)) return;
@@ -37,7 +38,7 @@ export function initImportDrop(opts: { target: HTMLElement; store: Store }): voi
     const files = Array.from(e.dataTransfer?.files ?? []);
     const pick = pickImportFile(files);
     if (pick?.kind === 'kicad') void openKicadImport({ store, file: pick.file });
-    else if (pick?.kind === 'mesh') void openMeshImport({ store, file: pick.file });
+    else if (pick?.kind === 'mesh') void openMeshImport({ store, file: pick.file, runner });
     else if (files.length > 0) toast(DROP_ERROR_MESSAGE, 'error');
   });
 }

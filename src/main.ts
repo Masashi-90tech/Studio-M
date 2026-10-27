@@ -73,7 +73,7 @@ const learnDrawer = initLearnDrawer({ store, runner, math: mathCard, drawer: $('
 if (takeLearnHint({ enabled: learn.get() })) toast('学習機能は設定（⚙）から表示できます');
 
 // KiCad 基板（.kicad_pcb）・3D モデル（.stl・.obj）を作図エリアにドロップしたら、取り込みダイアログを開く
-initImportDrop({ target: $('canvasWrap'), store });
+initImportDrop({ target: $('canvasWrap'), store, runner });
 
 // プロ専用の道具は、プロモードを初めて開くときに読み込む
 let proSuite: { update(): void } | null = null;

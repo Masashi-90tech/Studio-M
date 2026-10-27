@@ -5,6 +5,7 @@ import { toast } from './dom';
 import { importToasts, toastMsFor } from './import-toast';
 import { withLoading } from './lazy';
 import { openSim3D } from './sim3d-open';
+import type { Runner } from './runner';
 import type { Store } from './state';
 
 /** ドロップされたファイルから 3D モデル（.stl / .obj）を選ぶ */
@@ -15,7 +16,7 @@ export function pickMeshFile<T extends { name: string }>(files: readonly T[]): T
 let opening = false;
 
 /** 取り込みダイアログを開く。file があれば最初から読み込む */
-export async function openMeshImport(opts: { store: Store; file?: File }): Promise<void> {
+export async function openMeshImport(opts: { store: Store; file?: File; runner?: Runner }): Promise<void> {
   // 読み込み中・すでに開いているときに二重に開かない
   if (opening || document.querySelector('.m3d-backdrop')) return;
   opening = true;
@@ -29,7 +30,7 @@ export async function openMeshImport(opts: { store: Store; file?: File }): Promi
         for (const text of importToasts(warnings)) toast(text, 'info', { ms: toastMsFor(text) });
       },
       // 断面を切らず、3D のまま解く。ダイアログは閉じたあとなので、3D 解析の画面を開く
-      onAnalyze3D: (study, { warnings }) => void openSim3D({ study, warnings }),
+      onAnalyze3D: (study, { warnings }) => void openSim3D({ study, warnings, runner: opts.runner }),
     });
   } finally {
     opening = false;

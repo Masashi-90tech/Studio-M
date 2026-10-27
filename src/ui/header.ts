@@ -58,7 +58,7 @@ export function initHeader(store: Store, runner: Runner): void {
   // ---------- ファイル（開く・KiCad基板を開く・3Dモデルを開く・保存） ----------
   attachMenu({ button: $('btnFile'), menu: $('fileMenu') });
   $('btnKicad').addEventListener('click', () => void openKicadImport({ store }));
-  $('btnMesh').addEventListener('click', () => void openMeshImport({ store }));
+  $('btnMesh').addEventListener('click', () => void openMeshImport({ store, runner }));
 
   // ---------- 保存 / 開く ----------
   $('btnSave').addEventListener('click', () => {
