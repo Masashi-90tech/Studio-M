@@ -5,10 +5,13 @@ import { sliceMesh, sectionSegments3D } from '../mesh3d/slice';
 import type { Box3, TriMesh } from '../mesh3d/types';
 import { createViewer, type Viewer, type ViewerHighlight } from '../mesh3d/viewer';
 import { buildFaceGraph, raycastMesh, selectConnectedFaces, updateSelection, type FaceGraph } from './faces';
+import { boxEdges, windArrows } from './flow-scene';
+import { flowOf } from './flow-settings';
 import type { ModelEvent, Sim3DModel } from './model';
 import { refineForDisplay, type RefinedMesh } from './refine';
-import { fieldRange3D, hasValues, resultField, sectionImage, vertexColors } from './result-view';
+import { colormapFor, fieldRange3D, hasValues, resultField, sectionImage, vertexColors } from './result-view';
 import { ROLE_INFO, SELECTION_COLOR } from './regions';
+import { buildStreamlines, flowSeeds, streamlineSegments, velocityFieldOf } from './streamlines';
 import { mesh3DBounds } from '../core/grid3d';
 
 export interface SceneView {
@@ -23,6 +26,11 @@ export type SceneViewResult = { view: SceneView } | { error: string };
 
 /** 表示用に三角形を割るときの辺の長さの上限（外接箱の対角線に対する割合） */
 const REFINE_EDGE_RATIO = 1 / 100;
+/** 流線を引き直す間隔の下限 [ms]（追跡は重いので、結果が毎回届いても 1 秒に 1 回まで） */
+export const STREAMLINE_MIN_MS = 1000;
+/** 風洞の枠・矢印の色 */
+const TUNNEL_COLOR: [number, number, number] = [0.45, 0.5, 0.58];
+const WIND_COLOR: [number, number, number] = [0.11, 0.49, 0.84];
 
 export function createSceneView(opts: { host: HTMLElement; model: Sim3DModel; accent: string; background: string }): SceneViewResult {
   const { host, model } = opts;
@@ -36,23 +44,47 @@ export function createSceneView(opts: { host: HTMLElement; model: Sim3DModel; ac
     viewer.dispose();
     return { error: '3D モデルに三角形がありません。STL / OBJ を読み込み直してください。' };
   }
-  const box: Box3 = { min: b.min, max: b.max };
   const diag = Math.hypot(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]);
   const refined: RefinedMesh = refineForDisplay(mesh, { maxEdge: diag * REFINE_EDGE_RATIO });
   const shown: TriMesh = refined.mesh;
-  viewer.setMesh(shown, box);
+  const isFlow = (): boolean => model.study.analysis === 'flow';
+  /** 画面に収める範囲: 熱は部品、流れは風洞全体 */
+  let viewKey = '';
+  /** 範囲が変わったら true（ビューアの中心・縮尺が変わり、色や強調が消えるので、呼び出し側で描き直す） */
+  function applyBounds(): boolean {
+    const sb = model.sectionBounds ?? b;
+    const box: Box3 = { min: sb!.min, max: sb!.max };
+    const key = JSON.stringify([box.min, box.max]);
+    if (key === viewKey) return false;
+    viewKey = key;
+    viewer.setMesh(shown, box);
+    colorsFor = null;
+    colorsOn = false;
+    outlineKey = '';
+    return true;
+  }
 
   let graph: FaceGraph | null = null;
   let raf = 0;
   let disposed = false;
-  // 結果の色は、結果ごとに 1 回だけ作る
+  // 結果の色は、結果ごと・量ごとに 1 回だけ作る
   let colorsFor: unknown = null;
+  let colorsKey = '';
   let colorsOn = false;
   let outlineKey = '';
+  let streamTimer = 0;
+  let streamAt = -Infinity;
+  let streamFor: unknown = null;
+  applyBounds();
 
   // ---------- 面の強調 ----------
   function updateHighlights(): void {
     const study: Study3D = model.study;
+    if (isFlow()) {
+      // 流れでは面の条件を使わない（流れ＋熱は次の段階）
+      viewer.setHighlights([]);
+      return;
+    }
     const nOrig = Math.floor(mesh.indices.length / 3);
     const owner = new Int16Array(nOrig).fill(-1);
     const groups: ViewerHighlight[] = [];
@@ -84,6 +116,9 @@ export function createSceneView(opts: { host: HTMLElement; model: Sim3DModel; ac
   }
 
   // ---------- 結果の色と断面 ----------
+  /** 表示する場（流れは「圧力 / 流速」の選択、熱は温度） */
+  const fieldOf = (data: NonNullable<typeof model.result>['data']) => resultField(data, isFlow() ? model.view.flowField : undefined);
+
   function updateResult(): void {
     const res = model.result;
     const on = !!res && model.view.showResult;
@@ -94,7 +129,7 @@ export function createSceneView(opts: { host: HTMLElement; model: Sim3DModel; ac
       viewer.setSectionImage(null);
       return;
     }
-    const field = resultField(res.data);
+    const field = fieldOf(res.data);
     if (!field || !hasValues(field)) {
       viewer.setVertexColors(null);
       colorsOn = false;
@@ -103,17 +138,67 @@ export function createSceneView(opts: { host: HTMLElement; model: Sim3DModel; ac
       return;
     }
     const range = fieldRange3D(field);
-    if (colorsFor !== res) {
-      viewer.setVertexColors(vertexColors({ mesh: shown, grid: res.data.grid, field, range }));
+    const colormap = colormapFor(field);
+    const key = `${field.key}`;
+    if (colorsFor !== res || colorsKey !== key) {
+      viewer.setVertexColors(vertexColors({ mesh: shown, grid: res.data.grid, field, range, colormap }));
       colorsFor = res;
+      colorsKey = key;
       colorsOn = true;
     }
     const s = model.section;
     if (s.on) {
-      viewer.setSectionImage(sectionImage({ grid: res.data.grid, field, range, axis: s.axis, position: s.position }));
+      viewer.setSectionImage(sectionImage({ grid: res.data.grid, field, range, axis: s.axis, position: s.position, colormap }));
     } else {
       viewer.setSectionImage(null);
     }
+  }
+
+  // ---------- 風洞の枠・風の矢印・流線（流れのとき） ----------
+  function updateTunnel(): void {
+    const sb = model.sectionBounds;
+    if (!isFlow() || !model.view.showTunnel || !sb) {
+      viewer.setLines('tunnel', null);
+      viewer.setLines('wind', null);
+      return;
+    }
+    viewer.setLines('tunnel', { positions: boxEdges(sb), color: TUNNEL_COLOR, alpha: 0.9 });
+    viewer.setLines('wind', { positions: windArrows({ box: sb, direction: flowOf(model.study).direction }), color: WIND_COLOR });
+  }
+
+  /** 流線を引き直す。force なしのときは、前の描き直しから STREAMLINE_MIN_MS 以上あけて（早すぎれば待って）行う */
+  function updateStreamlines(force = false): void {
+    window.clearTimeout(streamTimer);
+    streamTimer = 0;
+    const res = model.result;
+    if (!isFlow() || !model.view.streamlines || !res || !model.bounds) {
+      viewer.setLines('streamlines', null);
+      streamFor = null;
+      return;
+    }
+    if (streamFor === res) return; // この結果の流線は描いてある
+    const wait = STREAMLINE_MIN_MS - (performance.now() - streamAt);
+    if (!force && wait > 0) {
+      streamTimer = window.setTimeout(() => {
+        streamTimer = 0;
+        if (!disposed) updateStreamlines();
+      }, wait);
+      return;
+    }
+    streamAt = performance.now();
+    streamFor = res;
+    const vf = velocityFieldOf(res.data);
+    const speed = res.data.fields.find((f) => f.key === 'speed');
+    if (!vf || !speed) {
+      viewer.setLines('streamlines', null);
+      return;
+    }
+    // 色の範囲は流速の場の範囲（凡例と同じ）。計算を始めたときの風の向きで種の点を並べる
+    const direction = (res.flow ?? flowOf(model.study)).direction;
+    const seeds = flowSeeds({ grid: res.data.grid, part: model.bounds, direction });
+    const lines = buildStreamlines(vf, seeds);
+    const seg = streamlineSegments(lines, fieldRange3D(speed));
+    viewer.setLines('streamlines', seg.count > 0 ? { positions: seg.positions, colors: seg.colors } : null);
   }
 
   function updateSection(): void {
@@ -139,12 +224,11 @@ export function createSceneView(opts: { host: HTMLElement; model: Sim3DModel; ac
         viewer.setSection(null);
       }
     }
-    updateResult();
   }
 
   // ---------- クリックで面を選ぶ ----------
   viewer.setPickHandler(({ ray, additive }) => {
-    if (disposed) return;
+    if (disposed || isFlow()) return;
     const s = model.section;
     const hide = s.flip ? -1 : 1;
     // 断面で隠れている側の面は選ばない
@@ -170,15 +254,22 @@ export function createSceneView(opts: { host: HTMLElement; model: Sim3DModel; ac
       pending = new Set();
       raf = 0;
       if (disposed) return;
-      if (ev.has('selection') || ev.has('study') || ev.has('view') || ev.has('result')) updateHighlights();
-      if (ev.has('section')) updateSection();
-      if (!ev.has('section') && (ev.has('result') || ev.has('view'))) updateResult();
+      // 風洞の大きさが変わったら（解析の切り替え・風の向きなど）、ビューアの中心・縮尺が変わるので全部描き直す
+      const rebuilt = (ev.has('analysis') || ev.has('study')) && applyBounds();
+      if (rebuilt || ev.has('analysis') || ev.has('selection') || ev.has('study') || ev.has('view') || ev.has('result')) updateHighlights();
+      if (rebuilt || ev.has('analysis') || ev.has('section')) updateSection();
+      if (rebuilt || ev.has('analysis') || ev.has('section') || ev.has('result') || ev.has('view')) updateResult();
+      if (rebuilt || ev.has('analysis') || ev.has('study') || ev.has('view')) updateTunnel();
+      if (ev.has('analysis') || ev.has('view') || rebuilt) updateStreamlines(true);
+      else if (ev.has('result')) updateStreamlines();
     });
   }
 
   updateHighlights();
   updateSection();
   updateResult();
+  updateTunnel();
+  updateStreamlines(true);
   return {
     view: {
       refresh,
@@ -186,6 +277,7 @@ export function createSceneView(opts: { host: HTMLElement; model: Sim3DModel; ac
       resize: () => viewer.resize(),
       dispose() {
         disposed = true;
+        window.clearTimeout(streamTimer);
         if (raf) cancelAnimationFrame(raf);
         viewer.setPickHandler(null);
         viewer.dispose();

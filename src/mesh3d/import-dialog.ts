@@ -27,7 +27,7 @@ export interface MeshImportResult {
 export interface MeshImportOptions {
   onImport: (result: MeshImportResult) => void;
   /**
-   * 「3D のまま解析する（熱）」を選んだとき。ダイアログを閉じてから呼ぶ。
+   * 「3D のまま解析する」を選んだとき（熱で開く。画面で流れに切り替えられる）。ダイアログを閉じてから呼ぶ。
    * 省略すると、そのボタンを出さない（mesh3d は 3D 解析の画面を知らない。開くのは画面側）
    */
   onAnalyze3D?: (study: Study3D, info: { warnings: string[] }) => void;
@@ -151,8 +151,8 @@ export function openMeshImport(opts: MeshImportOptions): () => void {
   const importBtn = h('button', { type: 'button', class: 'btn primary', disabled: true, onClick: () => doImport() }, '取り込む');
   const analyze3dBtn = h(
     'button',
-    { type: 'button', class: 'btn', disabled: true, hidden: !opts.onAnalyze3D, title: '断面を切らずに、3D モデルをそのまま 3D で解きます（熱）', onClick: () => doAnalyze3D() },
-    '3D のまま解析する（熱）',
+    { type: 'button', class: 'btn', disabled: true, hidden: !opts.onAnalyze3D, title: '断面を切らずに、3D モデルをそのまま 3D で解きます（熱・流れ）', onClick: () => doAnalyze3D() },
+    '3D のまま解析する',
   );
   const cancelBtn = h('button', { type: 'button', class: 'btn', onClick: () => close() }, 'キャンセル');
   const closeBtn = h('button', { type: 'button', class: 'btn m3d-close', 'aria-label': '閉じる', onClick: () => close() }, '×');

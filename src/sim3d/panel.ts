@@ -5,9 +5,12 @@ import type { Region3D, Region3DRole, ResultSet3D } from '../core/types';
 import { clear, fieldRow, h, numField, selectField, toast } from '../ui/dom';
 import { formatNumber } from '../ui/format';
 import { facesArea } from './faces';
+import { createFlowCard, createFlowViewControls, flowResultBody } from './flow-panel';
+import { ANALYSIS_OPTIONS } from './flow-settings';
+import { flowRunText } from './flow-verdict';
 import type { ModelEvent, Sim3DModel } from './model';
 import { HEAT_ROLES, ROLE_INFO, regionValueText, valueKeyOf } from './regions';
-import { RESULT_COLORMAP, fieldRange3D, hasValues, legendStops, resultField } from './result-view';
+import { RESULT_COLORMAP, colormapFor, fieldRange3D, hasValues, legendStops, resultField } from './result-view';
 import type { Sim3DRunner } from './runner';
 import { COOLING_OPTIONS, QUALITY_OPTIONS, coolingIdFor, previewGrid, qualityIdFor } from './settings';
 import { heatVerdict3D } from './verdict';
@@ -29,6 +32,30 @@ export interface PanelResult {
 
 export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): PanelResult {
   const { model, runner } = opts;
+  const isFlow = (): boolean => model.study.analysis === 'flow';
+
+  // ---------- 解析の切り替え（熱 / 流れ） ----------
+  const analysisBtns = ANALYSIS_OPTIONS.map((a) =>
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 's3d-seg s3d-analysis-btn',
+        'aria-pressed': 'false',
+        title: a.hint,
+        'data-analysis': a.id,
+        onClick: () => {
+          if (model.study.analysis === a.id) return;
+          runner.reset(); // 進んでいる計算は捨てる（別の解析の計算を続けない）
+          model.setAnalysis(a.id);
+        },
+      },
+      a.label,
+    ),
+  );
+  const analysisCard = h('section', { class: 'card s3d-card s3d-analysis', 'aria-label': '解析の種類' }, h('div', { class: 's3d-segs', role: 'group', 'aria-label': '解析の種類' }, ...analysisBtns));
+  const flowCard = createFlowCard(model);
+  const flowView = createFlowViewControls(model);
 
   // ---------- 設定 ----------
   const solids = MATERIALS.filter((m) => m.kind === 'solid');
@@ -188,20 +215,28 @@ export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): P
     h('button', { type: 'button', class: 's3d-seg', 'aria-pressed': 'false', title: q.hint, onClick: () => model.setQuality(q.id) }, q.label),
   );
   const qualityGroup = h('div', { class: 's3d-segs', role: 'group', 'aria-label': '計算の細かさ' }, ...qualityBtns);
-  const runBtn = h('button', { type: 'button', class: 'btn primary s3d-run', onClick: () => runner.start() }, '計算する');
+  const runBtn = h('button', { type: 'button', class: 'btn primary s3d-run', onClick: () => onRunClick() }, '計算する');
   const cancelBtn = h('button', { type: 'button', class: 'btn s3d-cancel', hidden: true, onClick: () => runner.cancel() }, '中止');
+  const restartBtn = h('button', { type: 'button', class: 'btn s3d-restart', hidden: true, title: '風洞を静かな状態に戻して、いまの設定で計算を始め直します', onClick: () => runner.restart() }, '最初から');
   const progress = h('progress', { class: 's3d-progress', max: '1', value: '0', hidden: true, 'aria-label': '計算の進み具合' });
   const runInfo = h('div', { class: 'readout s3d-runinfo', role: 'status', 'aria-live': 'polite', hidden: true });
+  const heatQuality = h('div', { class: 'field' }, h('span', { class: 'field-label' }, '計算の細かさ'), qualityGroup, h('span', { class: 'hint' }, '細かいほど形に忠実ですが、時間とメモリがかかります'));
   const runCard = h(
     'section',
     { class: 'card s3d-card' },
     h('h3', null, '計算'),
-    h('div', { class: 'field' }, h('span', { class: 'field-label' }, '計算の細かさ'), qualityGroup, h('span', { class: 'hint' }, '細かいほど形に忠実ですが、時間とメモリがかかります')),
+    heatQuality,
     gridInfo,
-    h('div', { class: 'btn-row' }, runBtn, cancelBtn),
+    h('div', { class: 'btn-row' }, runBtn, cancelBtn, restartBtn),
     progress,
     runInfo,
   );
+
+  /** 計算ボタン: 熱は計算を始める。流れは、動いていれば一時停止、止まっていれば再開（なければ始める） */
+  function onRunClick(): void {
+    if (isFlow() && model.run.kind === 'running') runner.pause();
+    else runner.start();
+  }
 
   function renderQuality(): void {
     const id = qualityIdFor(model.study.grid?.maxCells);
@@ -214,20 +249,39 @@ export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): P
 
   function renderRun(): void {
     const run = model.run;
+    const flow = isFlow();
     const busy = run.kind === 'loading' || run.kind === 'running';
-    runBtn.disabled = busy;
-    runBtn.textContent = model.result ? '計算し直す' : '計算する';
-    cancelBtn.hidden = !busy;
-    progress.hidden = !busy;
+    heatQuality.hidden = flow;
+    gridInfo.hidden = flow;
+    if (flow) {
+      // 流れは止めるまで進み続ける: 一時停止・再開・最初から
+      runBtn.disabled = run.kind === 'loading';
+      runBtn.textContent = run.kind === 'running' ? '一時停止' : run.kind === 'paused' ? '再開' : model.result ? '計算し直す' : '計算する';
+      cancelBtn.hidden = true;
+      restartBtn.hidden = !(run.kind === 'running' || run.kind === 'paused');
+      progress.hidden = run.kind !== 'loading';
+    } else {
+      runBtn.disabled = busy;
+      runBtn.textContent = model.result ? '計算し直す' : '計算する';
+      cancelBtn.hidden = !busy;
+      restartBtn.hidden = true;
+      progress.hidden = !busy;
+    }
     runInfo.hidden = run.kind === 'idle';
     runInfo.classList.toggle('error', run.kind === 'error');
     if (run.kind === 'loading') {
       runInfo.textContent = '解析エンジンを準備しています…';
       progress.removeAttribute('value');
     } else if (run.kind === 'running') {
-      progress.value = Math.max(0, Math.min(1, run.progress));
-      const secs = (performance.now() - run.startedAt) / 1000;
-      runInfo.textContent = `反復 ${run.iteration.toLocaleString('ja-JP')}${run.residual !== undefined ? `・残差 ${run.residual.toExponential(2)}` : ''}・${formatNumber(secs, 3)} 秒${run.message ? `・${run.message}` : ''}`;
+      if (flow) {
+        runInfo.textContent = flowRunText(run);
+      } else {
+        progress.value = Math.max(0, Math.min(1, run.progress));
+        const secs = (performance.now() - run.startedAt) / 1000;
+        runInfo.textContent = `反復 ${run.iteration.toLocaleString('ja-JP')}${run.residual !== undefined ? `・残差 ${run.residual.toExponential(2)}` : ''}・${formatNumber(secs, 3)} 秒${run.message ? `・${run.message}` : ''}`;
+      }
+    } else if (run.kind === 'paused') {
+      runInfo.textContent = flowRunText(run);
     } else if (run.kind === 'error') {
       runInfo.textContent = run.message;
     } else if (run.kind === 'cancelled') {
@@ -266,6 +320,7 @@ export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): P
     );
   }
 
+  let flowDetailsOpen = false;
   function renderResult(): void {
     const res = model.result;
     resultCard.hidden = !res;
@@ -273,9 +328,20 @@ export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): P
     const stale = model.stale;
     clear(resultCard);
     resultCard.classList.toggle('stale', stale);
-    const v = heatVerdict3D({ result: res.data, study: model.study });
     resultCard.append(h('h3', null, '結果', h('span', { class: 'unit' }, ` ${res.data.label ?? 'Lite（ブラウザの中の計算）'}`)));
-    if (stale) resultCard.append(h('div', { class: 's3d-stale', role: 'status' }, '条件や設定を変えました。いまの表示は前の結果です。もう一度「計算し直す」を押してください。'));
+    if (stale) {
+      resultCard.append(
+        h('div', { class: 's3d-stale', role: 'status' }, isFlow() ? '条件や設定を変えました。いまの表示は前の結果です。「最初から」を押すと、いまの設定で計算し直します。' : '条件や設定を変えました。いまの表示は前の結果です。もう一度「計算し直す」を押してください。'),
+      );
+    }
+    if (res.data.analysis === 'flow') {
+      const run = model.run;
+      const live = run.kind === 'running' || run.kind === 'paused';
+      resultCard.append(...flowResultBody({ model, res, flowThroughs: live ? run.progress : undefined, running: run.kind === 'running', detailsOpen: flowDetailsOpen, onDetails: (o) => (flowDetailsOpen = o) }));
+      if (res.data.warnings.length > 0) resultCard.append(h('div', { class: 's3d-warn', role: 'status' }, ...res.data.warnings.map((w) => h('div', null, w))));
+      return;
+    }
+    const v = heatVerdict3D({ result: res.data, study: model.study });
     resultCard.append(
       h(
         'div',
@@ -304,8 +370,9 @@ export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): P
   const flipBox = h('input', { type: 'checkbox' });
   const flipRow = h('label', { class: 's3d-check' }, flipBox, h('span', null, '切る向きを反対にする（隠す側を入れ替える）'));
   flipBox.addEventListener('change', () => model.setSection({ flip: flipBox.checked }));
-  const b = model.bounds;
+  // 切れる範囲は、熱は部品の外接箱、流れは風洞（解析によって変わる）
   slider.addEventListener('input', () => {
+    const b = model.sectionBounds;
     if (!b) return;
     const a = model.section.axis;
     const t = Number(slider.value) / SLIDER_STEPS;
@@ -316,6 +383,7 @@ export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): P
   const regionToggle = h('input', { type: 'checkbox', checked: true });
   regionToggle.addEventListener('change', () => model.setView({ showRegions: regionToggle.checked }));
   const sectionBody = h('div', { class: 's3d-section-body' }, axisGroup, fieldRow('切る位置', slider), posInfo, flipRow);
+  const regionToggleRow = h('label', { class: 's3d-check' }, regionToggle, h('span', null, '条件を置いた面を色で見せる'));
   const sectionCard = h(
     'section',
     { class: 'card s3d-card' },
@@ -323,7 +391,8 @@ export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): P
     sectionRow,
     sectionBody,
     h('label', { class: 's3d-check' }, resultToggle, h('span', null, '結果の色を表面に出す')),
-    h('label', { class: 's3d-check' }, regionToggle, h('span', null, '条件を置いた面を色で見せる')),
+    regionToggleRow,
+    flowView.root,
   );
 
   function renderSection(): void {
@@ -332,6 +401,7 @@ export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): P
     sectionBody.classList.toggle('off', !s.on);
     axisBtns.forEach((btn, i) => btn.setAttribute('aria-pressed', String(i === s.axis)));
     for (const el of [slider, flipBox, ...axisBtns]) (el as HTMLInputElement).disabled = !s.on;
+    const b = model.sectionBounds;
     if (b) {
       const t = b.max[s.axis] > b.min[s.axis] ? (s.position - b.min[s.axis]) / (b.max[s.axis] - b.min[s.axis]) : 0.5;
       if (document.activeElement !== slider) slider.value = String(Math.round(t * SLIDER_STEPS));
@@ -342,22 +412,50 @@ export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): P
 
   // ---------- 全体 ----------
   const warnings = model.warnings.length > 0 ? h('div', { class: 's3d-warn', role: 'status' }, ...model.warnings.map((w) => h('div', null, w))) : null;
-  const root = h('div', { class: 's3d-cards' }, warnings, settingsCard, regionsCard, runCard, resultCard, sectionCard);
+  const root = h('div', { class: 's3d-cards' }, warnings, analysisCard, settingsCard, regionsCard, flowCard.root, runCard, resultCard, sectionCard);
+
+  /** 解析の種類に合わせて、出すカードを切り替える（熱の面の条件は流れでは隠す。値は残る） */
+  function renderAnalysis(): void {
+    const flow = isFlow();
+    analysisBtns.forEach((btn, i) => btn.setAttribute('aria-pressed', String(ANALYSIS_OPTIONS[i].id === model.study.analysis)));
+    settingsCard.hidden = flow;
+    regionsCard.hidden = flow;
+    flowCard.root.hidden = !flow;
+    flowView.root.hidden = !flow;
+    regionToggleRow.hidden = flow;
+  }
 
   function refresh(e: ModelEvent): void {
+    if (e === 'analysis') {
+      renderAnalysis();
+      renderRegions();
+      renderQuality();
+      flowCard.refresh();
+      flowView.refresh();
+      renderResult();
+      renderRun();
+      renderSection();
+      return;
+    }
     if (e === 'selection' || e === 'study') renderRegions();
     if (e === 'study') {
       renderQuality();
+      flowCard.refresh();
       renderResult(); // 古い結果の表示・判定の再計算
       renderRun();
     }
-    if (e === 'run') renderRun();
+    if (e === 'run') {
+      renderRun();
+      if (isFlow()) renderResult(); // 風が通り抜けた回数が進んだら、判定の注意書きも合わせる
+    }
     if (e === 'result') {
       renderResult();
       renderRun();
     }
+    if (e === 'view') flowView.refresh();
     if (e === 'section') renderSection();
   }
+  renderAnalysis();
   renderRegions();
   renderQuality();
   renderRun();
@@ -366,28 +464,59 @@ export function createPanel(opts: { model: Sim3DModel; runner: Sim3DRunner }): P
   return { root, refresh };
 }
 
-/** 凡例（カラーバー）。結果があれば描き、なければ隠す。古い結果には「前の結果」と添える */
+/**
+ * 凡例（カラーバー）。結果があれば描き、なければ隠す。古い結果には「前の結果」と添える。
+ * 流れで、色にする量が流速でないときは、流線の色（流速）の凡例も並べる
+ */
 export function createLegend(model: Sim3DModel): { root: HTMLElement; refresh(): void } {
-  const bar = h('div', { class: 's3d-legend-bar', 'aria-hidden': 'true' });
-  const max = h('span', { class: 's3d-legend-max' });
-  const min = h('span', { class: 's3d-legend-min' });
-  const unit = h('span', { class: 's3d-legend-unit' });
-  const tag = h('span', { class: 's3d-legend-stale', hidden: true }, '前の結果');
-  const root = h('div', { class: 's3d-legend', hidden: true, role: 'img' }, unit, tag, max, bar, min);
-  bar.style.background = `linear-gradient(to top, ${legendStops(RESULT_COLORMAP, 16).join(', ')})`;
+  const make = (): { root: HTMLElement; bar: HTMLElement; max: HTMLElement; min: HTMLElement; unit: HTMLElement; tag: HTMLElement } => {
+    const bar = h('div', { class: 's3d-legend-bar', 'aria-hidden': 'true' });
+    const max = h('span', { class: 's3d-legend-max' });
+    const min = h('span', { class: 's3d-legend-min' });
+    const unit = h('span', { class: 's3d-legend-unit' });
+    const tag = h('span', { class: 's3d-legend-stale', hidden: true }, '前の結果');
+    const root = h('div', { class: 's3d-legend', hidden: true, role: 'img' }, unit, tag, max, bar, min);
+    return { root, bar, max, min, unit, tag };
+  };
+  const main = make();
+  const stream = make();
+  stream.bar.style.background = `linear-gradient(to top, ${legendStops(RESULT_COLORMAP, 16).join(', ')})`;
+  const root = h('div', { class: 's3d-legends' }, stream.root, main.root);
+  let barKey = '';
   return {
     root,
     refresh() {
+      const flow = model.study.analysis === 'flow';
       const res = model.result;
-      const f = res ? resultField(res.data) : undefined;
-      root.hidden = !res || !f || !model.view.showResult || !hasValues(f);
-      if (!res || !f || !hasValues(f)) return;
-      const r = fieldRange3D(f);
-      max.textContent = formatNumber(r.max, 4);
-      min.textContent = formatNumber(r.min, 4);
-      unit.textContent = `${f.label} [${f.unit}]`;
-      tag.hidden = !model.stale;
-      root.setAttribute('aria-label', `${f.label}の凡例。${formatNumber(r.min, 4)} から ${formatNumber(r.max, 4)} ${f.unit}`);
+      const f = res ? resultField(res.data, flow ? model.view.flowField : undefined) : undefined;
+      const ok = !!res && !!f && model.view.showResult && hasValues(f);
+      main.root.hidden = !ok;
+      if (res && f && hasValues(f)) {
+        const cm = colormapFor(f);
+        if (barKey !== cm) {
+          barKey = cm;
+          main.bar.style.background = `linear-gradient(to top, ${legendStops(cm, 16).join(', ')})`;
+        }
+        const r = fieldRange3D(f);
+        main.max.textContent = formatNumber(r.max, 4);
+        main.min.textContent = formatNumber(r.min, 4);
+        main.unit.textContent = `${f.label} [${f.unit}]`;
+        main.tag.hidden = !model.stale;
+        main.root.setAttribute('aria-label', `${f.label}の凡例。${formatNumber(r.min, 4)} から ${formatNumber(r.max, 4)} ${f.unit}`);
+      }
+      // 流線: 色は流速。表面・断面の色が流速のときは、同じ凡例なので重ねて出さない
+      const speed = res?.data.fields.find((x) => x.key === 'speed');
+      const showStream = flow && !!res && !!speed && model.view.streamlines && hasValues(speed) && f?.key !== 'speed';
+      stream.root.hidden = !showStream;
+      if (showStream && speed) {
+        const r = fieldRange3D(speed);
+        stream.max.textContent = formatNumber(r.max, 4);
+        stream.min.textContent = formatNumber(r.min, 4);
+        stream.unit.textContent = `流線の色\n${speed.label} [${speed.unit}]`;
+        stream.tag.hidden = !model.stale;
+        stream.root.setAttribute('aria-label', `流線の色は流速。${formatNumber(r.min, 4)} から ${formatNumber(r.max, 4)} ${speed.unit}`);
+      }
+      root.hidden = main.root.hidden && stream.root.hidden;
     },
   };
 }

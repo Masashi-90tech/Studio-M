@@ -154,7 +154,9 @@ export function faceOwners(study: Study3D): Int16Array {
  * 形（mesh）は途中で変わらないので含めない
  */
 export function studySignature(study: Study3D): string {
-  const r = study.regions.map((g) => {
+  // 流れは、流れの設定だけで決まる（熱の設定や面の条件を変えても、流れの結果は古くならない。流れ＋熱は次の段階）
+  if (study.analysis === 'flow') return JSON.stringify([study.analysis, study.flow, study.flow?.thermal?.enabled ? [study.materialId, study.heat] : null, study.grid]);
+  const r =study.regions.map((g) => {
     let h = 2166136261;
     for (const t of g.faces) h = Math.imul(h ^ t, 16777619);
     return [g.id, g.role, g.heatW, g.tempC, g.h, g.force?.fx, g.force?.fy, g.force?.fz, g.faces.length, h >>> 0].join(':');

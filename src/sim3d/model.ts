@@ -5,17 +5,31 @@
 // - result:     最後に計算した結果と、そのときの印（studySignature）。今の印と違えば古い結果
 // - run:        計算の進み具合
 import { mesh3DBounds, type Box3D } from '../core/grid3d';
-import type { Region3DRole, ResultSet3D, Study3D } from '../core/types';
+import type { Analysis3DKind, Flow3DSettings, Region3DRole, ResultSet3D, Study3D } from '../core/types';
 import type { Axis } from '../mesh3d/types';
+import { flowQualityGrid, switchAnalysis, tunnelBox, withFlow, type FlowQualityId } from './flow-settings';
 import { addRegion, removeRegion, studySignature, updateRegion, type AddRegionResult } from './regions';
 import { qualityGrid, type QualityId } from './settings';
 
-export type ModelEvent = 'study' | 'selection' | 'result' | 'run' | 'section' | 'view';
+/** 'analysis' は解析の種類（熱 / 流れ）を切り替えたとき（同時に study・section・result・selection も変わる） */
+export type ModelEvent = 'study' | 'selection' | 'result' | 'run' | 'section' | 'view' | 'analysis';
 
 export type RunState =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'running'; iteration: number; progress: number; residual?: number; message?: string; startedAt: number }
+  | {
+      kind: 'running';
+      iteration: number;
+      progress: number;
+      residual?: number;
+      message?: string;
+      startedAt: number;
+      /** 流れ（止めるまで進み続ける計算）のとき: 物理の経過時間 [s]・1 秒あたりのステップ数 */
+      physTime?: number;
+      stepsPerSec?: number;
+    }
+  /** 流れを一時停止中（再開すると続きから進む） */
+  | { kind: 'paused'; iteration: number; progress: number; physTime?: number; stepsPerSec?: number }
   | { kind: 'error'; message: string }
   | { kind: 'cancelled' };
 
@@ -28,11 +42,27 @@ export interface SectionState {
   flip: boolean;
 }
 
+/** 流れの結果で色にする量 */
+export type FlowFieldKey = 'pressure' | 'speed';
+
 export interface ViewOptions {
   /** 条件を置いた面を色で見せる */
   showRegions: boolean;
   /** 結果の色を表面に出す */
   showResult: boolean;
+  /** 流れ: 表面・断面の色にする量（既定は圧力） */
+  flowField: FlowFieldKey;
+  /** 流れ: 流線を描く */
+  streamlines: boolean;
+  /** 流れ: 風洞の枠と風の向きの矢印を描く */
+  showTunnel: boolean;
+}
+
+/** 解析ごとの結果。flow は、計算を始めた時点の流れの設定（結果の流線は、そのときの風の向きで描く） */
+export interface ModelResult {
+  data: ResultSet3D;
+  signature: string;
+  flow?: Flow3DSettings;
 }
 
 export class Sim3DModel {
@@ -40,10 +70,13 @@ export class Sim3DModel {
   selection: ReadonlySet<number> = new Set();
   /** 一覧で選んでいる条件（その面を強調する） */
   activeRegionId: string | null = null;
-  result: { data: ResultSet3D; signature: string } | null = null;
+  /** 解析ごとの結果（切り替えても、前の解析の結果は残る） */
+  private results: Partial<Record<Analysis3DKind, ModelResult>> = {};
+  /** 解析ごとの計算の細かさ（熱と流れで選択肢が違うので、別々に覚える） */
+  private gridMemo: Partial<Record<Analysis3DKind, Study3D['grid']>> = {};
   run: RunState = { kind: 'idle' };
   section: SectionState;
-  view: ViewOptions = { showRegions: true, showResult: true };
+  view: ViewOptions = { showRegions: true, showResult: true, flowField: 'pressure', streamlines: true, showTunnel: true };
   /** 取り込みで気づいたこと（穴のあるモデルなど） */
   readonly warnings: string[];
   readonly bounds: Box3D | null;
@@ -51,6 +84,7 @@ export class Sim3DModel {
 
   constructor(study: Study3D, opts: { warnings?: string[] } = {}) {
     this.study = study;
+    this.gridMemo[study.analysis] = study.grid;
     this.warnings = opts.warnings ?? [];
     this.bounds = mesh3DBounds(study.mesh);
     const axis: Axis = 2;
@@ -96,6 +130,50 @@ export class Sim3DModel {
     this.setStudy({ ...this.study, name });
   }
 
+  // ---------- 解析の切り替えと流れの設定 ----------
+  /** いま表示している解析の結果（なければ null） */
+  get result(): ModelResult | null {
+    return this.results[this.study.analysis] ?? null;
+  }
+
+  /**
+   * 熱 / 流れを切り替える。熱の面の条件・設定はそのまま残す。計算の細かさは解析ごとに別に覚える。
+   * 流れでは面の選択は使わないので外す。切り替えた解析の前の結果があれば、それを表示する
+   */
+  setAnalysis(analysis: Analysis3DKind): void {
+    if (this.study.analysis === analysis) return;
+    this.gridMemo[this.study.analysis] = this.study.grid;
+    this.study = switchAnalysis(this.study, analysis, this.gridMemo[analysis]);
+    if (analysis === 'flow') {
+      this.selection = new Set();
+      this.activeRegionId = null;
+    }
+    this.run = { kind: 'idle' };
+    this.setSection({});
+    this.emit('analysis');
+    this.emit('study');
+    this.emit('selection');
+    this.emit('result');
+    this.emit('run');
+  }
+
+  /** 流れの設定を一部だけ変える（風の向き・速さ・まわり・流体など）。印が変われば、今の結果は古くなる */
+  setFlow(patch: Partial<Flow3DSettings>): void {
+    this.setStudy(withFlow(this.study, patch));
+    // 風洞の大きさが変わるので、断面の位置を新しい範囲に収める
+    this.setSection({});
+  }
+
+  setFlowQuality(id: FlowQualityId): void {
+    this.setStudy({ ...this.study, grid: flowQualityGrid(id) });
+  }
+
+  /** 断面を切れる範囲。熱は部品の外接箱、流れは風洞 */
+  get sectionBounds(): Box3D | null {
+    if (this.study.analysis === 'flow') return tunnelBox(this.study) ?? this.bounds;
+    return this.bounds;
+  }
+
   // ---------- 面の選択と条件 ----------
   setSelection(sel: ReadonlySet<number>): void {
     this.selection = sel;
@@ -139,10 +217,12 @@ export class Sim3DModel {
   // ---------- 断面・表示 ----------
   setSection(patch: Partial<SectionState>): void {
     const next = { ...this.section, ...patch };
+    // 軸を変えたら、部品の真ん中で切る
     if (patch.axis !== undefined && patch.axis !== this.section.axis && this.bounds && patch.position === undefined) {
       next.position = (this.bounds.min[next.axis] + this.bounds.max[next.axis]) / 2;
     }
-    if (this.bounds) next.position = Math.min(this.bounds.max[next.axis], Math.max(this.bounds.min[next.axis], next.position));
+    const range = this.sectionBounds;
+    if (range) next.position = Math.min(range.max[next.axis], Math.max(range.min[next.axis], next.position));
     this.section = next;
     this.emit('section');
   }
@@ -158,11 +238,14 @@ export class Sim3DModel {
     this.emit('run');
   }
 
-  /** 計算が終わった。signature は計算を始めたときの印（そのあとに設定が変わっていれば、すぐ古い結果になる） */
-  setResult(data: ResultSet3D, signature: string): void {
-    this.result = { data, signature };
+  /**
+   * 結果が届いた（熱は計算が終わったとき、流れは進むたびに）。signature は計算を始めたときの印
+   * （そのあとに設定が変わっていれば、すぐ古い結果になる）。flow は計算を始めたときの流れの設定
+   */
+  setResult(data: ResultSet3D, signature: string, flow?: Flow3DSettings): void {
+    this.results[data.analysis] = { data, signature, flow };
     // 結果の色を読み取りやすいよう、一覧で選んでいた条件の強調は外す
-    if (this.activeRegionId !== null) {
+    if (this.activeRegionId !== null && data.analysis === this.study.analysis) {
       this.activeRegionId = null;
       this.emit('selection');
     }
@@ -171,7 +254,7 @@ export class Sim3DModel {
 
   clearResult(): void {
     if (!this.result) return;
-    this.result = null;
+    delete this.results[this.study.analysis];
     this.emit('result');
   }
 

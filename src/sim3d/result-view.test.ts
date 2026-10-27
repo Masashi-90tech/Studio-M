@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cellIndex3D } from '../core/grid3d';
 import type { Field3D, Grid3D, Mesh3D } from '../core/types';
 import { colormapRGB, fieldRange } from '../ui/colormap';
-import { fieldRange3D, hasValues, legendStops, resultField, sectionImage, sectionRange, vertexColors } from './result-view';
+import { colormapFor, fieldRange3D, hasValues, legendStops, resultField, sectionImage, sectionRange, vertexColors } from './result-view';
 
 // 4 × 2 × 2 セルの立方体（1 辺 0.4 m 相当）: x が小さい半分は 20°C、大きい半分は 80°C。外側の余白のセルは mask 0
 const grid: Grid3D = { nx: 6, ny: 4, nz: 4, h: 0.1, origin: [-0.1, -0.1, -0.1] };
@@ -91,5 +91,66 @@ describe('結果の色', () => {
     expect(s).toHaveLength(5);
     const [r, g, b] = colormapRGB('turbo', 0);
     expect(s[0]).toBe(`#${[r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')}`);
+  });
+});
+
+describe('流れの結果の色（mask = 流体のセル）', () => {
+  // 部品（中央の 2 × 2 × 2 セル）が固体。まわりは流体。圧力は x が大きいほど高い
+  const g: Grid3D = { nx: 8, ny: 6, nz: 6, h: 0.1, origin: [0, 0, 0] };
+  const n = g.nx * g.ny * g.nz;
+  const mask = new Uint8Array(n).fill(1);
+  const pdata = new Float32Array(n);
+  for (let k = 0; k < g.nz; k++)
+    for (let j = 0; j < g.ny; j++)
+      for (let i = 0; i < g.nx; i++) {
+        const c = cellIndex3D(g, i, j, k);
+        pdata[c] = i - 3.5;
+        if (i >= 3 && i <= 4 && j >= 2 && j <= 3 && k >= 2 && k <= 3) mask[c] = 0;
+      }
+  const pressure: Field3D = { key: 'pressure', label: '圧力', unit: 'Pa', data: pdata, mask, diverging: true };
+  const speed: Field3D = { key: 'speed', label: '流速', unit: 'm/s', data: new Float32Array(n).fill(2), mask };
+  const rs = { analysis: 'flow' as const, grid: g, fields: [speed, pressure], scalars: [], history: [], warnings: [] };
+
+  it('表示する量を key で選べる。key がなければ（熱の温度もなければ）最初の場', () => {
+    expect(resultField(rs, 'pressure')).toBe(pressure);
+    expect(resultField(rs, 'speed')).toBe(speed);
+    expect(resultField(rs)).toBe(speed);
+    expect(resultField(rs, 'nothing')).toBe(speed);
+  });
+
+  it('正負のある圧力は青‐白‐赤、それ以外は Turbo。範囲は 0 中心の対称', () => {
+    expect(colormapFor(pressure)).toBe('diverging');
+    expect(colormapFor(speed)).toBe('turbo');
+    const r = fieldRange3D(pressure);
+    expect(r.min).toBe(-r.max);
+    expect(r.max).toBe(3.5);
+    expect(hasValues(pressure)).toBe(true);
+  });
+
+  it('切り口は流体のセルだけ色が付き、部品（固体）のところは透明', () => {
+    const img = sectionImage({ grid: g, field: pressure, range: fieldRange3D(pressure), axis: 1, position: 0.25, colormap: 'diverging' })!;
+    // y = 0.25 m（セル j = 2）で切る。画像の横は z（k = px / 2）、縦は x（i = py / 2）。固体は i = 3〜4・k = 2〜3
+    expect(img.width).toBe(g.nz * 2);
+    expect(img.height).toBe(g.nx * 2);
+    const alpha = (px: number, py: number): number => img.rgba[(py * img.width + px) * 4 + 3];
+    expect(alpha(0, 0)).toBe(255); // 流体
+    expect(alpha(5, 2)).toBe(255); // i = 1
+    expect(alpha(11, 7)).toBe(255); // k = 5
+    expect(alpha(5, 7)).toBe(0); // 固体のセル (3, 2, 2)
+    expect(alpha(4, 6)).toBe(0);
+    expect(alpha(7, 9)).toBe(0);
+    expect(alpha(8, 7)).toBe(255); // k = 4 は流体
+  });
+
+  it('表面の頂点の色は、すぐ外の流体の値になる（部品の表面は mask = 0 のセルの境）', () => {
+    // 部品の -x 側の面（x = 0.3 m）の頂点: すぐ外の流体は圧力が低い側（x = 0.25 m 付近）
+    const mesh: Mesh3D = { positions: Float32Array.from([0.3, 0.25, 0.25, 0.5, 0.25, 0.25]), indices: Uint32Array.from([0, 1, 1]) };
+    const range = fieldRange3D(pressure);
+    const colors = vertexColors({ mesh, grid: g, field: pressure, range, colormap: 'diverging' });
+    const c0 = [colors[0], colors[1], colors[2]];
+    const c1 = [colors[3], colors[4], colors[5]];
+    // 風上側の面の頂点は低い圧力（-1.5 Pa）の側の色（青寄り）、風下側の面は高い圧力（+1.5 Pa）の側の色（赤寄り）
+    expect(c0[2]).toBeGreaterThan(c0[0]);
+    expect(c1[0]).toBeGreaterThan(c1[2]);
   });
 });

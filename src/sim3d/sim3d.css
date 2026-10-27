@@ -125,13 +125,23 @@
   display: none;
 }
 
-/* 凡例（カラーバー） */
-.s3d-legend {
+/* 凡例（カラーバー）。流れでは、表面の色と流線の色の 2 本を横に並べる */
+.s3d-legends {
   position: absolute;
   right: 10px;
   top: 10px;
   bottom: 10px;
-  width: 76px;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  max-height: 320px;
+  pointer-events: none;
+}
+.s3d-legends[hidden] {
+  display: none;
+}
+.s3d-legend {
+  width: 84px;
   display: grid;
   grid-template-columns: 16px 1fr;
   grid-template-rows: auto auto auto 1fr auto;
@@ -140,8 +150,6 @@
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
-  pointer-events: none;
-  max-height: 320px;
   background: rgba(255, 253, 249, 0.82);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -151,6 +159,7 @@
   display: none;
 }
 .s3d-legend-unit {
+  white-space: pre-line;
   grid-column: 1 / -1;
   font-size: 11px;
   color: var(--muted);
@@ -456,11 +465,52 @@
     border-left: 0;
     padding: 10px;
   }
-  .s3d-legend {
-    width: 56px;
+  .s3d-legends {
     max-height: 200px;
+  }
+  .s3d-legend {
+    width: 60px;
   }
   .s3d-head {
     padding: 6px 10px;
   }
+}
+
+/* 流れ */
+.s3d-card[hidden] {
+  display: none;
+}
+.s3d-analysis .s3d-analysis-btn {
+  min-height: 40px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.s3d-dir {
+  flex: 1 1 78px;
+}
+.s3d-gridinfo {
+  line-height: 1.5;
+}
+.s3d-flowview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.s3d-flowview[hidden] {
+  display: none;
+}
+.s3d-check[hidden],
+.s3d-restart[hidden] {
+  display: none;
+}
+.s3d-details {
+  font-size: 12px;
+}
+.s3d-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px 0;
+}
+.s3d-details .s3d-kvs {
+  margin-top: 4px;
 }

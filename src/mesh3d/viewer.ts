@@ -26,6 +26,18 @@ export interface ViewerHighlight {
   alpha?: number;
 }
 
+/** 色つきの線分の組（流線・風洞の枠・風の向きの矢印など）。メッシュの手前・奥に合わせて深さを判定して描く */
+export interface ViewerLines {
+  /** 線分の端点の並び（x y z を 2 点で 1 本。モデルの単位） */
+  positions: Float32Array;
+  /** 頂点ごとの色（0〜1 の RGB。positions と同じ長さ）。省略時は color */
+  colors?: Float32Array;
+  /** 一色の線の色（0〜1 の RGB。省略時は黒に近い灰色） */
+  color?: [number, number, number];
+  /** 不透明度（省略時 1） */
+  alpha?: number;
+}
+
 /** 画面のクリック（ドラッグしていない）。ray はモデルの単位の光線 */
 export interface ViewerPick {
   ray: Ray3;
@@ -50,6 +62,8 @@ export interface Viewer {
   setHighlights(groups: ViewerHighlight[]): void;
   /** 切り口に結果の色の画像を貼る。null で消す（画像があるあいだ、切る平面の半透明の面は描かない） */
   setSectionImage(image: SectionImage | null): void;
+  /** 色つきの線分の組を id ごとに表示する（同じ id で呼び直すと置き換わる）。null で消す。setMesh のあとに呼ばなくても、座標は setMesh の変更に追従する */
+  setLines(id: string, lines: ViewerLines | null): void;
   /** クリックされたとき（ドラッグでの回転とは区別する）。null で解除 */
   setPickHandler(handler: ((pick: ViewerPick) => void) | null): void;
   resetView(): void;
@@ -164,6 +178,23 @@ void main() {
   gl_FragColor = vec4(c.rgb, 1.0);
 }`;
 
+// 色つきの線分（流線・風洞の枠・矢印）
+const LINE_VS = `
+attribute vec3 aPos;
+attribute vec3 aColor;
+uniform mat4 uView;
+uniform mat4 uProj;
+varying vec3 vColor;
+void main() {
+  vColor = aColor;
+  gl_Position = uProj * uView * vec4(aPos, 1.0);
+}`;
+
+const LINE_FS = `
+uniform float uAlpha;
+varying vec3 vColor;
+void main() { gl_FragColor = vec4(vColor, uAlpha); }`;
+
 const FLAT_VS = `
 attribute vec3 aPos;
 uniform mat4 uView;
@@ -218,11 +249,13 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
   let flatProg: WebGLProgram;
   let hlProg: WebGLProgram;
   let texProg: WebGLProgram;
+  let lineProg: WebGLProgram;
   try {
     meshProg = link(MESH_VS, MESH_FS);
     flatProg = link(FLAT_VS, FLAT_FS);
     hlProg = link(HL_VS, HL_FS);
     texProg = link(TEX_VS, TEX_FS);
+    lineProg = link(LINE_VS, LINE_FS);
   } catch (e) {
     console.error(e);
     return { error: '3D 表示の準備に失敗しました。ブラウザを最新にするか、ページを開き直してください。断面の位置は、右の数値と 2D の図で指定できます。' };
@@ -248,6 +281,9 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
     tView: uni(texProg, 'uView'),
     tProj: uni(texProg, 'uProj'),
     tTex: uni(texProg, 'uTex'),
+    lView: uni(lineProg, 'uView'),
+    lProj: uni(lineProg, 'uProj'),
+    lAlpha: uni(lineProg, 'uAlpha'),
   };
 
   // ---------- 状態 ----------
@@ -265,6 +301,7 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
   let useColor = false;
   let highlights: { buf: WebGLBuffer; count: number; color: [number, number, number]; alpha: number }[] = [];
   let sectionTex: { tex: WebGLTexture; hasImage: boolean } | null = null;
+  const lineSets = new Map<string, { src: ViewerLines; pos: WebGLBuffer; col: WebGLBuffer | null; count: number }>();
   const texQuadBuf = g.createBuffer()!;
   const colorBuf = g.createBuffer()!;
   let pickHandler: ((pick: ViewerPick) => void) | null = null;
@@ -363,6 +400,34 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
       g.vertexAttribPointer(1, 3, g.FLOAT, false, 24, 12);
       g.drawArrays(g.TRIANGLE_FAN, 0, 4);
       g.disableVertexAttribArray(1);
+    }
+
+    // 色つきの線分（流線・風洞の枠・矢印）。メッシュや切り口の画像の奥に回ったところは隠れる
+    if (lineSets.size > 0) {
+      g.useProgram(lineProg);
+      g.uniformMatrix4fv(U.lView, false, view);
+      g.uniformMatrix4fv(U.lProj, false, proj);
+      g.enable(g.BLEND);
+      g.blendFunc(g.SRC_ALPHA, g.ONE_MINUS_SRC_ALPHA);
+      g.enableVertexAttribArray(0);
+      for (const ls of lineSets.values()) {
+        if (ls.count === 0) continue;
+        g.uniform1f(U.lAlpha, ls.src.alpha ?? 1);
+        g.bindBuffer(g.ARRAY_BUFFER, ls.pos);
+        g.vertexAttribPointer(0, 3, g.FLOAT, false, 0, 0);
+        if (ls.col) {
+          g.bindBuffer(g.ARRAY_BUFFER, ls.col);
+          g.enableVertexAttribArray(1);
+          g.vertexAttribPointer(1, 3, g.FLOAT, false, 0, 0);
+        } else {
+          g.disableVertexAttribArray(1);
+          const c = ls.src.color ?? [0.2, 0.2, 0.22];
+          g.vertexAttrib3f(1, c[0], c[1], c[2]);
+        }
+        g.drawArrays(g.LINES, 0, ls.count);
+      }
+      g.disableVertexAttribArray(1);
+      g.disable(g.BLEND);
     }
 
     // 面の強調（半透明。同じ位置の面に重ねるので、深さの比較を少し手前に寄せる）
@@ -576,6 +641,24 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
     g.bufferData(g.ARRAY_BUFFER, quad, g.DYNAMIC_DRAW);
   }
 
+  /** 線分の座標を正規化して GPU に送る（setMesh で中心・縮尺が変わったときも呼び直す） */
+  function uploadLines(ls: { src: ViewerLines; pos: WebGLBuffer; col: WebGLBuffer | null; count: number }): void {
+    const src = ls.src.positions;
+    const out = new Float32Array(src.length);
+    for (let i = 0; i + 2 < src.length; i += 3) {
+      out[i] = (src[i] - center[0]) * scale;
+      out[i + 1] = (src[i + 1] - center[1]) * scale;
+      out[i + 2] = (src[i + 2] - center[2]) * scale;
+    }
+    g.bindBuffer(g.ARRAY_BUFFER, ls.pos);
+    g.bufferData(g.ARRAY_BUFFER, out, g.DYNAMIC_DRAW);
+    if (ls.col && ls.src.colors) {
+      g.bindBuffer(g.ARRAY_BUFFER, ls.col);
+      g.bufferData(g.ARRAY_BUFFER, ls.src.colors, g.DYNAMIC_DRAW);
+    }
+    ls.count = Math.floor(src.length / 3);
+  }
+
   let sectionImg: SectionImage | null = null;
   /** 切り口の画像を貼る四角形（位置 xyz + 画像の座標 uv0 を交互に） */
   function updateSectionQuad(): void {
@@ -618,6 +701,7 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
       useColor = false;
       for (const hl of highlights) g.deleteBuffer(hl.buf);
       highlights = [];
+      for (const ls of lineSets.values()) uploadLines(ls);
       updatePlane();
       updateSectionQuad();
       schedule();
@@ -703,6 +787,21 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
       updateSectionQuad();
       schedule();
     },
+    setLines(id, lines) {
+      const old = lineSets.get(id);
+      if (old) {
+        g.deleteBuffer(old.pos);
+        if (old.col) g.deleteBuffer(old.col);
+        lineSets.delete(id);
+      }
+      if (lines && lines.positions.length >= 6) {
+        const hasColors = !!lines.colors && lines.colors.length >= lines.positions.length;
+        const ls = { src: lines, pos: g.createBuffer()!, col: hasColors ? g.createBuffer()! : null, count: 0 };
+        uploadLines(ls);
+        lineSets.set(id, ls);
+      }
+      schedule();
+    },
     setPickHandler(handler) {
       pickHandler = handler;
     },
@@ -726,7 +825,13 @@ export function createViewer(host: HTMLElement, colors: ViewerColors): ViewerRes
       canvas.removeEventListener('webglcontextlost', onLost);
       for (const b of [posBuf, idxBuf, quadBuf, outlineBuf, sectionBuf, gizmoBuf, texQuadBuf, colorBuf]) g.deleteBuffer(b);
       for (const hl of highlights) g.deleteBuffer(hl.buf);
+      for (const ls of lineSets.values()) {
+        g.deleteBuffer(ls.pos);
+        if (ls.col) g.deleteBuffer(ls.col);
+      }
+      lineSets.clear();
       if (sectionTex) g.deleteTexture(sectionTex.tex);
+      g.deleteProgram(lineProg);
       g.deleteProgram(meshProg);
       g.deleteProgram(flatProg);
       g.deleteProgram(hlProg);

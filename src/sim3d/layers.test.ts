@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 const DIR = __dirname;
 /** DOM・WebGL・タイマーを触ってよい画面のファイル */
-const DOM_FILES = new Set(['screen.ts', 'panel.ts', 'view.ts', 'runner.ts']);
+const DOM_FILES = new Set(['screen.ts', 'panel.ts', 'flow-panel.ts', 'view.ts', 'runner.ts']);
 const sources = readdirSync(DIR).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const text = (f: string): string => strip(readFileSync(join(DIR, f), 'utf8'));
@@ -49,7 +49,7 @@ describe('src/sim3d の依存の向き', () => {
     expect(hits).toEqual([]);
   });
 
-  it('DOM・WebGL を触るのは screen・panel・view・runner だけ', () => {
+  it('DOM・WebGL を触るのは screen・panel・flow-panel・view・runner だけ', () => {
     const hits = sources.filter((f) => !DOM_FILES.has(f) && /\b(document|window|HTMLElement|HTMLCanvasElement|navigator|WebGLRenderingContext|requestAnimationFrame|setTimeout)\b/.test(text(f)));
     expect(hits).toEqual([]);
   });
@@ -57,7 +57,7 @@ describe('src/sim3d の依存の向き', () => {
   it('計算・状態・条件・判定は、画面のファイルを import しない', () => {
     const hits: string[] = [];
     for (const f of sources.filter((x) => !DOM_FILES.has(x) && x !== 'index.ts')) {
-      for (const s of staticSpecs(f)) if (/\/(screen|panel|view|runner)$/.test(s)) hits.push(`${f}: ${s}`);
+      for (const s of staticSpecs(f)) if (/\/(screen|panel|flow-panel|view|runner)$/.test(s)) hits.push(`${f}: ${s}`);
     }
     expect(hits).toEqual([]);
   });

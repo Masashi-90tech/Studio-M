@@ -12,12 +12,17 @@ export const RESULT_COLORMAP: ColormapName = 'turbo';
 /** 値のないところ（NaN）の色 */
 const NO_VALUE: [number, number, number] = [0.72, 0.72, 0.72];
 
-/** 表示する場。温度（temp）があればそれ、なければ最初の場 */
+/** 正負のある場（圧力など）は青‐白‐赤、それ以外は Turbo */
+export function colormapFor(field: Field3D): ColormapName {
+  return field.diverging ? 'diverging' : RESULT_COLORMAP;
+}
+
+/** 表示する場。key があればそれ、なければ温度（temp）、それもなければ最初の場 */
 export function resultField(result: ResultSet3D, key?: string): Field3D | undefined {
   return result.fields.find((f) => f.key === (key ?? 'temp')) ?? result.fields[0];
 }
 
-/** 値のあるセル（部品の中で有限の値）が 1 つでもあるか。放熱の経路がなく解かなかったときなどは false */
+/** 値のあるセル（熱・強度は部品の中、流れは流体のセルで有限の値）が 1 つでもあるか。放熱の経路がなく解かなかったときなどは false */
 export function hasValues(field: Field3D): boolean {
   for (let i = 0; i < field.data.length; i++) if (field.mask[i] === 1 && Number.isFinite(field.data[i])) return true;
   return false;

@@ -1,11 +1,11 @@
 // 3D 解析の画面（全画面のオーバーレイ）。左に 3D ビュー、右に設定と結果のパネル。閉じると 2D の画面に戻る（2D の状態には触れない）。
 // 画面（ハーネス）からは、このファイルを使うときに遅延 import すること（src/ui/sim3d-open.ts が入口）。
 import './sim3d.css';
-import type { Solver3DFactory, Study3D } from '../core/types';
+import type { Analysis3DKind, Solver3DFactory, Study3D } from '../core/types';
 import { h } from '../ui/dom';
 import { Sim3DModel } from './model';
 import { createLegend, createPanel } from './panel';
-import { Sim3DRunner, loadHeat3DSolver } from './runner';
+import { Sim3DRunner, loadSolver3D } from './runner';
 import { createSceneView } from './view';
 
 export interface Sim3DOptions {
@@ -14,8 +14,8 @@ export interface Sim3DOptions {
   warnings?: string[];
   /** 閉じたとき */
   onClose?: () => void;
-  /** ソルバーの読み込み。省略時は Lite の 3D の熱（テストや、将来のエンジン連携で差し替える） */
-  loadSolver?: () => Promise<Solver3DFactory | null>;
+  /** ソルバーの読み込み（解析の種類ごと）。省略時は Lite の 3D の熱・流れ（テストや、将来のエンジン連携で差し替える） */
+  loadSolver?: (analysis: Analysis3DKind) => Promise<Solver3DFactory | null>;
 }
 
 export interface Sim3DHandle {
@@ -30,7 +30,7 @@ export function openSim3D(opts: Sim3DOptions): Sim3DHandle {
   const accent = css.getPropertyValue('--accent').trim() || '#e8590c';
 
   const model = new Sim3DModel(opts.study, { warnings: opts.warnings });
-  const runner = new Sim3DRunner(model, opts.loadSolver ?? loadHeat3DSolver);
+  const runner = new Sim3DRunner(model, opts.loadSolver ?? loadSolver3D);
   const panel = createPanel({ model, runner });
   const legend = createLegend(model);
   let closed = false;
@@ -41,12 +41,14 @@ export function openSim3D(opts: Sim3DOptions): Sim3DHandle {
   const head = h(
     'div',
     { class: 's3d-head' },
-    h('h2', { id: titleId }, '3D 解析（熱）'),
+    h('h2', { id: titleId }, '3D 解析'),
     h('span', { class: 's3d-title-name', title: opts.study.source ?? opts.study.name }, opts.study.name),
     closeBtn,
   );
   const viewHost = h('div', { class: 's3d-view' });
-  const hint = h('div', { class: 's3d-hint' }, '面をクリックで選択（Shift / Ctrl で追加）・ドラッグで回転・ホイールで拡大縮小');
+  const HINT_HEAT = '面をクリックで選択（Shift / Ctrl で追加）・ドラッグで回転・ホイールで拡大縮小';
+  const HINT_FLOW = 'ドラッグで回転・ホイールで拡大縮小・ダブルクリックで視点を戻す。風は枠の中を、矢印の向きに流れます';
+  const hint = h('div', { class: 's3d-hint' }, model.study.analysis === 'flow' ? HINT_FLOW : HINT_HEAT);
   const clearSel = h('button', { type: 'button', class: 'btn small', onClick: () => model.clearSelection() }, '選択を解除');
   const resetView = h('button', { type: 'button', class: 'btn small', onClick: () => scene?.resetView() }, '視点を戻す');
   const toolbar = h('div', { class: 's3d-toolbar' }, hint, h('span', { class: 's3d-spacer' }), clearSel, resetView);
@@ -69,6 +71,9 @@ export function openSim3D(opts: Sim3DOptions): Sim3DHandle {
   }
 
   const syncToolbar = (): void => {
+    const flow = model.study.analysis === 'flow';
+    hint.textContent = flow ? HINT_FLOW : HINT_HEAT;
+    clearSel.hidden = flow;
     clearSel.disabled = model.selection.size === 0;
   };
   syncToolbar();
@@ -77,8 +82,8 @@ export function openSim3D(opts: Sim3DOptions): Sim3DHandle {
   const off = model.subscribe((e) => {
     panel.refresh(e);
     scene?.refresh(e);
-    if (e === 'selection') syncToolbar();
-    if (e === 'result' || e === 'study' || e === 'view') legend.refresh();
+    if (e === 'selection' || e === 'analysis') syncToolbar();
+    if (e === 'result' || e === 'study' || e === 'view' || e === 'analysis') legend.refresh();
   });
 
   // ---------- キーボード: Esc で閉じる。Tab は画面の中でぐるぐる回す ----------
