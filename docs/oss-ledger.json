@@ -167,7 +167,7 @@
     },
     {
       "name": "SolidCraft",
-      "role": "3D CAD（形を作る主役。Studio M とは STEP・CLI・MCP で連携）",
+      "role": "3D CAD（形を作る。Studio M とは STEP・CLI・MCP で連携）",
       "license": "MIT OR Apache-2.0",
       "usage": "planned",
       "commercial": "ok",
@@ -176,7 +176,7 @@
       ],
       "source": "https://github.com/bherbruck/solidcraft",
       "checked": "2026-11-13",
-      "notes": "2026-11-13 決定: 形を作る主役にする。Studio M には組み込まず（WASM にはしない）、別のアプリとして STEP・CLI（solidcraft-cli）・MCP で連携する。解析側は STEP を OCCT で読み直す（docs/PLATFORM-DESIGN.md 14 章）。README は自らを「Early but usable for simple parts」と説明し、STEP の読み書きは「where supported」とある。コミット 8,654 件（2026-11-13 確認）。10 月の確認ではカーネルは truck（Apache-2.0）"
+      "notes": "2026-11-13 決定: 形は SolidCraft で作る。Studio M には組み込まず（WASM にはしない）、別のアプリとして STEP・CLI（solidcraft-cli）・MCP で連携する。解析側は STEP を OCCT で読み直す（docs/PLATFORM-DESIGN.md 14 章）。README は自らを「Early but usable for simple parts」と説明し、STEP の読み書きは「where supported」とある。コミット 8,654 件（2026-11-13 確認）。10 月の確認ではカーネルは truck（Apache-2.0）"
     },
     {
       "name": "replicad",

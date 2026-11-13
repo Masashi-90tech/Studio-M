@@ -127,7 +127,7 @@ v0.9 の検証スイート（理論値・実験値との照合）で、解析ご
 
 ### v0.9 SolidCraft と AI 連携（Phase 2 後半）
 
-- **SolidCraft を形を作る主役にする**（2026-11-13 決定）。SolidCraft で作った形を STEP で受け取って解析にかけ、結果を見て SolidCraft で直す。Studio M には組み込まず、別のアプリとして連携する
+- **形は SolidCraft で作る**（2026-11-13 決定）。SolidCraft で作った形を STEP で受け取って解析にかけ、結果を見て SolidCraft で直す。Studio M には組み込まず、別のアプリとして連携する
 - 寸法を変えて作り直した形でも、面の名前と条件を引き継ぐ。追跡できない面は「要確認」にして、計算を始めない
 - CLI: `studio-m run project.json --analysis stress --excel out.xlsx`（本計算は `--engine calculix` で Studio M Engine に投げる）
 - MCP サーバー: 形状の取り込み、材料の変更、解析の実行、結果の取得、Excel 出力。プロジェクトのスキーマを公開する
@@ -236,7 +236,7 @@ Studio M の中身はそのまま数学の教材になる。v0.3 以降、各機
 | 名前 | 役割 | ライセンス | 使い方 |
 |---|---|---|---|
 | ExcelJS / JSZip | Excel 出力 | MIT / MIT・GPLv3 デュアル | 使用中 |
-| SolidCraft | 3D CAD（形を作る主役） | MIT / Apache-2.0 | 別アプリ。STEP・CLI・MCP で連携 |
+| SolidCraft | 3D CAD（形を作る） | MIT / Apache-2.0 | 別アプリ。STEP・CLI・MCP で連携 |
 | OpenCASCADE（cadquery-ocp） | 解析側で STEP を読む形状カーネル | LGPL-2.1（例外条項付き）/ Apache-2.0 | 形状ワーカー（Python、別プロセス） |
 | replicad | 3D 形状（ブラウザ版の候補） | MIT（中身の OCCT は LGPL-2.1） | 必要になったら |
 | Manifold | メッシュのブーリアン（3D プリント用） | Apache-2.0 | 組み込み |
