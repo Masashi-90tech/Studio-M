@@ -2,6 +2,8 @@
 
 2026-10-26 に決めた方針（2026-10-30 に名前を「Studio M Pro」に決定）。実装は v0.6 として、新しいセッションで進める。
 
+2026-11-13 追記: v0.6 から 3D に入ることにした。v0.6 は「Studio M Pro」と「3D の土台（STEP の読み込み、3D ビューア、名前付き選択、メッシュ）」の 2 つからなる。3D の設計と決定事項は `docs/PLATFORM-DESIGN.md`（特に 14 章）。
+
 ## 版の分け方
 
 | 版 | 中身 | 使う場面 |
@@ -31,7 +33,7 @@
 | OpenFOAM | **同梱しない。「エンジン追加パック」として任意で入れる** | 1〜2 GB と大きく、Linux 中心のソフト。Windows は WSL2、Mac は Docker（opencfd のイメージ）を使う案内と自動判定をアプリに入れる |
 | 更新 | GitHub Releases から自動更新 | 新しい版を出したら、アプリが自分で更新する |
 | 署名 | 最初は署名なし（自分用） | 起動時に「発行元が不明」の警告が出るが、自分用なら問題ない。配布を広げるときに Apple Developer Program（年額）と Windows のコード署名を検討する |
-| プロジェクトの保存 | ファイルとして開く・保存する（`.studiom.json`）。OS のファイルダイアログ、最近使ったファイル、自動保存 | ブラウザの localStorage に頼らない |
+| プロジェクトの保存 | ファイルとして開く・保存する（`.studiom.json`）。OS のファイルダイアログ、最近使ったファイル、自動保存。3D の形やメッシュを入れるときは 1 つのフォルダー（`<名前>.studiom/`）にする案がある（`docs/PLATFORM-DESIGN.md` 6 章）。v0.6 の中で決める | ブラウザの localStorage に頼らない |
 
 ## GPL のソフトを同梱するときの約束
 
@@ -43,13 +45,20 @@
 
 ## 次のセッションでの進め方（v0.6）
 
-1. `CLAUDE.md`・`docs/ROADMAP.md`・この文書・`docs/ENGINE.md` を読む
+1. `CLAUDE.md`・`docs/ROADMAP.md`・この文書・`docs/ENGINE.md`・`docs/PLATFORM-DESIGN.md`（14 章の決定事項から）を読む
 2. Electron の雛形（`desktop/`）: 画面の読み込み、main プロセスで Studio M Engine を起動、IPC での接続、ファイルの開く・保存
 3. 画面側: 「PCのエンジン」設定を、Pro では自動接続にする（Lite との分岐は接続方法の層だけに閉じ込め、解析の種類では分岐しない）
 4. CalculiX の同梱: Mac と Windows のビルド手順、GitHub Actions での自動ビルド、ライセンス文の同梱
 5. OpenFOAM 追加パックの判定と案内（WSL2 / Docker）
 6. インストーラー（Mac: dmg、Windows: exe）と自動更新を GitHub Actions で作る
 7. Mac と Windows で、インストール直後に片持ち梁を CalculiX で本計算できることを確かめる
+
+続けて 3D の土台（詳しくは `docs/ROADMAP.md` の v0.6 と、`docs/PLATFORM-DESIGN.md` の 3・5・6・12 章）:
+
+8. 実証実験 4: 形状ワーカー（Python と OCCT）・Gmsh・CalculiX をアプリに同梱し、配布サイズと起動時間を測る。Python を使うかの最終判断はここで行う。日本語のユーザー名で動くかも確かめる
+9. 形状ワーカー（STEP・STL、面の番号と署名、単位の確定）と 3D ビューア、名前付き選択
+10. メッシュワーカー（Gmsh。GPL の別プログラムとしてフォルダーを分ける）と、CalculiX アダプターの 3D 対応
+11. 実証実験 1: STEP の円孔のある平板と片持ち梁を、取り込みから 3D の結果表示まで一続きで動かす。SolidCraft で作った STEP で、面の数・面積・体積が一致するかも確かめる
 
 ## セッションの使い方
 
