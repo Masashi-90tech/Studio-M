@@ -397,6 +397,46 @@
       "source": "https://github.com/hannobraun/fornjot",
       "checked": "2026-10-25",
       "notes": "2026年6月に開発終了・アーカイブ。初期プロジェクトに依存するリスクの例"
+    },
+    {
+      "name": "obra/superpowers",
+      "role": "AI との開発の進め方（計画 → サブエージェントでの実装 → 2 段階のレビュー）の参考",
+      "license": "MIT",
+      "usage": "reference",
+      "commercial": "ok",
+      "source": "https://github.com/obra/superpowers",
+      "checked": "2026-11-13",
+      "notes": "コードもスキルも入れていない。docs/AI-WORKFLOW.md の参考"
+    },
+    {
+      "name": "wshobson/agents",
+      "role": "サブエージェントの定義（model: の指定）の書き方の参考",
+      "license": "MIT",
+      "usage": "reference",
+      "commercial": "ok",
+      "source": "https://github.com/wshobson/agents",
+      "checked": "2026-11-13",
+      "notes": "入れていない。外部のプラグインは個別のライセンス"
+    },
+    {
+      "name": "oh-my-claudecode",
+      "role": "モデルを使い分ける複数エージェントの仕組み（比較対象）",
+      "license": "MIT",
+      "usage": "reference",
+      "commercial": "ok",
+      "source": "https://github.com/Yeachan-Heo/oh-my-claudecode",
+      "checked": "2026-11-13",
+      "notes": "設定やフックを書き換える大きな仕組みのため見送り（docs/AI-WORKFLOW.md）"
+    },
+    {
+      "name": "akaCT/conductor",
+      "role": "司令塔と実行役の分担の仕組み（比較対象）",
+      "license": "MIT",
+      "usage": "reference",
+      "commercial": "ok",
+      "source": "https://github.com/akaCT/conductor",
+      "checked": "2026-11-13",
+      "notes": "版 0.3.0 で初期段階。インストーラーが CLAUDE.md を書き換えるため見送り"
     }
   ]
 }
