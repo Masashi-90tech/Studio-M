@@ -1,6 +1,6 @@
 {
   "$comment": "Studio M の OSS 台帳。使っている・使う予定の OSS とライセンスの調査結果をここに集める。npm run licenses がこの台帳と node_modules を突き合わせる。説明は docs/OSS.md",
-  "updated": "2026-10-25",
+  "updated": "2026-11-13",
   "policy": {
     "project_license": "MIT",
     "bundle_allowed": [
@@ -167,7 +167,7 @@
     },
     {
       "name": "SolidCraft",
-      "role": "3D CAD エンジン（主力）",
+      "role": "3D CAD（形を作る。Studio M とは STEP・CLI・MCP で連携）",
       "license": "MIT OR Apache-2.0",
       "usage": "planned",
       "commercial": "ok",
@@ -175,8 +175,8 @@
         "Apache-2.0 を選ぶ場合は NOTICE の保持"
       ],
       "source": "https://github.com/bherbruck/solidcraft",
-      "checked": "2026-10-25",
-      "notes": "開発初期。カーネルは truck（Apache-2.0）。変換層越しに使い、バージョンを固定する"
+      "checked": "2026-11-13",
+      "notes": "2026-11-13 決定: 形は SolidCraft で作る。Studio M には組み込まず（WASM にはしない）、別のアプリとして STEP・CLI（solidcraft-cli）・MCP で連携する。解析側は STEP を OCCT で読み直す（docs/PLATFORM-DESIGN.md 14 章）。README は自らを「Early but usable for simple parts」と説明し、STEP の読み書きは「where supported」とある。コミット 8,654 件（2026-11-13 確認）。10 月の確認ではカーネルは truck（Apache-2.0）"
     },
     {
       "name": "replicad",
@@ -186,11 +186,11 @@
       "commercial": "ok",
       "source": "https://github.com/sgenoud/replicad",
       "checked": "2026-10-25",
-      "notes": "中身の opencascade.js / OCCT は LGPL-2.1。組み込み方を採用時に確認"
+      "notes": "中身の opencascade.js / OCCT は LGPL-2.1。組み込み方を採用時に確認。解析側のカーネルは OCCT（cadquery-ocp、Python）に決めたため、replicad はブラウザ版（Lite）で形を扱う場合の候補として残す（2026-11-13）"
     },
     {
       "name": "OpenCASCADE (OCCT)",
-      "role": "3D 形状カーネル",
+      "role": "3D 形状カーネル（解析側で STEP を読み、面に番号と名前を付ける）",
       "license": "LGPL-2.1（例外条項付き）",
       "usage": "planned",
       "commercial": "conditions",
@@ -198,8 +198,25 @@
         "LGPL: 利用者が差し替えられる形で組み込む",
         "改変した場合はソース公開"
       ],
-      "source": "https://dev.opencascade.org",
-      "checked": "2026-10-25"
+      "source": "https://github.com/Open-Cascade-SAS/OCCT",
+      "checked": "2026-11-12",
+      "version": "8.0.1",
+      "notes": "Python バインディング cadquery-ocp 経由で、形状ワーカー（別プロセス）から使う（docs/PLATFORM-DESIGN.md）。例外条項は、ヘッダーの内容を取り込んだオブジェクトコードの配布を告知を条件に認めている"
+    },
+    {
+      "name": "cadquery-ocp",
+      "version": "8.0.1.1.0",
+      "role": "OCCT の Python バインディング（形状ワーカー）",
+      "license": "Apache-2.0",
+      "usage": "planned",
+      "commercial": "conditions",
+      "obligations": [
+        "Apache-2.0: NOTICE の保持",
+        "中身の OCCT は LGPL-2.1（例外条項付き）に従う"
+      ],
+      "source": "https://pypi.org/project/cadquery-ocp/",
+      "checked": "2026-11-12",
+      "notes": "macOS（arm64）と Windows（x64）の配布物が PyPI にある。OCCT 8 では 7 系の書き方（TopoDS.Face_s）が使えず、版を固定して変換層越しに使う。Python のワーカーは配布サイズを測ってから最終判断（docs/PLATFORM-DESIGN.md 14 章）"
     },
     {
       "name": "Manifold",
@@ -214,10 +231,22 @@
       "name": "Tauri",
       "role": "デスクトップアプリ化",
       "license": "MIT OR Apache-2.0",
-      "usage": "planned",
+      "usage": "reference",
       "commercial": "ok",
       "source": "https://github.com/tauri-apps/tauri",
-      "checked": "2026-10-25"
+      "checked": "2026-10-25",
+      "notes": "Studio M Pro の土台には Electron を選んだ（docs/DESKTOP.md）。比較対象として残す"
+    },
+    {
+      "name": "Electron",
+      "version": "45.3.2",
+      "role": "デスクトップアプリ化（Studio M Pro）",
+      "license": "MIT",
+      "usage": "planned",
+      "commercial": "ok",
+      "source": "https://github.com/electron/electron",
+      "checked": "2026-11-12",
+      "notes": "版は 2026-11-12 時点の安定版。ライセンスは採用時に LICENSE で確かめ直す（docs/DESKTOP.md）"
     },
     {
       "name": "OpenFOAM",
@@ -277,7 +306,20 @@
       "usage": "separate-process",
       "commercial": "conditions",
       "source": "https://gmsh.info",
-      "checked": "2026-10-24"
+      "checked": "2026-11-12",
+      "version": "4.15.2",
+      "notes": "メッシュワーカーは Gmsh の Python API を使うため、Studio M 本体とは別の GPL-2.0-or-later のプログラムとして公開し、本体とはファイルだけでやり取りする。商用配布は予定しない（2026-11-13 決定）。公式サイトは、閉じたソースのソフトに組み込む場合は商用ライセンスが必要としている"
+    },
+    {
+      "name": "netgen-mesher",
+      "version": "6.2.2608",
+      "role": "メッシング（Gmsh の代替候補）",
+      "license": "LGPL-2.1",
+      "usage": "planned",
+      "commercial": "conditions",
+      "source": "https://pypi.org/project/netgen-mesher/",
+      "checked": "2026-11-12",
+      "notes": "メッシュワーカーを差し替えられるように残す候補。メッシュの品質は未評価"
     },
     {
       "name": "FreeCAD",
@@ -296,6 +338,16 @@
       "commercial": "ok",
       "source": "https://www.paraview.org",
       "checked": "2026-10-24"
+    },
+    {
+      "name": "VTK",
+      "version": "9.7.2",
+      "role": "結果の抽出と変換（結果処理ワーカー）",
+      "license": "BSD-3-Clause",
+      "usage": "planned",
+      "commercial": "ok",
+      "source": "https://pypi.org/project/vtk/",
+      "checked": "2026-11-12"
     },
     {
       "name": "KiCad",
