@@ -4,6 +4,8 @@
 
 2026-11-13 追記: v0.6 から 3D に入ることにした。v0.6 は「Studio M Pro」と「3D の土台（STEP の読み込み、3D ビューア、名前付き選択、メッシュ）」の 2 つからなる。3D の設計と決定事項は `docs/PLATFORM-DESIGN.md`（特に 14 章）。
 
+2026-11-13 追記: v0.6 はまず Mac（Apple Silicon）で作り、一通り動いてから Windows に広げる。Mac には CalculiX と OpenFOAM の公式のネイティブ配布がないので、その導入経路（Homebrew・自前のビルド・OpenFOAM.app・Docker）を最初に確かめる。Windows 機（Ryzen 7 7800X3D、32 GB）は、そのあと大きめの計算用に足す。
+
 ## 版の分け方
 
 | 版 | 中身 | 使う場面 |

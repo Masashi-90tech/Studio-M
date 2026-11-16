@@ -14,6 +14,10 @@ npm run engine      # Studio M Engine（PC 上の計算サーバー）を起動�
 npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML を作る
 ```
 
+## AI の役割分担
+
+司令塔（メインの会話）は Opus で、方針・設計・指示書・差分のレビューを受け持つ。実装は `implementer`（Sonnet）、テストの実行と失敗の要約は `checker`（Haiku）、コードの場所探しは `Explore`（Haiku）に渡す（定義は `.claude/agents/`）。数行の修正は司令塔がそのまま直し、実行役は同時に 1〜2 つまでにする。使用量を抑えるための約束は `docs/AI-WORKFLOW.md`。
+
 ## 層と依存の向き
 
 依存は下の層にだけ向ける。上の層を import しない。
