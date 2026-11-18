@@ -1,6 +1,6 @@
 {
   "$comment": "Studio M の OSS 台帳。使っている・使う予定の OSS とライセンスの調査結果をここに集める。npm run licenses がこの台帳と node_modules を突き合わせる。説明は docs/OSS.md",
-  "updated": "2026-11-13",
+  "updated": "2026-11-18",
   "policy": {
     "project_license": "MIT",
     "bundle_allowed": [
@@ -216,7 +216,7 @@
       ],
       "source": "https://pypi.org/project/cadquery-ocp/",
       "checked": "2026-11-12",
-      "notes": "macOS（arm64）と Windows（x64）の配布物が PyPI にある。OCCT 8 では 7 系の書き方（TopoDS.Face_s）が使えず、版を固定して変換層越しに使う。Python のワーカーは配布サイズを測ってから最終判断（docs/PLATFORM-DESIGN.md 14 章）"
+      "notes": "macOS（arm64）と Windows（x64）の配布物が PyPI にある。OCCT 8 では 7 系の書き方（TopoDS.Face_s）が使えず、版を固定して変換層越しに使う。Python のワーカーは配布サイズを測ってから最終判断（docs/PLATFORM-DESIGN.md 14 章）。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。"
     },
     {
       "name": "Manifold",
@@ -246,7 +246,7 @@
       "commercial": "ok",
       "source": "https://github.com/electron/electron",
       "checked": "2026-11-12",
-      "notes": "版は 2026-11-12 時点の安定版。ライセンスは採用時に LICENSE で確かめ直す（docs/DESKTOP.md）"
+      "notes": "版は 2026-11-12 時点の安定版。ライセンスは採用時に LICENSE で確かめ直す（docs/DESKTOP.md）。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。 実証実験 4 のキット（experiments/exp4-packaging/desktop-probe）では 45.2.2（公開から 2 週間以上たった版）に固定している。"
     },
     {
       "name": "OpenFOAM",
@@ -279,7 +279,7 @@
       "commercial": "conditions",
       "source": "http://www.calculix.de",
       "checked": "2026-10-24",
-      "notes": "PC 上の Studio M Engine から別プロセスとして呼ぶ（apt の calculix-ccx 2.21 で動作確認）。Studio M には同梱しない"
+      "notes": "PC 上の Studio M Engine から別プロセスとして呼ぶ（apt の calculix-ccx 2.21 で動作確認）。Studio M には同梱しない。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。"
     },
     {
       "name": "Elmer",
@@ -308,7 +308,7 @@
       "source": "https://gmsh.info",
       "checked": "2026-11-12",
       "version": "4.15.2",
-      "notes": "メッシュワーカーは Gmsh の Python API を使うため、Studio M 本体とは別の GPL-2.0-or-later のプログラムとして公開し、本体とはファイルだけでやり取りする。商用配布は予定しない（2026-11-13 決定）。公式サイトは、閉じたソースのソフトに組み込む場合は商用ライセンスが必要としている"
+      "notes": "メッシュワーカーは Gmsh の Python API を使うため、Studio M 本体とは別の GPL-2.0-or-later のプログラムとして公開し、本体とはファイルだけでやり取りする。商用配布は予定しない（2026-11-13 決定）。公式サイトは、閉じたソースのソフトに組み込む場合は商用ライセンスが必要としている。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。"
     },
     {
       "name": "netgen-mesher",
@@ -347,7 +347,8 @@
       "usage": "planned",
       "commercial": "ok",
       "source": "https://pypi.org/project/vtk/",
-      "checked": "2026-11-12"
+      "checked": "2026-11-12",
+      "notes": "実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。"
     },
     {
       "name": "KiCad",
@@ -437,6 +438,68 @@
       "source": "https://github.com/akaCT/conductor",
       "checked": "2026-11-13",
       "notes": "版 0.3.0 で初期段階。インストーラーが CLAUDE.md を書き換えるため見送り"
+    },
+    {
+      "name": "python-build-standalone",
+      "version": "3.12.11 (20250902)",
+      "role": "移動できる CPython（形状・メッシュワーカーの実行環境）",
+      "license": "MPL-2.0",
+      "usage": "planned",
+      "commercial": "ok",
+      "obligations": [
+        "同梱する CPython と各ライブラリのライセンス文の同梱（PSF-2.0 ほか。配布物の中の licenses を確認）"
+      ],
+      "source": "https://github.com/astral-sh/python-build-standalone",
+      "checked": "2026-11-18",
+      "notes": "ビルドのスクリプト自体は MPL-2.0。配られる CPython は PSF-2.0。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。GitHub Releases に届かない環境で書いたため、版の実在は Mac で要確認"
+    },
+    {
+      "name": "numpy",
+      "version": "2.5.5",
+      "role": "ワーカー（形状・メッシュ）の数値計算ライブラリ",
+      "license": "BSD-3-Clause",
+      "usage": "planned",
+      "commercial": "ok",
+      "obligations": [
+        "BSD-3-Clause ほか（wheel のメタデータは BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0）: ライセンス文の同梱"
+      ],
+      "source": "https://pypi.org/project/numpy/",
+      "checked": "2026-11-18",
+      "notes": "実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。版は 2026-11-18 に Linux で入った版。Mac で入る版は要確認"
+    },
+    {
+      "name": "@electron/packager",
+      "version": "20.3.0",
+      "role": "Electron アプリの .app 化（実証実験 4 の計測用）",
+      "license": "BSD-2-Clause",
+      "usage": "dev",
+      "commercial": "ok",
+      "source": "https://github.com/electron/packager",
+      "checked": "2026-11-18",
+      "notes": "experiments/exp4-packaging のキット内だけで使う（desktop-probe/package.json）。ルートの package.json には入れていない。ライセンスは npm レジストリの値"
+    },
+    {
+      "name": "OpenFOAM.app (gerlero/openfoam-app)",
+      "version": "v2606",
+      "role": "Mac ネイティブの OpenFOAM（導入経路の候補）",
+      "license": "GPL-3.0",
+      "usage": "separate-process",
+      "commercial": "conditions",
+      "obligations": [
+        "GPL-3.0: Studio M には組み込まない。別プロセスとして呼ぶだけ"
+      ],
+      "source": "https://github.com/gerlero/openfoam-app",
+      "checked": "2026-11-18",
+      "notes": "brew install gerlero/openfoam/openfoam@2606 または zip。macOS 15 以降の Apple Silicon のみ。実証実験 4 で導入と cavity の動作を測る（docs/EXPERIMENT-4.md）"
+    },
+    {
+      "name": "costerwi/homebrew-calculix",
+      "role": "Homebrew の CalculiX の tap（calculix-ccx の formula と、ccx のビルド手順の参考）",
+      "license": "要確認",
+      "usage": "reference",
+      "source": "https://github.com/costerwi/homebrew-calculix",
+      "checked": "2026-11-18",
+      "notes": "入れる経路としては測るが、Studio M には取り込まない。tap のリポジトリのライセンスは未確認（formula の中身のコピーはしない）。CalculiX 本体は別項目（GPL-2.0、別プロセス）"
     }
   ]
 }
