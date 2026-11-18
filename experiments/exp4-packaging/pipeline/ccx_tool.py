@@ -59,7 +59,8 @@ S
 
 
 def post(d: str, job: str, w: float, t: float, hole: float) -> int:
-    dat = open(os.path.join(d, job + '.dat'), encoding='utf-8').read()
+    # CalculiX は出力の見出しに入力のパスを入れ、長いと日本語の文字の途中で切る。読めない所は置き換えて読む
+    dat = open(os.path.join(d, job + '.dat'), encoding='utf-8', errors='replace').read()
     m = re.search(r'total force \(fx,fy,fz\)[^\n]*\n\s*\n\s*([-\d.E+]+)', dat)
     if not m:
         print('エラー: job.dat に反力の合計がありません。CalculiX が最後まで計算できたか job.log を確認してください', file=sys.stderr)
@@ -68,7 +69,7 @@ def post(d: str, job: str, w: float, t: float, hole: float) -> int:
     # probe_structure.py と同じく、積分点の応力表の 3 列目（x 方向応力）の最大を使う
     smax_ip = max(float(l.split()[2]) for l in dat.split('stresses (elem, integ.pnt.')[1].splitlines()[2:] if len(l.split()) == 8)
     smax_node, in_s = -1e30, False
-    for l in open(os.path.join(d, job + '.frd'), encoding='utf-8'):
+    for l in open(os.path.join(d, job + '.frd'), encoding='utf-8', errors='replace'):
         if l.startswith(' -4  STRESS'):
             in_s = True
         elif l.startswith(' -3'):

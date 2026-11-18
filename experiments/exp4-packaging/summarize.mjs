@@ -60,7 +60,7 @@ if (ip) {
     if (e.smoke) {
       smoke = e.smoke.ok ? `通った（${sec(e.smoke.seconds)}${e.smoke.rel_error !== undefined ? `、梁の理論値との差 ${pct(e.smoke.rel_error)}` : ''}${e.smoke.style ? `、${e.smoke.style}` : ''}）` : `**通らない**（${esc(e.smoke.note)}）`;
     }
-    return [label, e.detected ? '入っている' : '入っていない', esc(e.version ?? '—'), disk, e.install_seconds !== undefined ? sec(e.install_seconds) : '—', smoke, esc(e.note ?? '')];
+    return [label, e.detected ? '入っている' : '入っていない', esc(String(e.version ?? '—').trim()), disk, e.install_seconds !== undefined ? sec(e.install_seconds) : '—', smoke, esc(e.note ?? '')];
   });
   md.push(table(['経路', '状態', '版', 'ディスク', '導入の時間', '小さな計算', '備考'], rows), '');
   const eng = ip.engine_detection;
