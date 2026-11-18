@@ -1,0 +1,10 @@
+# 生成物（キットを動かすと増える）
+build/
+node_modules/
+desktop-probe/node_modules/
+desktop-probe/out/
+downloads/
+results/*
+# Linux の試走結果は 1 つだけ残す
+!results/
+!results/linux-dryrun-example.md
