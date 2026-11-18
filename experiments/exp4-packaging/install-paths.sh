@@ -270,7 +270,7 @@ if [ -f "$ENGINE_JS" ] && command -v curl >/dev/null 2>&1; then
   fi
   kill "$ENGINE_PID" 2>/dev/null || true
   wait "$ENGINE_PID" 2>/dev/null || true
-  if [ -n "$TOKEN_BACKUP" ]; then cp "$TOKEN_BACKUP" "$TOKEN_FILE"; fi
+  if [ -n "$TOKEN_BACKUP" ]; then cp "$TOKEN_BACKUP" "$TOKEN_FILE"; else rm -f "$TOKEN_FILE"; fi
 else
   rec_str "$OUT" "$K.note" "dist-engine/main.js がありません。リポジトリのルートで npm install && npm run build:engine を実行してからもう一度（curl も必要です）"
 fi
