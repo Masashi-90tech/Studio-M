@@ -32,7 +32,7 @@
 | アプリの土台 | **Electron** | Studio M Engine が Node.js 製なので、アプリの中でそのまま動く。Tauri は軽いが、Node.js を別に同梱する手間が増える |
 | エンジンの動かし方 | アプリの main プロセスで Studio M Engine を動かし、画面とはアプリ内の通信（IPC）でつなぐ。合言葉の入力は不要 | 利用者の手間をなくす。外部（Lite や CLI）から使う HTTP サーバーは設定でオンにできるようにする |
 | CalculiX | **同梱する**（OS ごとに GitHub Actions でビルド） | 小さい（数十 MB）。強度・熱・塑性の本計算がインストール直後から使える |
-| OpenFOAM | **同梱しない。「エンジン追加パック」として任意で入れる** | 1〜2 GB と大きく、Linux 中心のソフト。Windows は WSL2、Mac は Docker（opencfd のイメージ）を使う案内と自動判定をアプリに入れる |
+| OpenFOAM | **同梱しない。「エンジン追加パック」として任意で入れる** | 1〜2 GB と大きく、Linux 中心のソフト。Windows は WSL2、Mac は OpenFOAM.app（gerlero/openfoam-app。macOS 15 以降の Apple Silicon）を使う案内と自動判定をアプリに入れる。Docker（opencfd のイメージ）は代案（2026-11-19、実証実験 4 の結果。`docs/EXPERIMENT-4.md`） |
 | 更新 | GitHub Releases から自動更新 | 新しい版を出したら、アプリが自分で更新する |
 | 署名 | 最初は署名なし（自分用） | 起動時に「発行元が不明」の警告が出るが、自分用なら問題ない。配布を広げるときに Apple Developer Program（年額）と Windows のコード署名を検討する |
 | プロジェクトの保存 | ファイルとして開く・保存する（`.studiom.json`）。OS のファイルダイアログ、最近使ったファイル、自動保存。3D の形やメッシュを入れるときは 1 つのフォルダー（`<名前>.studiom/`）にする案がある（`docs/PLATFORM-DESIGN.md` 6 章）。v0.6 の中で決める | ブラウザの localStorage に頼らない |
@@ -52,7 +52,7 @@
    - 2026-11-19 雛形は作成済み（`desktop/`、起動は `npm run desktop:build` → `npm run desktop:start`）。Mac・Windows の実機での確認と、ファイルのダイアログ・IPC の実操作は未確認（Linux の xvfb で、画面の読み込みと Engine の起動までは確認）。画面側が開発用に `window.studioM` を作っているため、Pro の公開名は `window.studioMPro` にした
 3. 画面側: 「PCのエンジン」設定を、Pro では自動接続にする（Lite との分岐は接続方法の層だけに閉じ込め、解析の種類では分岐しない）
 4. CalculiX の同梱: Mac と Windows のビルド手順、GitHub Actions での自動ビルド、ライセンス文の同梱
-5. OpenFOAM 追加パックの判定と案内（WSL2 / Docker）
+5. OpenFOAM 追加パックの判定と案内（Mac は OpenFOAM.app、Windows は WSL2 / Docker）
 6. インストーラー（Mac: dmg、Windows: exe）と自動更新を GitHub Actions で作る
 7. Mac と Windows で、インストール直後に片持ち梁を CalculiX で本計算できることを確かめる
 

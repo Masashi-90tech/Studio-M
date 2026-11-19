@@ -8,3 +8,5 @@ results/*
 # Linux の試走結果は 1 つだけ残す
 !results/
 !results/linux-dryrun-example.md
+__pycache__/
+*.pyc
