@@ -1,0 +1,15 @@
+{
+  "name": "studio-m-desktop",
+  "version": "0.6.0",
+  "description": "Studio M Pro（Electron）の雛形。ビルドはリポジトリのルートから `npm run desktop:build`",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.2.1"
+  },
+  "license": "MIT"
+}

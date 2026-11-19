@@ -117,6 +117,20 @@
       "checked": "2026-10-25"
     },
     {
+      "name": "electron",
+      "version": "^33.2.1",
+      "role": "Studio M Pro（Mac・Windows のアプリ）の土台。今は雛形（desktop/）",
+      "license": "MIT",
+      "usage": "dev",
+      "commercial": "ok",
+      "obligations": [
+        "同梱するときは Electron の LICENSE と、Chromium とその部品のライセンス一覧（LICENSES.chromium.html）を配布物に同梱する（6 番のインストーラーの作業で bundled に変える）"
+      ],
+      "source": "https://github.com/electron/electron",
+      "checked": "2026-11-19",
+      "notes": "desktop/package.json だけに入れる（ルートの npm ci でバイナリをダウンロードしないため）。npm の electron パッケージの LICENSE（MIT）で確認。Chromium は BSD-3-Clause など複数のライセンスの部品を含む"
+    },
+    {
       "name": "@types/node",
       "role": "エンジン（Node.js）の型定義",
       "license": "MIT",

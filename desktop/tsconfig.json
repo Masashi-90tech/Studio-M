@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/api.ts",
+    "src/ipc-channels.ts",
+    "src/request-guard.ts",
+    "src/engine-bridge.ts",
+    "src/file-store.ts",
+    "src/*.test.ts",
+    "layers.test.ts",
+    "../src/core",
+    "../engine/env.d.ts"
+  ]
+}

@@ -49,6 +49,7 @@
 
 1. `CLAUDE.md`・`docs/ROADMAP.md`・この文書・`docs/ENGINE.md`・`docs/PLATFORM-DESIGN.md`（14 章の決定事項から）を読む
 2. Electron の雛形（`desktop/`）: 画面の読み込み、main プロセスで Studio M Engine を起動、IPC での接続、ファイルの開く・保存
+   - 2026-11-19 雛形は作成済み（`desktop/`、起動は `npm run desktop:build` → `npm run desktop:start`）。Mac・Windows の実機での確認と、ファイルのダイアログ・IPC の実操作は未確認（Linux の xvfb で、画面の読み込みと Engine の起動までは確認）。画面側が開発用に `window.studioM` を作っているため、Pro の公開名は `window.studioMPro` にした
 3. 画面側: 「PCのエンジン」設定を、Pro では自動接続にする（Lite との分岐は接続方法の層だけに閉じ込め、解析の種類では分岐しない）
 4. CalculiX の同梱: Mac と Windows のビルド手順、GitHub Actions での自動ビルド、ライセンス文の同梱
 5. OpenFOAM 追加パックの判定と案内（WSL2 / Docker）
