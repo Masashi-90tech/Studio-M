@@ -8,6 +8,7 @@ import { loadAdapters } from '../../engine/server/adapters';
 import { generateToken } from '../../engine/server/auth';
 import { createEngineService, type EngineService } from '../../engine/server/service';
 import type { OpenedFile, SaveRequest } from './api';
+import { findBundledCcx } from './bundled-tools';
 import { createEngineBridge, type EngineBridge } from './engine-bridge';
 import { createFileStore, ensureProjectName } from './file-store';
 import { IPC } from './ipc-channels';
@@ -36,9 +37,21 @@ function isTrustedSender(e: IpcMainInvokeEvent): boolean {
   return appOrigin.startsWith('file:') ? url.startsWith('file:') : url.startsWith(appOrigin);
 }
 
+/**
+ * 同梱の解析ソフトを置いたフォルダー。パッケージ後は resources、開発中は STUDIO_M_BUNDLED_DIR（あれば）。
+ * ccx は `<そこ>/ccx/` に置く（`ccx_2.23` のように版つきの名前でもよい）。
+ */
+function bundledBase(): string | null {
+  if (app.isPackaged) return process.resourcesPath;
+  return process.env.STUDIO_M_BUNDLED_DIR || null;
+}
+
 async function startEngine(): Promise<void> {
   const token = generateToken(); // main の中だけに持つ。renderer には渡さない
-  service = createEngineService({ adapters: loadAdapters(), token, port: 0 });
+  const base = bundledBase();
+  // 見つからなければ今までどおり（PATH の ccx を使う）
+  const ccx = base ? findBundledCcx({ dir: resolve(base, 'ccx'), platform: process.platform }) : null;
+  service = createEngineService({ adapters: loadAdapters(), token, port: 0, commandPaths: ccx ? { ccx } : undefined });
   const port = await service.listen();
   bridge = createEngineBridge({ baseUrl: `http://127.0.0.1:${port}`, token });
 }

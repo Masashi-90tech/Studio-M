@@ -18,6 +18,8 @@ export interface EngineServiceOptions {
   workRoot?: string;
   probe?: ProbeFn;
   maxBodyBytes?: number;
+  /** コマンド名 → 絶対パス。ここにある名前は PATH ではなくそのパスで起動する（同梱の ccx など。native のときだけ有効）。省略時は PATH から探す */
+  commandPaths?: Record<string, string>;
 }
 
 export interface EngineService {
@@ -36,7 +38,7 @@ export function createEngineService(o: EngineServiceOptions): EngineService {
   const ttlMs = (o.ttlHours ?? 24) * 3600_000;
 
   const detect = (): Promise<Detection> => {
-    detecting ??= detectEngines({ adapters: o.adapters, probe: o.probe })
+    detecting ??= detectEngines({ adapters: o.adapters, probe: o.probe, commandPaths: o.commandPaths })
       .then((d) => (detection = d))
       .finally(() => (detecting = null));
     return detecting;
@@ -51,6 +53,7 @@ export function createEngineService(o: EngineServiceOptions): EngineService {
     ttlMs,
     commandTimeoutMs: o.commandTimeoutMs,
     workRoot: o.workRoot,
+    commandPaths: o.commandPaths,
   });
 
   const status = async (refresh: boolean): Promise<EngineStatus> => {

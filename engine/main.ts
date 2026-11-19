@@ -2,6 +2,8 @@
 import { HELP_TEXT, parseArgs } from './server/args';
 import { loadAdapters } from './server/adapters';
 import { generateToken, writeTokenFile } from './server/auth';
+import { existsSync, statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { createEngineService } from './server/service';
 import { ENGINE_VERSION } from './server/version';
 
@@ -21,6 +23,13 @@ async function main(): Promise<void> {
   const fixed = process.env.STUDIO_M_ENGINE_TOKEN;
   const token = fixed && fixed.length >= 16 ? fixed : generateToken();
   const adapters = loadAdapters();
+  // STUDIO_M_CCX: PATH にない ccx（`ccx_2.23` など）の場所を絶対パスで指定する
+  const commandPaths: Record<string, string> = {};
+  const ccxPath = process.env.STUDIO_M_CCX;
+  if (ccxPath) {
+    if (isAbsolute(ccxPath) && existsSync(ccxPath) && statSync(ccxPath).isFile()) commandPaths.ccx = ccxPath;
+    else console.warn(`STUDIO_M_CCX（${ccxPath}）は、実在するファイルへの絶対パスではないので無視します。ccx の実行ファイルのフルパスを指定してください`);
+  }
   const service = createEngineService({
     adapters,
     token,
@@ -29,6 +38,7 @@ async function main(): Promise<void> {
     keep: args.keep,
     ttlHours: args.ttlHours,
     commandTimeoutMs: args.timeoutMin * 60_000,
+    commandPaths: Object.keys(commandPaths).length > 0 ? commandPaths : undefined,
   });
 
   console.log('エンジンの検出中…');

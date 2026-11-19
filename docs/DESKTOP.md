@@ -52,6 +52,7 @@
    - 2026-11-19 雛形は作成済み（`desktop/`、起動は `npm run desktop:build` → `npm run desktop:start`）。Mac・Windows の実機での確認と、ファイルのダイアログ・IPC の実操作は未確認（Linux の xvfb で、画面の読み込みと Engine の起動までは確認）。画面側が開発用に `window.studioM` を作っているため、Pro の公開名は `window.studioMPro` にした
 3. 画面側: 「PCのエンジン」設定を、Pro では自動接続にする（Lite との分岐は接続方法の層だけに閉じ込め、解析の種類では分岐しない）
 4. CalculiX の同梱: Mac と Windows のビルド手順、GitHub Actions での自動ビルド、ライセンス文の同梱
+   - 2026-11-19 Engine 側の受け口は作成済み（`commandPaths`・`STUDIO_M_CCX`、`desktop/src/bundled-tools.ts` が `resources/ccx`（開発中は `STUDIO_M_BUNDLED_DIR/ccx`）から ccx を探して渡す）。ビルドと同梱は未
 5. OpenFOAM 追加パックの判定と案内（Mac は OpenFOAM.app、Windows は WSL2 / Docker）
 6. インストーラー（Mac: dmg、Windows: exe）と自動更新を GitHub Actions で作る
 7. Mac と Windows で、インストール直後に片持ち梁を CalculiX で本計算できることを確かめる

@@ -19,6 +19,8 @@ export interface ContextOptions {
   dockerAvailable: boolean;
   /** 1 回のコマンドの時間切れ [ms]（アダプターが timeoutMs を指定すればそちらが優先） */
   commandTimeoutMs: number;
+  /** コマンド名 → 絶対パス（native のときだけ使う）。省略時は PATH から探す */
+  commandPaths?: Record<string, string>;
   log(line: string): void;
   progress: AdapterContext['progress'];
 }
@@ -43,6 +45,7 @@ export function createAdapterContext(o: ContextOptions): AdapterContext {
           opts.onLine?.(line, stream);
         },
         backend,
+        commandPaths: o.commandPaths,
         containerName: backend.kind === 'docker' ? `studio-m-${o.jobId}-${++seq}` : undefined,
       });
     try {

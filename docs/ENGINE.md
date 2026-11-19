@@ -30,6 +30,8 @@ npm run engine -- --port 47801 --max-jobs 2 --keep
 | `--ttl-hours <時間>` | 終わった計算を覚えておく時間（既定 24） |
 | `--timeout-min <分>` | 1 つのコマンドの時間切れ（既定 60） |
 
+`ccx` が PATH になく、`ccx_2.23` のような名前の実行ファイルしかないときは、環境変数 `STUDIO_M_CCX` に、その実行ファイルの絶対パス（空白や日本語を含んでもよい）を入れて起動します（例: `STUDIO_M_CCX=/opt/ccx/ccx_2.23 npm run engine`）。アダプターは今までどおり `ctx.run('ccx', …)` / `ctx.probe('ccx', …)` と書き、サーバーが名前を指定のパスに置き換えます（`createEngineService` の `commandPaths`。native のときだけ有効で、Docker では無視）。Studio M Pro は同梱の ccx の場所をこの仕組みで渡します。ccx は、連立方程式を解く部分を 1 スレッドに固定して走らせ、支持の反力と荷重の釣り合いを検算します（合わなければ全部 1 スレッドで 1 回だけやり直し、それでも合わなければ日本語のエラー。`docs/EXPERIMENT-4.md`）。
+
 ## Studio M につなぐ
 
 1. エンジンを起動する

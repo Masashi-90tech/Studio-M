@@ -32,6 +32,8 @@ export interface JobManagerOptions {
   /** 終わったジョブを覚えておく時間 [ms] */
   ttlMs?: number;
   commandTimeoutMs?: number;
+  /** コマンド名 → 絶対パス（同梱の ccx など。native のときだけ有効） */
+  commandPaths?: Record<string, string>;
 }
 
 interface Job {
@@ -221,6 +223,7 @@ export class JobManager {
         info: this.opts.getInfo(job.req.engine),
         dockerAvailable: this.opts.dockerAvailable(),
         commandTimeoutMs: this.opts.commandTimeoutMs ?? 3600_000,
+        commandPaths: this.opts.commandPaths,
         log: (line) => this.pushLog(job, line),
         progress: (fraction, message, status) => {
           if (job.cancelRequested || isFinal(s.status)) return;
