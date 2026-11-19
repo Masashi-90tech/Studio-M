@@ -20,10 +20,12 @@ for t in $THREADS_LIST; do
     D="$(mktemp -d "${TMPDIR:-/tmp}/ccxdiag.XXXXXX")"
     cp "$SRC"/job.inp "$SRC"/mesh.inp "$D"/ 2>/dev/null || cp "$SRC"/job.inp "$D"/
     if is_mac; then export DYLD_FALLBACK_LIBRARY_PATH="$LIB"; else export LD_LIBRARY_PATH="$LIB"; fi
-    (cd "$D" && OMP_NUM_THREADS="$t" CCX_NPROC_RESULTS=1 "$CCX" -i job >ccx.log 2>&1) || { echo "threads=$t #$i: ccx が失敗"; tail -n 3 "$D/ccx.log"; continue; }
+    t0=$(now_ms)
+    # EQ_THREADS を指定すると、連立方程式を解く部分（SPOOLES）のスレッド数だけを別にする（例: EQ_THREADS=1 THREADS_LIST=4）
+    (cd "$D" && env OMP_NUM_THREADS="$t" CCX_NPROC_RESULTS=1 CCX_NPROC_EQUATION_SOLVER="${EQ_THREADS:-$t}" "$CCX" -i job >ccx.log 2>&1) || { echo "threads=$t #$i: ccx が失敗"; tail -n 3 "$D/ccx.log"; continue; }
     out="$(PYTHONNOUSERSITE=1 PYTHONPATH="$PAYLOAD/workers/shape/site-packages" "$PY" "$PAYLOAD/workers/common/ccx_tool.py" post --dir "$D" --job job 2>&1 | tail -n 1)"
     if [ "$N" -le 5 ]; then echo "threads=$t #$i: $out" | cut -c1-230; fi
-    echo "$t $(printf '%s' "$out" | python3 -c 'import sys,json
+    echo "$t $(( $(now_ms) - t0 )) $(printf '%s' "$out" | python3 -c 'import sys,json
 try:
   j=json.loads(sys.stdin.read()); print("%.1f"%j["reaction_N"])
 except Exception: print("読めない")')" >>"$SUMMARY"
@@ -33,5 +35,5 @@ done
 
 echo ""
 echo "=== まとめ（スレッド数ごとの、反力 [N] の値と回数。正しい値は約 51434 N。2 種類以上あれば実行ごとに変わっている）==="
-sort "$SUMMARY" | uniq -c | awk '{printf "  threads=%s  反力=%s N  %s 回\n", $2, $3, $1}'
+awk '{k=$1" "$3; n[k]++; ms[k]+=$2} END{for(k in n){split(k,a," "); printf "  threads=%s  反力=%s N  %d 回（平均 %.2f 秒）\n", a[1], a[2], n[k], ms[k]/n[k]/1000}}' "$SUMMARY" | sort
 rm -f "$SUMMARY"

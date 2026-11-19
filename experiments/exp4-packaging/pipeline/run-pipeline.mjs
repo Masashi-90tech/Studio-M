@@ -88,7 +88,11 @@ export async function runOnce(o) {
   if (r.code !== 0) throw stageError('計算の入力づくり', r);
 
   log('CalculiX で解きます');
-  const ccxEnv = { ...baseEnv, OMP_NUM_THREADS: '4', CCX_NPROC_RESULTS: '1' };
+  // 2026-11-19: Mac（M1）で ccx を 4 スレッドで動かすと、約 7% の確率で間違った答えが出た
+  // （30 回中 2 回、反力が 52061 N・69821 N。正しくは 51434 N）。1 スレッドでは 30 回とも正しい。
+  // 既定は 1 スレッド。変えて試すときは環境変数 STUDIO_M_CCX_THREADS を指定する（docs/EXPERIMENT-4.md）
+  const ccxThreads = process.env.STUDIO_M_CCX_THREADS ?? '1';
+  const ccxEnv = { ...baseEnv, OMP_NUM_THREADS: ccxThreads, CCX_NPROC_EQUATION_SOLVER: ccxThreads, CCX_NPROC_RESULTS: '1' };
   if (process.platform === 'linux') ccxEnv.LD_LIBRARY_PATH = P.ccxLib + (process.env.LD_LIBRARY_PATH ? `:${process.env.LD_LIBRARY_PATH}` : '');
   if (process.platform === 'darwin') ccxEnv.DYLD_FALLBACK_LIBRARY_PATH = P.ccxLib;
   r = await exec(P.ccx, ['-i', 'job'], { cwd: o.workDir, env: ccxEnv });
