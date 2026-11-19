@@ -103,7 +103,7 @@ sudo sysadminctl -deleteUser テスト太郎                                    
 ## 要確認（Mac で初めて分かること）
 
 - python-build-standalone の URL（`20250902` のタグ）は、GitHub に届かない環境で書いたため、実在を確かめていません。404 のときは `--python-url` で差し替えてください
-- OpenFOAM.app の `etc/openfoam` の使い方（`openfoam -c "コマンド"` か、`source` か）は両方試し、通ったほうを結果に書きます
+- OpenFOAM.app の `etc/openfoam` は zsh のスクリプトです（bash で呼ぶと失敗する）。直接実行、`zsh` で実行、`zsh` で `source` の 3 通りを順に試し、通ったものを結果に書きます
 - `brew install gerlero/openfoam/openfoam@2606` が入れる場所と形（formula か cask か、`/Applications` のどこか）
 - ccx の dylib の書き換え（`bundle_ccx.py`）は Mac で初めて動きます。失敗したときは `build/bundle_ccx.log` と、`otool -L build/payload/engines/calculix/bin/ccx` を見てください
 - vtk なしの変種は Linux では動きませんでした（OCP が `libvtkWrappingPythonCore` を読むため）。Mac でも同じかを記録します
