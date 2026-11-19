@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { isAbsolute, posix, relative, resolve, sep } from 'node:path';
 import type { RunResult } from '../types';
+import type { CommandLauncher } from './launcher';
 
 /** コマンド名に使える文字（パスや引数を紛れ込ませない） */
 const COMMAND_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
@@ -54,6 +55,11 @@ export interface ExecOptions {
    * サーバー側の設定なので信頼する。native のときだけ有効（Docker では無視）。省略時は今までと同じ
    */
   commandPaths?: Record<string, string>;
+  /**
+   * 特定のコマンドを、ラッパー経由（file に -c "<コマンドと引数>" を渡す形）で起動する設定（Mac の OpenFOAM.app など）。
+   * commandPaths より優先。native のときだけ有効。省略時は今までと同じ
+   */
+  commandLaunchers?: CommandLauncher;
 }
 
 /** 実行に失敗したときの、利用者向けの説明つきエラー */
@@ -168,6 +174,11 @@ export function runCommand(o: ExecOptions): Promise<RunResult> {
     let cwd: string;
     try {
       cwd = resolveInside(o.workDir, o.cwd);
+      const launcher = o.backend.kind === 'native' && o.commandLaunchers?.commands.includes(o.command) ? o.commandLaunchers : undefined;
+      if (launcher) {
+        file = launcher.file;
+        args = launcher.argsFor(o.command, o.args);
+      }
       if (o.backend.kind === 'docker') {
         file = 'docker';
         args = buildDockerArgs({

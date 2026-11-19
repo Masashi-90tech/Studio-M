@@ -9,6 +9,7 @@ import type { ResultSet } from '../../src/core/types';
 import type { EngineAdapter } from '../types';
 import { createAdapterContext } from './context';
 import { ExecError } from './exec';
+import type { CommandLauncher } from './launcher';
 
 const LOG_LIMIT = 200;
 /** 中止の指示から、アダプターが返ってこなくても「中止済み」にするまでの時間 [ms] */
@@ -34,6 +35,8 @@ export interface JobManagerOptions {
   commandTimeoutMs?: number;
   /** コマンド名 → 絶対パス（同梱の ccx など。native のときだけ有効） */
   commandPaths?: Record<string, string>;
+  /** ラッパー経由で起動するコマンドの設定（Mac の OpenFOAM.app など。native のときだけ有効） */
+  commandLaunchers?: CommandLauncher;
 }
 
 interface Job {
@@ -224,6 +227,7 @@ export class JobManager {
         dockerAvailable: this.opts.dockerAvailable(),
         commandTimeoutMs: this.opts.commandTimeoutMs ?? 3600_000,
         commandPaths: this.opts.commandPaths,
+        commandLaunchers: this.opts.commandLaunchers,
         log: (line) => this.pushLog(job, line),
         progress: (fraction, message, status) => {
           if (job.cancelRequested || isFinal(s.status)) return;

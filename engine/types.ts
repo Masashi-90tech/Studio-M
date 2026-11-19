@@ -38,6 +38,8 @@ export interface DetectContext {
   /** command が使えるかを確かめ、使えれば版の文字列を返す */
   probe(command: string, args: string[]): Promise<{ ok: boolean; output: string }>;
   dockerAvailable: boolean;
+  /** command がラッパー経由（Mac の OpenFOAM.app など）で起動される場合の、その名前。そうでなければ undefined。省略可 */
+  launcherLabel?(command: string): string | undefined;
 }
 
 export interface SolveOutput {

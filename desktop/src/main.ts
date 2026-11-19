@@ -6,6 +6,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadAdapters } from '../../engine/server/adapters';
 import { generateToken } from '../../engine/server/auth';
+import { createWrapperLauncher } from '../../engine/server/launcher';
+import { findOpenFoamApp, OPENFOAM_APP_COMMANDS } from '../../engine/server/openfoam-app';
 import { createEngineService, type EngineService } from '../../engine/server/service';
 import type { OpenedFile, SaveRequest } from './api';
 import { findBundledCcx } from './bundled-tools';
@@ -51,7 +53,10 @@ async function startEngine(): Promise<void> {
   const base = bundledBase();
   // 見つからなければ今までどおり（PATH の ccx を使う）
   const ccx = base ? findBundledCcx({ dir: resolve(base, 'ccx'), platform: process.platform }) : null;
-  service = createEngineService({ adapters: loadAdapters(), token, port: 0, commandPaths: ccx ? { ccx } : undefined });
+  // Mac: OpenFOAM.app が入っていれば、そのラッパー経由で OpenFOAM を動かす（見つからなければ今までどおり）
+  const foamApp = findOpenFoamApp();
+  const commandLaunchers = foamApp ? createWrapperLauncher({ commands: OPENFOAM_APP_COMMANDS, file: foamApp.wrapper, label: `OpenFOAM.app（${foamApp.version}）` }) : undefined;
+  service = createEngineService({ adapters: loadAdapters(), token, port: 0, commandPaths: ccx ? { ccx } : undefined, commandLaunchers });
   const port = await service.listen();
   bridge = createEngineBridge({ baseUrl: `http://127.0.0.1:${port}`, token });
 }
