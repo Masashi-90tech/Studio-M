@@ -117,20 +117,6 @@
       "checked": "2026-10-25"
     },
     {
-      "name": "electron",
-      "version": "^33.2.1",
-      "role": "Studio M Pro（Mac・Windows のアプリ）の土台。今は雛形（desktop/）",
-      "license": "MIT",
-      "usage": "dev",
-      "commercial": "ok",
-      "obligations": [
-        "同梱するときは Electron の LICENSE と、Chromium とその部品のライセンス一覧（LICENSES.chromium.html）を配布物に同梱する（6 番のインストーラーの作業で bundled に変える）"
-      ],
-      "source": "https://github.com/electron/electron",
-      "checked": "2026-11-19",
-      "notes": "desktop/package.json だけに入れる（ルートの npm ci でバイナリをダウンロードしないため）。npm の electron パッケージの LICENSE（MIT）で確認。Chromium は BSD-3-Clause など複数のライセンスの部品を含む"
-    },
-    {
       "name": "@types/node",
       "role": "エンジン（Node.js）の型定義",
       "license": "MIT",
@@ -253,14 +239,17 @@
     },
     {
       "name": "Electron",
-      "version": "45.3.2",
-      "role": "デスクトップアプリ化（Studio M Pro）",
+      "version": "45.2.2",
+      "role": "Studio M Pro（Mac・Windows のアプリ）の土台。今は雛形（desktop/）",
       "license": "MIT",
-      "usage": "planned",
+      "usage": "dev",
       "commercial": "ok",
       "source": "https://github.com/electron/electron",
-      "checked": "2026-11-12",
-      "notes": "版は 2026-11-12 時点の安定版。ライセンスは採用時に LICENSE で確かめ直す（docs/DESKTOP.md）。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。 実証実験 4 のキット（experiments/exp4-packaging/desktop-probe）では 45.2.2（公開から 2 週間以上たった版）に固定している。"
+      "checked": "2026-11-19",
+      "notes": "desktop/package.json だけに入れる（ルートの npm ci でバイナリをダウンロードしないため）。実証実験 4 のキット（experiments/exp4-packaging/desktop-probe）と同じ 45.2.2 に固定。npm の electron パッケージの LICENSE（MIT）で確認。Chromium は BSD-3-Clause など複数のライセンスの部品を含む",
+      "obligations": [
+        "同梱するときは Electron の LICENSE と、Chromium とその部品のライセンス一覧（LICENSES.chromium.html）を配布物に同梱する（6 番のインストーラーの作業で bundled に変える）"
+      ]
     },
     {
       "name": "OpenFOAM",
