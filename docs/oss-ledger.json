@@ -278,11 +278,14 @@
       "name": "CalculiX",
       "role": "本格的な強度",
       "license": "GPL-2.0",
-      "usage": "separate-process",
+      "usage": "bundled-separate-program",
       "commercial": "conditions",
       "source": "http://www.calculix.de",
-      "checked": "2026-10-24",
-      "notes": "PC 上の Studio M Engine から別プロセスとして呼ぶ（apt の calculix-ccx 2.21 で動作確認）。Studio M には同梱しない。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。"
+      "checked": "2026-11-19",
+      "notes": "Studio M Pro に別の実行ファイルとして同梱する（リンクしない）。公式ソースから GitHub Actions でビルド（docs/CCX-BUILD.md、desktop/tools/ccx/）。PC 上の Studio M Engine からはコマンドとファイルでだけ使う（apt の calculix-ccx 2.21 でも動作確認）。",
+      "obligations": [
+        "ライセンス全文（GPL-2.0）の同梱、ソースの入手先の明記（SOURCE.txt・「このアプリについて」）"
+      ]
     },
     {
       "name": "Elmer",
@@ -517,6 +520,58 @@
       "source": "https://pypi.org/project/cadquery-ocp-novtk/",
       "checked": "2026-11-19",
       "notes": "cadquery-ocp と同じ版・同じ OCP で、vtk を使わないようにビルドされた別パッケージ。Mac（arm64）の wheel は 63 MB。Linux で import と STEP の読み書きを確かめた（vtk 込みより約 0.7 GB 小さい）。Mac での確認は実証実験 4 の次の実行で行う（docs/EXPERIMENT-4.md）。ライセンスは PyPI の表示による。採用時に LICENSE で確かめ直す"
+    },
+    {
+      "name": "SPOOLES",
+      "role": "CalculiX の連立方程式の解法（ccx に静的リンク）",
+      "license": "Public domain 相当の独自の許諾（要確認）",
+      "usage": "bundled-separate-program",
+      "commercial": "ok",
+      "obligations": [
+        "ライセンス文の同梱（THIRD-PARTY-LICENSES/ccx/DEPENDENCIES.md に記録）"
+      ],
+      "source": "http://www.netlib.org/linalg/spooles/",
+      "checked": "2026-11-19",
+      "notes": "ccx の一部として同梱。許諾の文面は採用時に配布物の中で確かめ直す"
+    },
+    {
+      "name": "arpack-ng",
+      "role": "CalculiX の固有値の解法（共有ライブラリ）",
+      "license": "BSD-3-Clause",
+      "usage": "bundled-separate-program",
+      "commercial": "ok",
+      "obligations": [
+        "ライセンス文の同梱（THIRD-PARTY-LICENSES/ccx/DEPENDENCIES.md に記録）"
+      ],
+      "source": "https://github.com/opencollab/arpack-ng",
+      "checked": "2026-11-19",
+      "notes": "ccx の隣の lib/ に同梱（macOS は Homebrew から集める）"
+    },
+    {
+      "name": "OpenBLAS",
+      "role": "CalculiX の線形代数（共有ライブラリ）",
+      "license": "BSD-3-Clause",
+      "usage": "bundled-separate-program",
+      "commercial": "ok",
+      "obligations": [
+        "ライセンス文の同梱（THIRD-PARTY-LICENSES/ccx/DEPENDENCIES.md に記録）"
+      ],
+      "source": "https://github.com/OpenMathLib/OpenBLAS",
+      "checked": "2026-11-19",
+      "notes": "ccx の隣の lib/ に同梱"
+    },
+    {
+      "name": "GCC ランタイム（libgfortran / libquadmath / libgcc_s / libgomp）",
+      "role": "CalculiX（Fortran・OpenMP）の実行時ライブラリ",
+      "license": "GPL-3.0 with GCC Runtime Library Exception",
+      "usage": "bundled-separate-program",
+      "commercial": "ok",
+      "obligations": [
+        "ライセンス文の同梱（THIRD-PARTY-LICENSES/ccx/DEPENDENCIES.md に記録）"
+      ],
+      "source": "https://gcc.gnu.org/onlinedocs/gcc/Runtime-Library-Exception.html",
+      "checked": "2026-11-19",
+      "notes": "例外条項により、同梱して配布してよい。libquadmath は LGPL-2.1+。ccx の隣の lib/ に同梱"
     }
   ]
 }

@@ -119,3 +119,5 @@ CalculiX の Docker イメージは今のところ使っていません（Linux 
 6. テスト: 入力ファイルの組み立てや結果の読み取りは単体テスト、ソフトが入っていれば理論値との照合テスト
 
 サーバー側のテストは、本物のソフトなしで動く偽のアダプター（`engine/server/testing.ts`）を使っています。
+
+Mac に OpenFOAM.app（`brew install gerlero/openfoam/openfoam@2606`）が入っていると、Engine は `/Applications`・`~/Applications` から見つけ、blockMesh・simpleFoam などを、そのラッパー（`Contents/Resources/etc/openfoam`）に `-c "コマンド"` を渡す形で起動します（`createEngineService` の `commandLaunchers`。native のときだけ有効）。別の場所に入れたときは `STUDIO_M_OPENFOAM_APP`（`.app` かラッパーのパス）で指定します。シェルを通る起動なので、引数は英数字と `. _ / : = , + @ % -` だけを許し、それ以外は断ります。

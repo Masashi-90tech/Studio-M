@@ -1,0 +1,74 @@
+# CalculiX（ccx）を OS ごとにビルドして、同梱用の zip を作る。手順は docs/CCX-BUILD.md。
+# Windows のジョブは未検証（最初の実行で直す）。
+name: build-ccx
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'ccx-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  macos-arm64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: ccx をビルドする
+        run: bash desktop/tools/ccx/build-macos.sh "$RUNNER_TEMP/ccx-build"
+      - name: 共有ライブラリとライセンス文をまとめる
+        run: |
+          . desktop/tools/ccx/versions.env
+          python3 desktop/tools/ccx/bundle.py \
+            --ccx "$RUNNER_TEMP/ccx-build/ccx_${CCX_VERSION}" \
+            --out "$RUNNER_TEMP/ccx-pack" --version "$CCX_VERSION" \
+            --licenses THIRD-PARTY-LICENSES/ccx
+      - name: 片持ち梁で動作確認する
+        run: |
+          . desktop/tools/ccx/versions.env
+          node desktop/tools/ccx/smoke.mjs "$RUNNER_TEMP/ccx-pack/ccx/ccx_${CCX_VERSION}"
+      - name: zip にする
+        run: cd "$RUNNER_TEMP/ccx-pack" && zip -r -y "$GITHUB_WORKSPACE/ccx-macos-arm64.zip" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ccx-macos-arm64
+          path: ccx-macos-arm64.zip
+
+  windows-x64:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make tar bzip2 curl zip python
+            mingw-w64-x86_64-nodejs
+      - name: ccx をビルドする
+        run: bash desktop/tools/ccx/build-windows.sh "$RUNNER_TEMP/ccx-build"
+      - name: DLL とライセンス文をまとめる
+        run: |
+          . desktop/tools/ccx/versions.env
+          python3 desktop/tools/ccx/bundle.py \
+            --ccx "$RUNNER_TEMP/ccx-build/ccx_${CCX_VERSION}.exe" \
+            --out "$RUNNER_TEMP/ccx-pack" --version "$CCX_VERSION" \
+            --licenses THIRD-PARTY-LICENSES/ccx
+      - name: 片持ち梁で動作確認する
+        run: |
+          . desktop/tools/ccx/versions.env
+          node desktop/tools/ccx/smoke.mjs "$RUNNER_TEMP/ccx-pack/ccx/ccx_${CCX_VERSION}.exe"
+      - name: zip にする
+        run: cd "$RUNNER_TEMP/ccx-pack" && zip -r "$GITHUB_WORKSPACE/ccx-windows-x64.zip" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ccx-windows-x64
+          path: ccx-windows-x64.zip
