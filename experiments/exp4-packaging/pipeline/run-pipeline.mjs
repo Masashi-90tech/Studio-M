@@ -130,10 +130,10 @@ function parseArgs(argv) {
     const a = argv[i];
     const next = () => argv[++i];
     if (a === '--payload') o.payloadDir = next();
-    else if (a === '--work') o.workDir = next();
+    else if (a === '--work') o.workDir = resolve(next());
     else if (a === '--mesh-size') o.meshSize = Number(next());
     else if (a === '--runs') o.runs = Number(next());
-    else if (a === '--json') o.json = next();
+    else if (a === '--json') o.json = resolve(next());
     else if (a === '--shape-site-packages') o.shapeSitePackages = next();
     else throw new Error(`知らない引数です: ${a}`);
   }
