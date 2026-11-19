@@ -13,14 +13,25 @@ PAYLOAD="$BUILD_DIR/payload"
 CCX="$PAYLOAD/engines/calculix/bin/ccx"; LIB="$PAYLOAD/engines/calculix/lib"
 PY="$PAYLOAD/runtime/python/bin/python3"
 [ -x "$CCX" ] || fail "同梱の ccx がありません（$CCX）。先に ./run-all.sh を実行してください"
-for t in 1 2 4; do
+THREADS_LIST="${THREADS_LIST:-1 2 4}"   # 例: THREADS_LIST="1 4" ./diag-ccx.sh <フォルダー> 30
+SUMMARY="$(mktemp "${TMPDIR:-/tmp}/ccxdiag-summary.XXXXXX")"
+for t in $THREADS_LIST; do
   for i in $(seq 1 "$N"); do
     D="$(mktemp -d "${TMPDIR:-/tmp}/ccxdiag.XXXXXX")"
     cp "$SRC"/job.inp "$SRC"/mesh.inp "$D"/ 2>/dev/null || cp "$SRC"/job.inp "$D"/
     if is_mac; then export DYLD_FALLBACK_LIBRARY_PATH="$LIB"; else export LD_LIBRARY_PATH="$LIB"; fi
     (cd "$D" && OMP_NUM_THREADS="$t" CCX_NPROC_RESULTS=1 "$CCX" -i job >ccx.log 2>&1) || { echo "threads=$t #$i: ccx が失敗"; tail -n 3 "$D/ccx.log"; continue; }
     out="$(PYTHONNOUSERSITE=1 PYTHONPATH="$PAYLOAD/workers/shape/site-packages" "$PY" "$PAYLOAD/workers/common/ccx_tool.py" post --dir "$D" --job job 2>&1 | tail -n 1)"
-    echo "threads=$t #$i: $out" | cut -c1-230
+    if [ "$N" -le 5 ]; then echo "threads=$t #$i: $out" | cut -c1-230; fi
+    echo "$t $(printf '%s' "$out" | python3 -c 'import sys,json
+try:
+  j=json.loads(sys.stdin.read()); print("%.1f"%j["reaction_N"])
+except Exception: print("読めない")')" >>"$SUMMARY"
     rm -rf "$D"
   done
 done
+
+echo ""
+echo "=== まとめ（スレッド数ごとの、反力 [N] の値と回数。正しい値は約 51434 N。2 種類以上あれば実行ごとに変わっている）==="
+sort "$SUMMARY" | uniq -c | awk '{printf "  threads=%s  反力=%s N  %s 回\n", $2, $3, $1}'
+rm -f "$SUMMARY"
