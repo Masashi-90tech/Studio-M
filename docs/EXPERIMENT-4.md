@@ -74,7 +74,7 @@ Python 本体は python-build-standalone（Astral が配る、移動できる CP
 | 経路 | 結果 |
 |---|---|
 | CalculiX: Homebrew の tap（`costerwi/calculix/calculix-ccx`） | 入った。版は 2.23（予備確認は 2.21）。実行ファイルの名前は `ccx_2.23`（`ccx` ではない）。本体 0.12 GB、依存を含めて 0.81 GB。梁の理論値との差 0.20%、0.1 秒 |
-| OpenFOAM: OpenFOAM.app（brew で `gerlero/openfoam/openfoam@2606` を入れると `/Applications/OpenFOAM-v2606.app` に入る） | 入った。1.11 GB。cavity（blockMesh と icoFoam）は、最初は通らなかった。原因は、`Contents/Resources/etc/openfoam` が bash ではなく **zsh** のスクリプトだったこと（`${0:h:h:h}` は zsh の書き方）。キットが bash で呼んでいた。直接実行するか zsh で呼ぶ形に直した（再測定はこれから） |
+| OpenFOAM: OpenFOAM.app（brew で `gerlero/openfoam/openfoam@2606` を入れると `/Applications/OpenFOAM-v2606.app` に入る） | 入った。1.11 GB。**cavity（blockMesh と icoFoam）が通った**。`Contents/Resources/etc/openfoam` を直接実行し、`-c` でコマンドを渡す形で 16.6 秒（初回の起動を含む）。最初に通らなかったのは、このファイルが bash ではなく **zsh** のスクリプトで（`${0:h:h:h}` は zsh の書き方）、キットが bash で呼んでいたため |
 | OpenFOAM: Docker | 測っていない（この Mac に Docker がない） |
 | 既存の Studio M Engine の検出 | calculix・openfoam とも「使えない」。`ccx` や OpenFOAM のコマンドが PATH にないため。Pro ではアプリが同梱の ccx の場所を教える必要がある |
 
@@ -141,17 +141,16 @@ vtk を外すだけで 0.57 GB 減る。`cadquery-ocp` から vtk だけを外�
 |---|---|
 | CalculiX の同梱 | **同梱する**。Homebrew で入れた ccx 2.23 と依存のライブラリを集め、`@executable_path` に書き換えて ad-hoc で署名し直す方法で、31 MB。アプリの中でも動いた。実行時は連立方程式を解く部分を 1 スレッドにする。力の釣り合いの検算を必須にする。製品版では、Homebrew に頼らず GitHub Actions で自前のビルドにする（依存のライセンス文の同梱もここで行う） |
 | Python のワーカー | **採用する**。vtk を使わない `cadquery-ocp-novtk` に切り替える（Mac でも動いた）。`.app` は 0.68 GB、dmg は 0.28 GB（実測）。初めて OCP を読み込む時間は 6 秒だったので、初回は進み具合を表示する |
-| OpenFOAM の入れ方 | **未決**。OpenFOAM.app はインストールできた。cavity が通らなかった原因は、キットが bash で呼んでいたことだと分かり、直した。再測定で通れば、「追加パック。OpenFOAM.app を第一候補、Docker を代案」で決める。アプリからは `etc/openfoam` を zsh のスクリプトとして呼ぶ必要がある |
+| OpenFOAM の入れ方 | **Mac は OpenFOAM.app（追加パック）を第一候補にする**。Docker を入れずに、ネイティブで動く（cavity が通った）。条件は macOS 15 以降の Apple Silicon（Intel は対象外）。アプリからは `/Applications/OpenFOAM-v*.app/Contents/Resources/etc/openfoam -c "コマンド"` の形で呼ぶ。Docker（opencfd のイメージ）は、macOS 14 以前や Intel の代案として残す（今回は未測定） |
 | アプリの署名 | 自分用の間は署名なしでよいが、配布を広げる前に Gatekeeper の実際の挙動を確かめる |
 
 ## 残った問い（次にやること）
 
-1. OpenFOAM.app の cavity を、直したキットで測り直す
-2. 署名なしのアプリを手で開いたときの macOS の表示
-3. Studio M Engine から同梱の ccx と OpenFOAM.app を使えるようにする（アダプターに、検出と実行で別の場所のコマンドを渡す方法が要る）
-4. アプリの中でエンジンを動かしたときの起動時間（`dist-engine/` を作って `.app` に入れる）
-5. 日本語のユーザー名の Mac での動作、Intel の Mac、Windows
-6. Docker 経路の測定
+1. 署名なしのアプリを手で開いたときの macOS の表示
+2. Studio M Engine から同梱の ccx と OpenFOAM.app を使えるようにする（アダプターに、検出と実行で別の場所のコマンドを渡す方法が要る）
+3. アプリの中でエンジンを動かしたときの起動時間（`dist-engine/` を作って `.app` に入れる）
+4. 日本語のユーザー名の Mac での動作、Intel の Mac、Windows
+5. Docker 経路の測定
 
 ## 出典
 
