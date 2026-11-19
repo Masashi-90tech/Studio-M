@@ -20,7 +20,7 @@ done
 OUT="$PARTS_DIR/install-paths.json"
 rm -f "$OUT"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/exp4-install.XXXXXX")"
-cleanup() { rm -rf "$WORK"; }
+cleanup() { if [ "${KEEP_WORK:-0}" = 1 ]; then echo "作業フォルダーを残しました: ${WORK}（cavity のログは $WORK/cavity-*/run.log）" >&2; else rm -rf "$WORK"; fi; }
 trap cleanup EXIT
 
 rec_str "$OUT" platform "$OS_NAME"
@@ -84,7 +84,9 @@ smoke_foam_app() {
     rec_str "$OUT" "$key.smoke.style" "$style"
   else
     rec "$OUT" "$key.smoke.ok" false
-    rec_str "$OUT" "$key.smoke.note" "cavity が通りませんでした。$d の run.log を確認してください（測定後は消えるので、必要なら WORK を残して再実行）"
+    rec_str "$OUT" "$key.smoke.note" "cavity が通りませんでした。ログの末尾: $( { tail -n 4 "$d/run.log"; tail -n 4 "$d/run2.log"; } 2>/dev/null | tr '\n' ' ' | cut -c1-400 )（全文を見るには KEEP_WORK=1 を付けて実行し直す）"
+    say "  [OpenFOAM.app] cavity が通りませんでした。run.log の末尾:"
+    { tail -n 8 "$d/run.log"; echo "--- run2.log（方式 B）"; tail -n 8 "$d/run2.log"; } 2>/dev/null | sed 's/^/    /' >&2 || true
   fi
   rec "$OUT" "$key.smoke.seconds" "$(node -e "console.log(($t1-$t0)/1000)")"
 }

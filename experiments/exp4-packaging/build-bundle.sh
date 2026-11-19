@@ -7,6 +7,7 @@
 #   --python <dir>   既存の移動できる Python（bin/python3 を持つフォルダー）を使う
 #   --python-url     python-build-standalone の tar.gz の URL を差し替える（既定は下の固定の版）
 #   --skip-novtk     vtk なしの変種を作らない
+#   --shape-novtk    形状ワーカー本体を cadquery-ocp-novtk（vtk なし）にする。変種は作らない
 #
 # Mac では python-build-standalone の CPython 3.12 を GitHub からダウンロードする。
 # Linux の試走では、システムの python3.12 の venv（--copies）で代わりにする（Python 本体のサイズは参考値）。
@@ -21,13 +22,14 @@ PBS_URL_DEFAULT="https://github.com/astral-sh/python-build-standalone/releases/d
 OCP_VER="8.0.1.1.0"
 GMSH_VER="4.15.2"
 
-INSTALL=0; PY_DIR=""; PBS_URL="$PBS_URL_DEFAULT"; NOVTK=1
+INSTALL=0; PY_DIR=""; PBS_URL="$PBS_URL_DEFAULT"; NOVTK=1; SHAPE_PKG="cadquery-ocp"
 while [ $# -gt 0 ]; do
   case "$1" in
     --install) INSTALL=1 ;;
     --python) shift; PY_DIR="${1:-}"; [ -n "$PY_DIR" ] || fail "--python にフォルダーを指定してください" ;;
     --python-url) shift; PBS_URL="${1:-}" ;;
     --skip-novtk) NOVTK=0 ;;
+    --shape-novtk) SHAPE_PKG="cadquery-ocp-novtk"; NOVTK=0 ;;   # 形状ワーカー本体を vtk なしにする（.app のサイズを vtk なしで測る）
     -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
     *) fail "知らない引数です: $1" ;;
   esac
@@ -89,10 +91,11 @@ rec "$OUT" seconds.python_runtime "$(node -e "console.log(($(now_ms)-$t0)/1000)"
 pip_install() { "$PY" -m pip install --disable-pip-version-check --only-binary=:all: --quiet "$@"; }
 
 # ---------- 2. 形状ワーカー（OCP）の site-packages ----------
-say "[2/6] 形状ワーカー: cadquery-ocp==$OCP_VER と numpy（vtk 込み）"
+say "[2/6] 形状ワーカー: ${SHAPE_PKG}==${OCP_VER} と numpy"
+rec_str "$OUT" shape_package "$SHAPE_PKG"
 SHAPE_SP="$PAYLOAD/workers/shape/site-packages"
 t0=$(now_ms)
-pip_install --target "$SHAPE_SP" "cadquery-ocp==$OCP_VER" numpy || fail "cadquery-ocp を入れられません。ネットワークと、Python が 3.12 であることを確認してください"
+pip_install --target "$SHAPE_SP" "${SHAPE_PKG}==${OCP_VER}" numpy || fail "${SHAPE_PKG} を入れられません。ネットワークと、Python が 3.12 であることを確認してください"
 rec "$OUT" seconds.shape_site_packages "$(node -e "console.log(($(now_ms)-$t0)/1000)")"
 
 if [ "$NOVTK" = 1 ]; then
