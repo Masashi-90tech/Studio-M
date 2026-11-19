@@ -12,7 +12,7 @@ SRC="$(cd "$SRC" && pwd -P)"
 PAYLOAD="$BUILD_DIR/payload"
 CCX="$PAYLOAD/engines/calculix/bin/ccx"; LIB="$PAYLOAD/engines/calculix/lib"
 PY="$PAYLOAD/runtime/python/bin/python3"
-[ -x "$CCX" ] || fail "同梱の ccx がありません（$CCX）。先に ./run-all.sh を実行してください"
+[ -x "$CCX" ] || fail "同梱の ccx がありません（${CCX}）。先に ./run-all.sh を実行してください"
 THREADS_LIST="${THREADS_LIST:-1 2 4}"   # 例: THREADS_LIST="1 4" ./diag-ccx.sh <フォルダー> 30
 SUMMARY="$(mktemp "${TMPDIR:-/tmp}/ccxdiag-summary.XXXXXX")"
 for t in $THREADS_LIST; do

@@ -96,11 +96,11 @@ pip_install --target "$SHAPE_SP" "cadquery-ocp==$OCP_VER" numpy || fail "cadquer
 rec "$OUT" seconds.shape_site_packages "$(node -e "console.log(($(now_ms)-$t0)/1000)")"
 
 if [ "$NOVTK" = 1 ]; then
-  say "      変種: vtk に依存しない cadquery-ocp-novtk==$OCP_VER（同じ版の別パッケージ）"
+  say "      変種: vtk に依存しない cadquery-ocp-novtk==${OCP_VER}（同じ版の別パッケージ）"
   NOVTK_SP="$VARIANTS/shape-novtk/site-packages"
   # 2026-11-19: cadquery-ocp から vtk だけを外す（--no-deps）と、Linux でも Mac でも libvtkWrappingPythonCore を
   # 読めず動かない。vtk を使わないようにビルドされた別パッケージ cadquery-ocp-novtk（同じ版）を使う
-  pip_install --target "$NOVTK_SP" "cadquery-ocp-novtk==$OCP_VER" || fail "vtk なしの変種（cadquery-ocp-novtk==$OCP_VER）を入れられません（--skip-novtk で飛ばせます）"
+  pip_install --target "$NOVTK_SP" "cadquery-ocp-novtk==$OCP_VER" || fail "vtk なしの変種（cadquery-ocp-novtk==${OCP_VER}）を入れられません（--skip-novtk で飛ばせます）"
   pip_install --target "$NOVTK_SP" numpy
 fi
 
