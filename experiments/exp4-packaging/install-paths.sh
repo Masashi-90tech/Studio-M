@@ -125,8 +125,10 @@ if [ "$HAVE_BREW" = 1 ]; then
       deps_kb=$(( deps_kb + $(du_kb "$(brew --cellar "$dep" 2>/dev/null || echo /nonexistent)") ))
     done
     rec "$OUT" "$K.deps_kb" "$deps_kb"
-    ccx_bin="$(brew --prefix)/bin/ccx"
-    if [ -x "$ccx_bin" ]; then smoke_ccx "$ccx_bin" "$K"; fi
+    if ccx_bin="$(find_brew_ccx)"; then
+      rec_str "$OUT" "$K.path" "$ccx_bin"
+      smoke_ccx "$ccx_bin" "$K"
+    fi
   else
     rec "$OUT" "$K.detected" false
   fi

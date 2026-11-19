@@ -135,13 +135,13 @@ rec "$OUT" seconds.mesh_site_packages "$(node -e "console.log(($(now_ms)-$t0)/10
 say "[4/6] CalculiX を集めます"
 CCX_SRC=""
 if is_mac; then
-  if command -v brew >/dev/null 2>&1 && [ -x "$(brew --prefix)/bin/ccx" ]; then CCX_SRC="$(brew --prefix)/bin/ccx"
+  if command -v brew >/dev/null 2>&1 && CCX_SRC="$(find_brew_ccx)"; then :
   elif command -v ccx >/dev/null 2>&1; then CCX_SRC="$(command -v ccx)"; fi
   if [ -z "$CCX_SRC" ] && [ "$INSTALL" = 1 ]; then
     need_cmd brew "https://brew.sh/ から Homebrew を入れてください。"
     say "  brew install costerwi/calculix/calculix-ccx を実行します（ソースからのビルドで時間がかかります）"
     brew install costerwi/calculix/calculix-ccx
-    CCX_SRC="$(brew --prefix)/bin/ccx"
+    CCX_SRC="$(find_brew_ccx)" || CCX_SRC=""
   fi
   [ -n "$CCX_SRC" ] || fail "ccx が見つかりません。./build-bundle.sh --install を付けるか、brew install costerwi/calculix/calculix-ccx を実行してください"
 else

@@ -31,3 +31,14 @@ need_cmd() {
 need_cmd node "Node.js 22 以上を https://nodejs.org/ から入れてください（brew install node@22 でも可）。"
 
 is_mac() { [ "$OS_NAME" = "Darwin" ]; }
+
+# brew の CalculiX の実行ファイルを探す。tap の formula は ccx_2.23 のように版つきの名前で入れる
+# ことがあるので、ccx と ccx_* の両方を見る（見つかったら標準出力にパスを出す）
+find_brew_ccx() {
+  local prefix f
+  prefix="$(brew --prefix 2>/dev/null)" || return 1
+  for f in "${prefix}/bin/ccx" "${prefix}"/bin/ccx_*; do
+    if [ -x "$f" ] && [ ! -d "$f" ]; then printf '%s\n' "$f"; return 0; fi
+  done
+  return 1
+}
