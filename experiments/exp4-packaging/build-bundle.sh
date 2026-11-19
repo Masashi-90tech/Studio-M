@@ -70,7 +70,7 @@ elif is_mac; then
   fi
   tar -xzf "$TARBALL" -C "$PAYLOAD/runtime"   # 中身は python/ という 1 つのフォルダー
   [ -x "$PAYLOAD/runtime/python/bin/python3" ] || fail "展開したのに runtime/python/bin/python3 がありません。tar.gz の中身を確認してください"
-  rec_str "$OUT" python_source "python-build-standalone（$PBS_URL）"
+  rec_str "$OUT" python_source "python-build-standalone（${PBS_URL}）"
 else
   SYS_PY=""
   for c in /usr/bin/python3.12 python3.12 python3; do
@@ -215,4 +215,4 @@ check_shape with_vtk "$SHAPE_SP"
 if [ "$NOVTK" = 1 ]; then check_shape without_vtk "$NOVTK_SP"; fi
 rm -f "$BUILD_DIR"/shape-check-*.step
 
-say "同梱物ができました: $PAYLOAD（合計 $(du_kb "$PAYLOAD") KB）"
+say "同梱物ができました: ${PAYLOAD}（合計 $(du_kb "$PAYLOAD") KB）"

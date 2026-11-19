@@ -28,11 +28,11 @@ OUT="$PARTS_DIR/app.json"
 rm -f "$OUT"
 if ! is_mac; then
   rec "$OUT" skipped true
-  rec_str "$OUT" reason "Mac 以外（$OS_NAME）なので Electron の段は飛ばしました"
+  rec_str "$OUT" reason "Mac 以外（${OS_NAME}）なので Electron の段は飛ばしました"
   say "Mac ではないので Electron の測定は飛ばします"
   exit 0
 fi
-[ "$ARCH_NAME" = "arm64" ] || say "注意: Apple Silicon（arm64）ではありません（$ARCH_NAME）。arm64 の .app は Rosetta なしでは動きません"
+[ "$ARCH_NAME" = "arm64" ] || say "注意: Apple Silicon（arm64）ではありません（${ARCH_NAME}）。arm64 の .app は Rosetta なしでは動きません"
 
 PAYLOAD="$BUILD_DIR/payload"
 [ -d "$PAYLOAD" ] || fail "$PAYLOAD がありません。先に ./build-bundle.sh を実行してください"
@@ -115,7 +115,7 @@ say "[3/5] ビルドした場所で起動時間を測ります（$LAUNCHES 回�
 measure_launches "$APP" "$BUILD_DIR/app-work" scenarios.build_dir
 
 TEST_ROOT="$HOME/Studio M テスト"
-say "[4/5] 日本語と空白を含む場所（$TEST_ROOT）にコピーして測ります"
+say "[4/5] 日本語と空白を含む場所（${TEST_ROOT}）にコピーして測ります"
 rm -rf "$TEST_ROOT/Studio M Probe.app"
 mkdir -p "$TEST_ROOT/作業 フォルダ"
 ditto "$APP" "$TEST_ROOT/Studio M Probe.app"

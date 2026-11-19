@@ -50,9 +50,13 @@ fi
 
 if is_mac && [ "$FAILED" = 0 ]; then
   run_step "Electron アプリ" "$KIT_DIR/measure-app.sh" || FAILED=1
+elif is_mac; then
+  rec "$PARTS_DIR/app.json" skipped true
+  rec_str "$PARTS_DIR/app.json" reason "前の段（同梱物のビルドか一連の処理）が失敗したため、Electron の段は飛ばしました。上のエラーを直してから実行し直してください"
+  say ""; say "=== Electron アプリ: 前の段が失敗したので飛ばします ==="
 else
   rec "$PARTS_DIR/app.json" skipped true
-  rec_str "$PARTS_DIR/app.json" reason "Mac 以外（$OS_NAME）のため、Electron の段（.app の作成・起動時間・日本語パス・quarantine）は飛ばしました。Linux の試走の結果は参考値です"
+  rec_str "$PARTS_DIR/app.json" reason "Mac 以外（${OS_NAME}）のため、Electron の段（.app の作成・起動時間・日本語パス・quarantine）は飛ばしました。Linux の試走の結果は参考値です"
   say ""; say "=== Electron アプリ: Mac 以外なので飛ばします ==="
 fi
 

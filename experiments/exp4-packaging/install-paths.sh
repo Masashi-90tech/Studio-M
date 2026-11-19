@@ -13,7 +13,7 @@ for a in "$@"; do
   case "$a" in
     --install) INSTALL=1 ;;
     -h|--help) sed -n '2,7p' "$0"; exit 0 ;;
-    *) fail "知らない引数です: $a（使えるのは --install だけです）" ;;
+    *) fail "知らない引数です: ${a}（使えるのは --install だけです）" ;;
   esac
 done
 
