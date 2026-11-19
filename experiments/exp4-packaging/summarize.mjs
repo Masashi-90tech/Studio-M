@@ -96,7 +96,7 @@ if (b) {
   const v = b.variants ?? {};
   md.push(table(['変種', '結果', 'import OCP', '備考'], [
     ['vtk あり（標準）', v.with_vtk?.ok ? '通った' : '**通らない**', sec(v.with_vtk?.result?.seconds?.import_ocp), esc(v.with_vtk?.note ?? '')],
-    ['vtk なし（--no-deps）', v.without_vtk ? (v.without_vtk.ok ? '通った' : '**通らない**') : '作っていない', sec(v.without_vtk?.result?.seconds?.import_ocp), esc(v.without_vtk?.note ?? '')],
+    ['vtk なし（cadquery-ocp-novtk）', v.without_vtk ? (v.without_vtk.ok ? '通った' : '**通らない**') : '作っていない', sec(v.without_vtk?.result?.seconds?.import_ocp), esc(v.without_vtk?.note ?? '')],
   ]), '');
 }
 

@@ -1,6 +1,6 @@
 {
   "$comment": "Studio M の OSS 台帳。使っている・使う予定の OSS とライセンスの調査結果をここに集める。npm run licenses がこの台帳と node_modules を突き合わせる。説明は docs/OSS.md",
-  "updated": "2026-11-18",
+  "updated": "2026-11-19",
   "policy": {
     "project_license": "MIT",
     "bundle_allowed": [
@@ -500,6 +500,20 @@
       "source": "https://github.com/costerwi/homebrew-calculix",
       "checked": "2026-11-18",
       "notes": "入れる経路としては測るが、Studio M には取り込まない。tap のリポジトリのライセンスは未確認（formula の中身のコピーはしない）。CalculiX 本体は別項目（GPL-2.0、別プロセス）"
+    },
+    {
+      "name": "cadquery-ocp-novtk",
+      "version": "8.0.1.1.0",
+      "role": "形状ワーカーの OCCT バインディング（vtk に依存しない版）",
+      "license": "Apache-2.0",
+      "usage": "planned",
+      "commercial": "ok",
+      "obligations": [
+        "同梱する OCCT（LGPL-2.1 と例外条項）のライセンス文を配布物に入れる"
+      ],
+      "source": "https://pypi.org/project/cadquery-ocp-novtk/",
+      "checked": "2026-11-19",
+      "notes": "cadquery-ocp と同じ版・同じ OCP で、vtk を使わないようにビルドされた別パッケージ。Mac（arm64）の wheel は 63 MB。Linux で import と STEP の読み書きを確かめた（vtk 込みより約 0.7 GB 小さい）。Mac での確認は実証実験 4 の次の実行で行う（docs/EXPERIMENT-4.md）。ライセンスは PyPI の表示による。採用時に LICENSE で確かめ直す"
     }
   ]
 }

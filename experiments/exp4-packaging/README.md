@@ -43,7 +43,7 @@ Mac 以外（Linux）で `run-all.sh` を実行すると、Electron の段は飛
 | 部品 | 版 | 入れ方 |
 |---|---|---|
 | Python | python-build-standalone 3.12.11（`20250902`、aarch64-apple-darwin、install_only_stripped） | GitHub Releases からダウンロード。`--python <dir>` で手元の移動できる Python に差し替え可（3.12 のこと）。URL が古くなっていたら `--python-url` で差し替え |
-| 形状ワーカー | cadquery-ocp 8.0.1.1.0（vtk 込み）+ numpy | pip（wheel のみ）。変種として vtk なし（`--no-deps`）も作って、`import OCP` と STEP の読み書きが通るか記録 |
+| 形状ワーカー | cadquery-ocp 8.0.1.1.0（vtk 込み）+ numpy | pip（wheel のみ）。変種として vtk に依存しない `cadquery-ocp-novtk`（同じ版の別パッケージ）も作って、`import OCP` と STEP の読み書きが通るか記録。cadquery-ocp から vtk だけを外す（`--no-deps`）やり方は、Linux でも Mac でも動かなかった |
 | メッシュワーカー | gmsh 4.15.2 + numpy | pip（GPL のため形状とは別フォルダー）。共有ライブラリは wheel から取り出して `workers/mesh/lib` に置く |
 | CalculiX | brew の ccx（costerwi の tap） | `ccx` と、使う dylib を集めて `@executable_path/../lib/` に書き換え、ad-hoc 署名をやり直す（`lib/bundle_ccx.py`） |
 | Electron | 45.2.2（公開から 2 週間以上たった版） / @electron/packager 20.3.0 | `desktop-probe/` の npm install |
