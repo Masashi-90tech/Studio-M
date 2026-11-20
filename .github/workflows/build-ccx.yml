@@ -4,6 +4,8 @@ name: build-ccx
 
 on:
   workflow_dispatch:
+  # build-desktop.yml から呼ぶ（同じ実行の中で成果物を使うため）
+  workflow_call:
   push:
     tags:
       - 'ccx-v*'

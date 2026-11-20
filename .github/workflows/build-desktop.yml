@@ -1,0 +1,142 @@
+# Studio M Pro のインストーラー（Mac: dmg、Windows: exe）を作る。手順は desktop/README.md。
+# ccx（build-ccx）を同じ実行の中で作り、同梱して、作ったアプリを --selftest で確かめてから成果物にする。
+name: build-desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'pro-v*'
+    # 開発用。main に入れる前に消す（新しいワークフローは main に入るまで workflow_dispatch で呼べないため）
+    branches:
+      - 'claude/elegant-ptolemy-fpskh7'
+
+permissions:
+  contents: read
+
+jobs:
+  ccx:
+    uses: ./.github/workflows/build-ccx.yml
+
+  macos-arm64:
+    needs: ccx
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: タグとバージョンが合っているか確かめる
+        if: startsWith(github.ref, 'refs/tags/pro-v')
+        run: |
+          V="$(node -p "require('./desktop/package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "pro-v${V}" ]; then
+            echo "タグ ${GITHUB_REF_NAME} と desktop/package.json の version ${V} が違います。どちらかを直してください" >&2
+            exit 1
+          fi
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: ccx-macos-arm64
+          path: ${{ runner.temp }}/ccx-dl
+      - name: ccx を同梱用のフォルダーに展開する
+        run: |
+          mkdir -p desktop/build/payload
+          unzip -q "$RUNNER_TEMP/ccx-dl/ccx-macos-arm64.zip" -d desktop/build/payload
+          ls desktop/build/payload desktop/build/payload/ccx
+      - name: desktop の依存を入れる
+        working-directory: desktop
+        run: npm ci
+      # desktop:build は先にルートの `npm run build`（単一 HTML の dist/index.html）を実行する
+      - name: 画面と main・preload をビルドする
+        run: npm run desktop:build
+      - name: dmg を作る
+        working-directory: desktop
+        run: npx electron-builder --mac dmg --arm64 --publish never
+      - name: 作ったアプリで --selftest を実行する
+        run: |
+          "desktop/release/mac-arm64/Studio M Pro.app/Contents/MacOS/Studio M Pro" --selftest --out "$GITHUB_WORKSPACE/selftest-mac-arm64.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selftest-mac-arm64
+          path: selftest-mac-arm64.json
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: studio-m-pro-mac-arm64
+          path: desktop/release/*.dmg
+
+  windows-x64:
+    needs: ccx
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: タグとバージョンが合っているか確かめる
+        if: startsWith(github.ref, 'refs/tags/pro-v')
+        shell: bash
+        run: |
+          V="$(node -p "require('./desktop/package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "pro-v${V}" ]; then
+            echo "タグ ${GITHUB_REF_NAME} と desktop/package.json の version ${V} が違います。どちらかを直してください" >&2
+            exit 1
+          fi
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: ccx-windows-x64
+          path: ${{ runner.temp }}/ccx-dl
+      - name: ccx を同梱用のフォルダーに展開する
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/build/payload | Out-Null
+          Expand-Archive -Path "$env:RUNNER_TEMP/ccx-dl/ccx-windows-x64.zip" -DestinationPath desktop/build/payload
+          Get-ChildItem desktop/build/payload/ccx
+      - name: desktop の依存を入れる
+        working-directory: desktop
+        run: npm ci
+      - name: 画面と main・preload をビルドする
+        run: npm run desktop:build
+      - name: exe（インストーラー）を作る
+        working-directory: desktop
+        run: npx electron-builder --win nsis --x64 --publish never
+      - name: 作ったアプリで --selftest を実行する
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "desktop/release/win-unpacked/Studio M Pro.exe" -ArgumentList '--selftest','--out',"$env:GITHUB_WORKSPACE/selftest-win-x64.json" -Wait -PassThru
+          if (Test-Path "$env:GITHUB_WORKSPACE/selftest-win-x64.json") { Get-Content "$env:GITHUB_WORKSPACE/selftest-win-x64.json" }
+          if ($p.ExitCode -ne 0) { Write-Error "selftest が失敗しました（終了コード $($p.ExitCode)）"; exit 1 }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selftest-win-x64
+          path: selftest-win-x64.json
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: studio-m-pro-win-x64
+          path: desktop/release/*.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/pro-v')
+    needs: [macos-arm64, windows-x64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: studio-m-pro-*
+          path: installers
+          merge-multiple: true
+      - name: Release を作って dmg・exe を添付する
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l installers
+          gh release create "${GITHUB_REF_NAME}" installers/* --repo "${GITHUB_REPOSITORY}" --title "Studio M Pro ${GITHUB_REF_NAME#pro-v}" --generate-notes

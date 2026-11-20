@@ -1,0 +1,39 @@
+# Studio M Pro のインストーラーの設定（electron-builder）。desktop/ で `npx electron-builder` を実行する。
+# 事前に: ルートで `npm run desktop:build`（画面 dist/index.html と desktop/dist を作る）、
+#         同梱の ccx を desktop/build/payload/ccx に展開（ワークフロー build-desktop.yml がやる）。
+# 署名はしない（自分用）。Mac は afterPack で ad-hoc 署名だけ付ける（署名のない実行ファイルは Apple Silicon で起動しない）。
+appId: com.studio-m.pro
+productName: Studio M Pro
+directories:
+  # 出力先。desktop/dist は main・preload のビルド結果で、ビルドのたびに消えるので別の名前にする
+  output: release
+# アプリ本体（asar に入る）。Engine のアダプターは vite の SSR ビルドで main.js に束ねてある
+files:
+  - dist/**
+  - package.json
+extraResources:
+  - from: ../dist/index.html
+    to: web/index.html
+  - from: build/payload/ccx
+    to: ccx
+  - from: ../THIRD-PARTY-LICENSES
+    to: THIRD-PARTY-LICENSES
+  - from: ../LICENSE
+    to: LICENSE
+npmRebuild: false
+afterPack: tools/after-pack.cjs
+mac:
+  target:
+    - target: dmg
+      arch: arm64
+  identity: null
+  artifactName: Studio-M-Pro-${version}-mac-arm64.dmg
+win:
+  target:
+    - target: nsis
+      arch: x64
+  artifactName: Studio-M-Pro-${version}-win-x64.exe
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true

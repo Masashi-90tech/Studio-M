@@ -13,6 +13,7 @@ npm run test:engines  # PC に入っている CalculiX・OpenFOAM を実際に�
 npm run engine      # Studio M Engine（PC 上の計算サーバー）を起動（本計算。docs/ENGINE.md）
 npm run desktop:build  # Studio M Pro（Electron）をビルド（先に `cd desktop && npm install`。docs/DESKTOP.md）
 npm run desktop:start  # Studio M Pro を起動
+npm run desktop:pack  # Studio M Pro を展開済みのアプリにする（desktop/release/。確認用。インストーラーは build-desktop ワークフロー）
 npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML を作る
 ```
 
