@@ -4,8 +4,7 @@ import { loadAdapters } from './server/adapters';
 import { generateToken, writeTokenFile } from './server/auth';
 import { existsSync, statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
-import { createWrapperLauncher } from './server/launcher';
-import { findOpenFoamApp, OPENFOAM_APP_COMMANDS } from './server/openfoam-app';
+import { findOpenFoamLauncher } from './server/openfoam-app';
 import { createEngineService } from './server/service';
 import { ENGINE_VERSION } from './server/version';
 
@@ -33,8 +32,7 @@ async function main(): Promise<void> {
     else console.warn(`STUDIO_M_CCX（${ccxPath}）は、実在するファイルへの絶対パスではないので無視します。ccx の実行ファイルのフルパスを指定してください`);
   }
   // Mac: OpenFOAM.app が入っていれば、そのラッパー経由で OpenFOAM のコマンドを動かす（darwin 以外では何も見つからない）
-  const foamApp = findOpenFoamApp();
-  const commandLaunchers = foamApp ? createWrapperLauncher({ commands: OPENFOAM_APP_COMMANDS, file: foamApp.wrapper, label: `OpenFOAM.app（${foamApp.version}）` }) : undefined;
+  const commandLaunchers = findOpenFoamLauncher();
   const service = createEngineService({
     adapters,
     token,

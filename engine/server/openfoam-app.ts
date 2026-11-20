@@ -4,6 +4,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { createWrapperLauncher, type CommandLauncher } from './launcher';
 
 export interface OpenFoamApp {
   /** ラッパー（etc/openfoam）の絶対パス */
@@ -73,4 +74,10 @@ export function findOpenFoamApp(o: FindOpenFoamAppOptions = {}): OpenFoamApp | n
   // 新しい版（4 桁の数字が大きい方）を優先。同じ版なら先に見つけた方
   found.sort((a, b) => Number(b.version.slice(1)) - Number(a.version.slice(1)));
   return found[0] ?? null;
+}
+
+/** OpenFOAM.app が見つかれば、そのラッパー経由で起動するランチャーを返す（見つからなければ undefined = 直接起動） */
+export function findOpenFoamLauncher(o: FindOpenFoamAppOptions = {}): CommandLauncher | undefined {
+  const app = findOpenFoamApp(o);
+  return app ? createWrapperLauncher({ commands: OPENFOAM_APP_COMMANDS, file: app.wrapper, label: `OpenFOAM.app（${app.version}）` }) : undefined;
 }
