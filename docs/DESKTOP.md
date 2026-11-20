@@ -60,7 +60,8 @@
 6. インストーラー（Mac: dmg、Windows: exe）と自動更新を GitHub Actions で作る
    - 2026-11-20 作成済み（未実行）: `desktop/electron-builder.yml`（electron-builder 26.18.0。Mac は arm64 の dmg＋ad-hoc 署名、Windows は x64 の nsis）、`.github/workflows/build-desktop.yml`（`build-ccx` を呼んで ccx を同梱 → ビルド → `--selftest` → 成果物。`pro-v*` のタグで Release に添付）、更新の通知（`desktop/src/update-check.ts`。署名なしで Mac の自動更新ができないため、新しい版を知らせてダウンロードページを開く方式。署名を取ったら electron-updater へ）。パッケージ後の画面は `resources/web/index.html`
    - 2026-11-20 **Actions（`build-desktop`）で macOS・Windows とも最後まで通った**: dmg 134.5 MB・exe 135.6 MB。開発用の push トリガーは消した（タグ `pro-v*` か手動で動かす。新しいワークフローは main に入るまで手動で呼べない）。更新の通知は、リリースの一覧から `pro-v` のタグを選ぶ形にした（Lite・ccx のリリースが最新でも見つかる）
-   - 未確認: Mac・Windows の実機でのインストールと起動（Mac は署名なしの警告・「右クリック→開く」）、更新の通知の実動作（`pro-v` の Release を作ってから）、Windows の SmartScreen の警告
+   - 2026-11-20 **Mac（M1）の実機で、Actions の成果物の dmg からインストールしたアプリが起動した**（署名なしのため、初回は「システム設定 → プライバシーとセキュリティ → このまま開く」か `xattr -dr com.apple.quarantine` が要る。macOS 15 以降は右クリック→開くが使えない）
+   - 未確認: Windows の実機でのインストールと起動（SmartScreen の警告）、更新の通知の実動作（`pro-v` の Release を作ってから）、Windows の SmartScreen の警告
 7. Mac と Windows で、インストール直後に片持ち梁を CalculiX で本計算できることを確かめる
    - 2026-11-20 `--selftest`（`desktop/src/selftest.ts`・`selftest-logic.ts`）を作成。ウィンドウなしで Engine を起動し、同梱の ccx で片持ち梁を本計算して JSON と終了コード（0 / 1）を返す。ccx がないときは「同梱の ccx が見つかりません」で終了コード 1（Linux の xvfb で確認）。Actions で作ったアプリに対して実行する手順を `build-desktop.yml` に入れた（未実行）。Mac・Windows の実機での確認は未
    - 2026-11-20 **Actions で、作った直後のアプリ（インストーラーの中身）の `--selftest` が macOS・Windows とも合格**: 同梱の ccx で、先端のたわみが梁理論との差 0.99%（Windows のログで確認）、反力が荷重と一致。実機（インストーラーから入れたアプリ）での確認は未
