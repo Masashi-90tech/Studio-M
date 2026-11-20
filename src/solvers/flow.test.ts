@@ -142,7 +142,7 @@ describe('createFlowSolver', () => {
 
   it('カルマン渦が立ち上がり、ストローハル数が検出される', () => {
     const p = cylinderProject(150);
-    const solver = createFlowSolver(p, rasterize(p));
+    const solver = createFlowSolverWithOptions(p, rasterize(p));
     // ステップ数を固定して、渦が十分に安定してから 1 回だけ確かめる。
     // （step(ミリ秒) は時間ベースなので、実行環境が遅いと立ち上がり途中の不安定な値をつかんで揺らぐ。
     //  2026-11-20 に CI で 1 度だけ ストローハル数 2.11 で落ちた。固定ステップなら 0.17〜0.22 で安定する）
