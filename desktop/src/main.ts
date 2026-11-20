@@ -56,6 +56,7 @@ async function startEngine(): Promise<void> {
   const commandLaunchers = findOpenFoamLauncher();
   service = createEngineService({ adapters: loadAdapters(), token, port: 0, commandPaths: ccx ? { ccx } : undefined, commandLaunchers });
   const port = await service.listen();
+  if (service.workRootNotice) console.warn(service.workRootNotice);
   bridge = createEngineBridge({ baseUrl: `http://127.0.0.1:${port}`, token });
 }
 

@@ -76,6 +76,10 @@ CalculiX の Docker イメージは今のところ使っていません（Linux 
 - **Docker Desktop**（または colima）を入れ、OpenFOAM のイメージを使う
 - CalculiX は Homebrew にもあるが（`brew install calculix-ccx` など、版に注意）、まずは Docker 経由が確実
 
+### 作業フォルダーのパス
+
+計算の作業フォルダーは、既定では一時フォルダーの下の `studio-m-engine` です。OpenFOAM は、作業フォルダーのパスに日本語・空白・引用符などがあると動きません（Windows のユーザー名が日本語だと、一時フォルダーがそうなります）。そのため Engine は、起動時にパスが「英数字と `. _ - / \ :` だけ」かを確かめ、違えば自動で安全な場所（Mac・Linux は `/tmp`、Windows は `%ProgramData%`、`C:\Users\Public`、`C:\studio-m-work` の順）の `studio-m-engine` に移して、起動表示に知らせます。場所を自分で決めたいときは、環境変数 `STUDIO_M_WORK_ROOT` に英数字だけのフォルダー（例 `C:\studio-m-work`）を指定してください。
+
 ## 安全のしくみ
 
 - **127.0.0.1 だけで待ち受けます。** 同じネットワークの他の PC からは届きません

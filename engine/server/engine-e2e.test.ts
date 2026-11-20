@@ -160,4 +160,5 @@ function realSuite(label: string, parentName: string): void {
 }
 
 realSuite('普通のパス', 'work');
-realSuite('日本語と空白を含むパス', 'Studio M テスト');
+// 日本語・空白を含む workRoot を渡しても、Engine が安全な場所に逃がして最後まで解ける
+realSuite('日本語と空白を含むパス（安全な場所に逃がす）', 'Studio M テスト');

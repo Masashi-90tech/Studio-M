@@ -77,6 +77,7 @@ async function main(): Promise<void> {
   console.log(' 「接続を確認」を押してください。合言葉は他の人に教えないでください。');
   if (tokenFile) console.log(` （合言葉は ${tokenFile} にも保存しました）`);
   console.log(' ');
+  if (service.workRootNotice) console.log(` ${service.workRootNotice}`);
   console.log(' 見つかったエンジン:');
   for (const e of status.engines) {
     const mark = e.available ? '✓' : '✗';

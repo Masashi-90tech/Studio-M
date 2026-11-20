@@ -72,13 +72,18 @@ export class JobManager {
   private jobs = new Map<string, Job>();
   private queue: string[] = [];
   private running = 0;
-  private readonly workRoot: string;
+  private workRoot: string;
   private readonly opts: JobManagerOptions;
 
   constructor(opts: JobManagerOptions) {
     this.opts = opts;
     this.maxConcurrentJobs = Math.max(1, Math.floor(opts.maxConcurrentJobs ?? 1));
     this.workRoot = opts.workRoot ?? WORK_ROOT;
+  }
+
+  /** 作業フォルダーの置き場所を差し替える（起動時に、安全なパスへ移したとき用）。これから作るジョブにだけ効く */
+  setWorkRoot(root: string): void {
+    this.workRoot = root;
   }
 
   /** ジョブを待ち行列に入れて id を返す */
