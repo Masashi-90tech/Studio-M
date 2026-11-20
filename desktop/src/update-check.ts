@@ -2,7 +2,9 @@
 // 署名なしの Mac では自動更新ができないので、「新しい版を見つけて知らせ、ダウンロードページを開く」方式にする。
 // 署名を取ったら、electron-updater による本物の自動更新へ移る（desktop/README.md）。
 
-export const RELEASES_API = 'https://api.github.com/repos/Masashi-90tech/Studio-M/releases/latest';
+// releases/latest は使わない: Lite（v で始まるタグ）や ccx のリリースが「最新」になると、Pro の更新を見つけられないため。
+// 一覧から pro-v のタグだけを選ぶ。
+export const RELEASES_API = 'https://api.github.com/repos/Masashi-90tech/Studio-M/releases?per_page=30';
 const TIMEOUT_MS = 8000;
 
 export type UpdateResult = { latest: string; url: string } | { error: string } | null;
@@ -76,12 +78,21 @@ export async function checkForUpdate(o: CheckForUpdateOptions): Promise<UpdateRe
   } catch {
     return { error: '更新情報の形が正しくありません。しばらくしてからもう一度試してください' };
   }
-  const r = (typeof json === 'object' && json !== null ? json : {}) as { tag_name?: unknown; html_url?: unknown };
-  if (typeof r.tag_name !== 'string') return { error: '更新情報の形が正しくありません。しばらくしてからもう一度試してください' };
-  const latest = parseProTag(r.tag_name);
-  if (!latest) return null; // Studio M Pro のリリースではない（ccx のリリースなど）
-  const cmp = compareSemver(latest, o.current);
+  // 一覧（配列）が返る。1 件だけのオブジェクトも受け付ける（テストと将来の API の変更のため）
+  const items = (Array.isArray(json) ? json : [json]) as unknown[];
+  if (items.length === 0 || items.some((x) => typeof x !== 'object' || x === null)) return { error: '更新情報の形が正しくありません。しばらくしてからもう一度試してください' };
+  if (items.every((x) => typeof (x as { tag_name?: unknown }).tag_name !== 'string')) return { error: '更新情報の形が正しくありません。しばらくしてからもう一度試してください' };
+  // Pro のリリース（pro-vX.Y.Z）の中で最も新しいもの。下書き・先行版は除く
+  let best: { latest: string; url: unknown } | null = null;
+  for (const x of items as { tag_name?: unknown; html_url?: unknown; draft?: unknown; prerelease?: unknown }[]) {
+    if (typeof x.tag_name !== 'string' || x.draft === true || x.prerelease === true) continue;
+    const v = parseProTag(x.tag_name);
+    if (!v) continue; // Studio M Pro のリリースではない（Lite・ccx など）
+    if (!best || compareSemver(v, best.latest) > 0) best = { latest: v, url: x.html_url };
+  }
+  if (!best) return null;
+  const cmp = compareSemver(best.latest, o.current);
   if (Number.isNaN(cmp) || cmp <= 0) return null;
-  if (!isSafeReleaseUrl(r.html_url)) return { error: '更新情報のダウンロード先が正しくありません。GitHub のリリースページを直接開いてください' };
-  return { latest, url: r.html_url };
+  if (!isSafeReleaseUrl(best.url)) return { error: '更新情報のダウンロード先が正しくありません。GitHub のリリースページを直接開いてください' };
+  return { latest: best.latest, url: best.url };
 }

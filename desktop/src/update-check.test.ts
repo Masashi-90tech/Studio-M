@@ -42,6 +42,17 @@ describe('checkForUpdate', () => {
   it('新しければ { latest, url }', async () => {
     expect(await checkForUpdate({ current: '0.6.0', fetch: reply(200, { tag_name: 'pro-v0.7.0', html_url: url }) })).toEqual({ latest: '0.7.0', url });
   });
+  it('一覧から pro- のリリースだけを選ぶ（Lite や ccx が先頭にあっても見つける。下書き・先行版は除く）', async () => {
+    const list = [
+      { tag_name: 'v0.9.0', html_url: 'https://github.com/Masashi-90tech/Studio-M/releases/tag/v0.9.0' },
+      { tag_name: 'ccx-v2.23', html_url: 'https://github.com/Masashi-90tech/Studio-M/releases/tag/ccx-v2.23' },
+      { tag_name: 'pro-v0.8.0', draft: true, html_url: url },
+      { tag_name: 'pro-v0.7.0', html_url: url },
+      { tag_name: 'pro-v0.6.5', html_url: url },
+    ];
+    expect(await checkForUpdate({ current: '0.6.0', fetch: reply(200, list) })).toEqual({ latest: '0.7.0', url });
+    expect(await checkForUpdate({ current: '0.7.0', fetch: reply(200, list) })).toBeNull();
+  });
   it('同じか古ければ null', async () => {
     expect(await checkForUpdate({ current: '0.7.0', fetch: reply(200, { tag_name: 'pro-v0.7.0', html_url: url }) })).toBeNull();
     expect(await checkForUpdate({ current: '0.8.0', fetch: reply(200, { tag_name: 'pro-v0.7.0', html_url: url }) })).toBeNull();

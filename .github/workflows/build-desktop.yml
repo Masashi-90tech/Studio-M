@@ -7,9 +7,6 @@ on:
   push:
     tags:
       - 'pro-v*'
-    # 開発用。main に入れる前に消す（新しいワークフローは main に入るまで workflow_dispatch で呼べないため）
-    branches:
-      - 'claude/elegant-ptolemy-fpskh7'
 
 permissions:
   contents: read
