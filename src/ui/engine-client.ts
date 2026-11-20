@@ -27,6 +27,8 @@ export interface EngineClientOptions {
   fetch?: typeof fetch;
   /** 操作ごとの時間切れ [ms] */
   timeouts?: Partial<Record<Op, number>>;
+  /** 通信できなかったときの説明（省略時は PC のエンジンにつなぐ Lite 向けの説明。Pro は別の文面を渡す） */
+  networkHelp?: string;
 }
 
 export interface EngineClient {
@@ -61,7 +63,7 @@ export function createEngineClient(opts: EngineClientOptions): EngineClient {
     } catch (e) {
       if (e instanceof EngineClientError) throw e;
       if (timedOut) throw new EngineClientError(`エンジンから ${Math.round(timeouts[op] / 1000)} 秒以内に返事がありませんでした。エンジンが止まっていないか確かめてください。`, 'timeout');
-      throw new EngineClientError(NETWORK_HELP, 'network');
+      throw new EngineClientError(opts.networkHelp ?? NETWORK_HELP, 'network');
     } finally {
       clearTimeout(timer);
     }

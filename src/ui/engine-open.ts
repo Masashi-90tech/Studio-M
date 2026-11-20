@@ -1,8 +1,9 @@
 // PC のエンジンまわりの入口（軽い）。画面（main.ts・設定ポップオーバー）はここだけを呼び、
 // 通信・パネル・結果カードは必要になったときに遅延 import する。
-//   - 合言葉が保存されていれば、起動後に自動で接続を確かめ、結果ボックスの下に本計算カードを出す
+//   - Pro は常に、Lite は合言葉が保存されていれば、起動後に自動で接続を確かめ、結果ボックスの下に本計算カードを出す
 //   - 設定（⚙）を開いたとき、「PCのエンジン」の欄を作る
 import { hasSavedEngineToken } from './engine-config';
+import { getProBridge } from './engine-ipc';
 import type { EngineView } from './engine-view';
 import { withLoading } from './lazy';
 import type { Runner } from './runner';
@@ -33,8 +34,9 @@ export function initEngineUi(opts: { store: Store; runner: Runner; resultsHost: 
     return booting;
   }
 
-  // 合言葉が保存されている人には、少し待ってから自動で接続を確かめる（画面の起動を邪魔しない）
-  if (hasSavedEngineToken()) {
+  // Studio M Pro では合言葉なしで、アプリの中のエンジンに自動で接続する。
+  // Lite は、合言葉が保存されている人にだけ、少し待ってから接続を確かめる（画面の起動を邪魔しない）
+  if (getProBridge() || hasSavedEngineToken()) {
     window.setTimeout(() => {
       void boot()
         .then((session) => session?.connect())

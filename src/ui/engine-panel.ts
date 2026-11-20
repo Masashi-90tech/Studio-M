@@ -4,7 +4,63 @@ import { clear, h } from './dom';
 import { DEFAULT_ENGINE_URL, inArtifactViewer, normalizeEngineUrl } from './engine-config';
 import type { EngineSession } from './engine-session';
 
+/** 接続の状態（確認中・エラー・使えるエンジンの一覧）を result に描く。Lite と Pro で共通 */
+function renderConnection(session: EngineSession, result: HTMLElement): void {
+  clear(result);
+  const c = session.conn;
+  if (c.kind === 'none') return;
+  if (c.kind === 'checking') {
+    result.append(h('p', { class: 'hint' }, '確認しています…'));
+    return;
+  }
+  if (c.kind === 'error') {
+    result.append(h('p', { class: 'notice error', role: 'alert' }, c.message));
+    return;
+  }
+  const s = c.status;
+  result.append(h('p', { class: 'engine-ok' }, `✓ 接続しました（Studio M Engine ${s.version}）`));
+  const list = h('ul', { class: 'engine-list' });
+  for (const e of s.engines) {
+    const note = e.note ?? '見つかりません';
+    const body = h('span', null, h('strong', null, e.name));
+    if (e.available) {
+      body.append(` ${[e.version ?? '', e.via === 'docker' ? 'Docker' : 'PC に直接'].filter(Boolean).join(' ・ ')}`);
+    } else if (note.length <= 40) {
+      body.append(` — ${note}`);
+    } else {
+      // 入れ方の説明は長いので、開いたときだけ全部見せる
+      body.append(' — 見つかりません', h('details', { class: 'engine-note' }, h('summary', null, '入れ方を見る'), h('p', null, note)));
+    }
+    list.append(h('li', { class: e.available ? 'ok' : 'ng' }, h('span', { class: 'mark', 'aria-hidden': 'true' }, e.available ? '✓' : '✗'), body));
+  }
+  result.append(list);
+  if (s.capabilities.length === 0) result.append(h('p', { class: 'hint' }, 'このエンジンには、解析のアダプターが組み込まれていません。'));
+}
+
+/** Studio M Pro: アプリの中のエンジンに自動で接続している。URL・合言葉の入力欄は出さない */
+function mountProPanel(opts: { session: EngineSession; container: HTMLElement }): void {
+  const { session, container } = opts;
+  const result = h('div', { class: 'engine-conn', 'aria-live': 'polite' });
+  const recheckBtn = h('button', { class: 'btn small primary', type: 'button' }, 'もう一度検出する');
+  recheckBtn.addEventListener('click', () => {
+    recheckBtn.disabled = true;
+    void session.connect({ refresh: true }).finally(() => (recheckBtn.disabled = false));
+  });
+  container.append(
+    h('div', { class: 'pop-title engine-title' }, 'PCのエンジン（本計算）'),
+    h('p', { class: 'pop-hint engine-lead' }, 'このアプリの中のエンジンを使っています（接続は自動です）。CalculiX（強度・熱）は同梱です。OpenFOAM（流れ）は、PC に入っていれば自動で見つけます。'),
+    result,
+    h('div', { class: 'btn-row' }, recheckBtn),
+  );
+  session.subscribe(() => renderConnection(session, result));
+  renderConnection(session, result);
+}
+
 export function mountEnginePanel(opts: { session: EngineSession; container: HTMLElement }): void {
+  if (opts.session.mode === 'pro') {
+    mountProPanel(opts);
+    return;
+  }
   const { session, container } = opts;
 
   const url = h('input', { type: 'text', id: 'engineUrl', spellcheck: 'false', autocomplete: 'off', placeholder: DEFAULT_ENGINE_URL, 'aria-label': 'エンジンの URL' });
@@ -50,38 +106,6 @@ export function mountEnginePanel(opts: { session: EngineSession; container: HTML
     session.setConfig({ url: DEFAULT_ENGINE_URL, token: '' });
   });
 
-  function renderConn(): void {
-    clear(result);
-    const c = session.conn;
-    if (c.kind === 'none') return;
-    if (c.kind === 'checking') {
-      result.append(h('p', { class: 'hint' }, '確認しています…'));
-      return;
-    }
-    if (c.kind === 'error') {
-      result.append(h('p', { class: 'notice error', role: 'alert' }, c.message));
-      return;
-    }
-    const s = c.status;
-    result.append(h('p', { class: 'engine-ok' }, `✓ 接続しました（Studio M Engine ${s.version}）`));
-    const list = h('ul', { class: 'engine-list' });
-    for (const e of s.engines) {
-      const note = e.note ?? '見つかりません';
-      const body = h('span', null, h('strong', null, e.name));
-      if (e.available) {
-        body.append(` ${[e.version ?? '', e.via === 'docker' ? 'Docker' : 'PC に直接'].filter(Boolean).join(' ・ ')}`);
-      } else if (note.length <= 40) {
-        body.append(` — ${note}`);
-      } else {
-        // 入れ方の説明は長いので、開いたときだけ全部見せる
-        body.append(' — 見つかりません', h('details', { class: 'engine-note' }, h('summary', null, '入れ方を見る'), h('p', null, note)));
-      }
-      list.append(h('li', { class: e.available ? 'ok' : 'ng' }, h('span', { class: 'mark', 'aria-hidden': 'true' }, e.available ? '✓' : '✗'), body));
-    }
-    result.append(list);
-    if (s.capabilities.length === 0) result.append(h('p', { class: 'hint' }, 'このエンジンには、解析のアダプターが組み込まれていません。'));
-  }
-
   container.append(
     h('div', { class: 'pop-title engine-title' }, 'PCのエンジン（本計算）'),
     h('p', { class: 'pop-hint engine-lead' }, 'この PC で動く Studio M Engine につなぐと、CalculiX（強度）や OpenFOAM（流れ）で本計算できます。ダウンロードした HTML か開発版でだけ使えます。'),
@@ -93,6 +117,7 @@ export function mountEnginePanel(opts: { session: EngineSession; container: HTML
     result,
     h('p', { class: 'pop-hint engine-lead' }, 'エンジンは `npm run engine` で起動します。入れ方は docs/ENGINE.md を見てください。'),
   );
+  const renderConn = (): void => renderConnection(session, result);
   session.subscribe(renderConn);
   renderConn();
 }

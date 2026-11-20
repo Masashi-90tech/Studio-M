@@ -5,13 +5,17 @@ import type { EngineStatusResponse } from '../core/engine-wire';
 import type { AnalysisKind } from '../core/types';
 import { downloadBlob, toast } from './dom';
 import { createEngineClient, EngineClientError, type EngineClient } from './engine-client';
-import { loadEngineConfig, saveEngineConfig, type EngineConfig } from './engine-config';
+import { DEFAULT_ENGINE_URL, loadEngineConfig, saveEngineConfig, type EngineConfig } from './engine-config';
+import { createIpcFetch, getProBridge, type ProBridge } from './engine-ipc';
 import { engineName } from './engine-logic';
 import type { Runner } from './runner';
 
 const POLL_MS = 600;
 /** 続けてこの回数だけ通信に失敗したら、エンジンとの接続が切れたとみなす */
 const LOST_AFTER = 6;
+
+/** Studio M Pro で通信できないときの説明（アプリ内のエンジンなので、URL や合言葉ではなく再起動を案内する） */
+const PRO_NETWORK_HELP = 'アプリの中のエンジンに接続できません。アプリを再起動してください。直らないときは、ほかのソフトを閉じてからもう一度起動するか、アプリを入れ直してください。';
 
 export type ConnState =
   | { kind: 'none' }
@@ -38,8 +42,13 @@ export interface RemoteRun {
   cancelling: boolean;
 }
 
+/** pro = Studio M Pro（アプリ内のエンジンへ IPC で自動接続）、lite = ブラウザ版（URL と合言葉で接続） */
+export type EngineMode = 'pro' | 'lite';
+
 export class EngineSession {
   config: EngineConfig;
+  readonly mode: EngineMode;
+  private bridge: ProBridge | null;
   conn: ConnState = { kind: 'none' };
   quality: JobQuality = 'standard';
   /** key = `${analysis}:${engine}` → 選んだオプション */
@@ -57,9 +66,14 @@ export class EngineSession {
       runner: Runner;
       /** テスト用に通信部品を差し替える */
       clientFactory?: (config: EngineConfig) => EngineClient;
+      /** テスト用に Pro の中継口を差し替える（省略時は window.studioMPro があれば Pro） */
+      bridge?: ProBridge | null;
     },
   ) {
-    this.config = loadEngineConfig();
+    this.bridge = opts.bridge === undefined ? getProBridge() : opts.bridge;
+    this.mode = this.bridge ? 'pro' : 'lite';
+    // Pro では URL・合言葉を使わない（読まず・保存せず、アプリの中で自動で決まる）
+    this.config = this.bridge ? { url: DEFAULT_ENGINE_URL, token: '' } : loadEngineConfig();
   }
 
   subscribe(fn: () => void): () => void {
@@ -73,12 +87,21 @@ export class EngineSession {
   }
 
   private makeClient(): EngineClient {
-    this.client ??= (this.opts.clientFactory ?? ((c) => createEngineClient({ baseUrl: c.url, token: c.token })))(this.config);
+    if (this.client) return this.client;
+    const bridge = this.bridge;
+    const factory =
+      this.opts.clientFactory ??
+      ((c: EngineConfig) =>
+        bridge
+          ? createEngineClient({ baseUrl: DEFAULT_ENGINE_URL, token: '', fetch: createIpcFetch(bridge), networkHelp: PRO_NETWORK_HELP })
+          : createEngineClient({ baseUrl: c.url, token: c.token }));
+    this.client = factory(this.config);
     return this.client;
   }
 
   /** URL と合言葉を変える（保存もする）。接続の確認は connect で行う */
   setConfig(config: EngineConfig): void {
+    if (this.mode === 'pro') return; // Pro は設定を持たない
     this.config = { url: config.url, token: config.token.trim() };
     saveEngineConfig(this.config);
     this.client = null;
@@ -93,6 +116,11 @@ export class EngineSession {
     try {
       const status = await this.makeClient().status({ refresh: o.refresh });
       if (!status.authorized) {
+        if (this.mode === 'pro') {
+          this.conn = { kind: 'error', reason: 'unauthorized', message: 'アプリの中のエンジンに認証されませんでした。アプリを再起動してください。直らないときは、アプリを入れ直してください。' };
+          this.changed();
+          return false;
+        }
         const noToken = this.config.token === '';
         this.conn = {
           kind: 'error',
@@ -210,7 +238,7 @@ export class EngineSession {
         this.schedulePoll(run, failures + 1);
         return;
       }
-      this.fail(run, e instanceof EngineClientError && (e.kind === 'network' || e.kind === 'timeout') ? new EngineClientError('エンジンとの接続が切れました。エンジンが動いているか確かめて、もう一度本計算してください。', 'network') : e);
+      this.fail(run, e instanceof EngineClientError && (e.kind === 'network' || e.kind === 'timeout') ? new EngineClientError(this.mode === 'pro' ? 'アプリの中のエンジンとの接続が切れました。アプリを再起動してから、もう一度本計算してください。' : 'エンジンとの接続が切れました。エンジンが動いているか確かめて、もう一度本計算してください。', 'network') : e);
     }
   }
 

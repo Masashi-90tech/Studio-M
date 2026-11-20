@@ -142,6 +142,13 @@ function sanitizeShape(v: unknown, index: number): Shape | null {
   return s;
 }
 
+/** プロジェクトファイルの文字列を読む。読めなければ、画面にそのまま出せる日本語の Error を投げる */
+export function parseProjectText(text: string): Project {
+  const project = sanitizeProject(JSON.parse(text));
+  if (!project) throw new Error('Studio M のプロジェクトファイルではありません');
+  return project;
+}
+
 /** JSON から読んだ値を Project として安全に取り込む。壊れていれば null */
 export function sanitizeProject(raw: unknown): Project | null {
   if (!isObj(raw) || !isObj(raw.domain)) return null;

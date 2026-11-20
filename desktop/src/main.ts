@@ -1,14 +1,15 @@
 // Studio M Pro の main プロセス。画面を読み込み、Studio M Engine を同じプロセスで動かし、IPC でつなぐ。
 // electron を import してよいのは、この main.ts と preload.ts だけ。
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type IpcMainInvokeEvent } from 'electron';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { arch, release } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadAdapters } from '../../engine/server/adapters';
 import { generateToken } from '../../engine/server/auth';
 import { findOpenFoamLauncher } from '../../engine/server/openfoam-app';
 import { createEngineService, type EngineService } from '../../engine/server/service';
+import { buildAboutText } from './about';
 import type { OpenedFile, SaveRequest } from './api';
 import { findBundledCcx } from './bundled-tools';
 import { createEngineBridge, type EngineBridge } from './engine-bridge';
@@ -98,6 +99,28 @@ function registerIpc(): void {
     if (r.canceled || !r.filePath) return null;
     return files.saveAs(r.filePath, req.text);
   });
+}
+
+/** ライセンス文のフォルダー。パッケージ後は resources/THIRD-PARTY-LICENSES、開発中はリポジトリ直下 */
+function licenseDir(): string {
+  return app.isPackaged ? resolve(process.resourcesPath, 'THIRD-PARTY-LICENSES') : resolve(here, '../../THIRD-PARTY-LICENSES');
+}
+
+/** 「このアプリについて」: 版・MIT・同梱の CalculiX（GPL-2.0）・ソースの入手先・ライセンス文のフォルダーを出す */
+async function showAbout(): Promise<void> {
+  const dir = licenseDir();
+  let sourceText: string | null = null;
+  try {
+    sourceText = readFileSync(join(dir, 'ccx', 'SOURCE.txt'), 'utf8');
+  } catch {
+    // 読めなければ、フォルダーを案内する文面になる
+  }
+  const t = buildAboutText({ appVersion: app.getVersion(), ccxPath: bundledCcx, sourceText, licenseDir: dir });
+  const box = await dialog.showMessageBox({ type: 'info', title: t.title, message: t.message, detail: t.detail, buttons: ['閉じる', 'ライセンスのフォルダーを開く'], defaultId: 0, cancelId: 0 });
+  if (box.response === 1) {
+    const err = await shell.openPath(existsSync(dir) ? dir : dirname(dir));
+    if (err) await dialog.showMessageBox({ type: 'warning', title: 'フォルダーを開けません', message: 'ライセンスのフォルダーを開けませんでした', detail: `${err}\n\n場所: ${dir}` });
+  }
 }
 
 function openExternalIfWeb(url: string): void {
@@ -208,11 +231,33 @@ async function boot(): Promise<void> {
   registerIpc();
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
-      ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+      // Mac は標準の appMenu の「について」を、ライセンスを出す自前のものに置き換える
+      ...(process.platform === 'darwin'
+        ? [
+            {
+              label: app.name,
+              submenu: [
+                { label: 'Studio M Pro について…', click: () => void showAbout() },
+                { type: 'separator' as const },
+                { role: 'hide' as const },
+                { role: 'hideOthers' as const },
+                { role: 'unhide' as const },
+                { type: 'separator' as const },
+                { role: 'quit' as const },
+              ],
+            },
+          ]
+        : []),
       { role: 'editMenu' as const },
       { role: 'viewMenu' as const },
       { role: 'windowMenu' as const },
-      { label: 'ヘルプ', submenu: [{ label: '更新を確認…', click: () => void runUpdateCheck({ silent: false }) }] },
+      {
+        label: 'ヘルプ',
+        submenu: [
+          { label: '更新を確認…', click: () => void runUpdateCheck({ silent: false }) },
+          ...(process.platform === 'darwin' ? [] : [{ label: 'Studio M Pro について…', click: () => void showAbout() }]),
+        ],
+      },
     ]),
   );
   createWindow(appUrl);
