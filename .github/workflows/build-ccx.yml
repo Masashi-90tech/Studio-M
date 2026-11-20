@@ -59,19 +59,23 @@ jobs:
             make tar bzip2 curl zip python
       - name: ccx をビルドする
         run: bash desktop/tools/ccx/build-windows.sh "$RUNNER_TEMP/ccx-build"
+      # RUNNER_TEMP は D:\a\_temp の形（Windows 形式）。MSYS2 の python / zip には /d/a/_temp の形（cygpath -u）、
+      # Windows 版の node には D:/a/_temp の形（cygpath -m）で渡す。形が違うと相対パスと解釈されて見つからない
       - name: DLL とライセンス文をまとめる
         run: |
           . desktop/tools/ccx/versions.env
+          T="$(cygpath -u "$RUNNER_TEMP")"
           python3 desktop/tools/ccx/bundle.py \
-            --ccx "$RUNNER_TEMP/ccx-build/ccx_${CCX_VERSION}.exe" \
-            --out "$RUNNER_TEMP/ccx-pack" --version "$CCX_VERSION" \
+            --ccx "$T/ccx-build/ccx_${CCX_VERSION}.exe" \
+            --out "$T/ccx-pack" --version "$CCX_VERSION" \
             --licenses THIRD-PARTY-LICENSES/ccx
       - name: 片持ち梁で動作確認する
         run: |
           . desktop/tools/ccx/versions.env
-          node desktop/tools/ccx/smoke.mjs "$RUNNER_TEMP/ccx-pack/ccx/ccx_${CCX_VERSION}.exe"
+          M="$(cygpath -m "$RUNNER_TEMP")"
+          node desktop/tools/ccx/smoke.mjs "$M/ccx-pack/ccx/ccx_${CCX_VERSION}.exe"
       - name: zip にする
-        run: cd "$RUNNER_TEMP/ccx-pack" && zip -r "$GITHUB_WORKSPACE/ccx-windows-x64.zip" .
+        run: cd "$(cygpath -u "$RUNNER_TEMP")/ccx-pack" && zip -r "$(cygpath -u "$GITHUB_WORKSPACE")/ccx-windows-x64.zip" .
       - uses: actions/upload-artifact@v4
         with:
           name: ccx-windows-x64
