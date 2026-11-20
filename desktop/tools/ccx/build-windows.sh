@@ -40,6 +40,8 @@ CCX_SRC="$(ls -d "$WORK"/src/*/ccx_*/src | head -1)"
     -e "s|@SPOOLES@|$WORK/src/SPOOLES.2.2|g" -e "s|@ARCH@|Linux|g" -e "s|@CC@|$CC|g" -e "s|@FC@|$FC|g" \
     "$HERE/patches/ccx-makefile.sed" > "$WORK/ccx-makefile.sed"
   sed -i -E -f "$WORK/ccx-makefile.sed" Makefile
+  # ccx_2.23.c の冒頭の _set_output_format(_TWO_DIGIT_EXPONENT);（指数を 2 桁にする設定）は、mingw の stdio.h の宣言と衝突する。結果の値には影響しないので消す
+  sed -i -E '/^[[:space:]]*_set_output_format\(_TWO_DIGIT_EXPONENT\);/d' ccx_*.c
   # 公式の Makefile の LIBS は「LIBS = \」から続く複数行で、さらに make の依存ファイルとしても使われる。
   # 1 行だけ置き換えると残りの行が壊れて「missing separator」になるので、続きの行ごと置き換え、依存ファイルからは外す
   LIBS_LINE="LIBS = $WORK/src/SPOOLES.2.2/spooles.a -larpack -lopenblas -lpthread -lm" perl -0pi -e 's/^LIBS[ \t]*=(?:[^\n]*\\\n)*[^\n]*\n/$ENV{LIBS_LINE}\n/m' Makefile
