@@ -37,7 +37,7 @@ CCX_SRC="$(ls -d "$WORK"/src/*/ccx_*/src | head -1)"
 (
   cd "$CCX_SRC"
   sed -E \
-    -e "s|@SPOOLES@|$WORK/src/SPOOLES.2.2|g" -e "s|@ARCH@|Windows|g" -e "s|@CC@|$CC|g" -e "s|@FC@|$FC|g" \
+    -e "s|@SPOOLES@|$WORK/src/SPOOLES.2.2|g" -e "s|@ARCH@|Linux|g" -e "s|@CC@|$CC|g" -e "s|@FC@|$FC|g" \
     "$HERE/patches/ccx-makefile.sed" > "$WORK/ccx-makefile.sed"
   sed -i -E -f "$WORK/ccx-makefile.sed" Makefile
   # 公式の Makefile の LIBS は「LIBS = \」から続く複数行で、さらに make の依存ファイルとしても使われる。

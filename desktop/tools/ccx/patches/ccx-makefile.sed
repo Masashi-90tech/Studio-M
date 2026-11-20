@@ -1,4 +1,5 @@
 # ccx_2.23/src/Makefile の差し替え（sed -E -f で適用）。build-*.sh が @SPOOLES@ などを置き換えてから使う。
+# ARCH は Linux にする（ccx.h は ARCH が Linux などの既知の名前のときだけ FORTRAN マクロ（関数名の末尾に _）を定義する。gfortran は macOS・Windows でも同じ規則）
 # 公式の Makefile は ../../../SPOOLES.2.2 と ARPACK を相対パスで決め打ちにしている。
 s|^CFLAGS *=.*|CFLAGS = -Wall -O2 -I@SPOOLES@ -DARCH="@ARCH@" -DSPOOLES -DARPACK -DMATRIXSTORAGE -DNETWORKOUT -DUSE_MT=1 -Wno-error=int-conversion -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=implicit-int|
 s|^FFLAGS *=.*|FFLAGS = -Wall -O2 -fopenmp -fallow-argument-mismatch|
