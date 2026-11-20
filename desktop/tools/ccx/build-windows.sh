@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 未検証。最初の Actions の実行で直す（MSYS2 の mingw-w64 で書いただけで、実機でも Actions でも動かしていない）。
+# 2026-11-20 に GitHub Actions（windows-latest の MSYS2）で動作を確認した。Windows の実機での確認は未了。
 # Windows x64 で CalculiX（ccx）を公式ソースからビルドする（GitHub の windows-latest ＋ MSYS2 MINGW64 向け）。
 #   使い方（MSYS2 MINGW64 の bash で）: build-windows.sh <作業フォルダー>   → <作業フォルダー>/ccx_<版>.exe ができる
 # 直すときの目安: Makefile の差し替え（patches/ccx-makefile.sed）、SPOOLES の Make.inc、-fallow-argument-mismatch、
@@ -26,7 +26,10 @@ CCX_SRC="$(ls -d "$WORK"/src/*/ccx_*/src | head -1)"
 
 (
   cd "$WORK/src/SPOOLES.2.2"
-  sed -i -E "s|^ *CC *=.*|  CC = $CC|; s|^ *OPTLEVEL *=.*|  OPTLEVEL = -O2|" Make.inc
+  sed -i -E "s|^ *CC *=.*|  CC = $CC|; s|^ *OPTLEVEL *=.*|  OPTLEVEL = -O2 -Wno-error=int-conversion -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=implicit-int|" Make.inc
+  # SPOOLES 2.2 は古い C で、新しい gcc（14 以降）は IVinit(n, NULL) などの暗黙変換をエラーにする。
+  # NULL は整数としては 0 なので、意味を変えずに 0 に書き換え、残りの同種のエラーも出さないようにする
+  sed -i -E "s|IVinit\(([A-Za-z_]+), NULL\)|IVinit(\1, 0)|g" ETree/src/transform.c
   make lib
   (cd MT/src && make -f makeGlobalLib)
 )
@@ -34,10 +37,15 @@ CCX_SRC="$(ls -d "$WORK"/src/*/ccx_*/src | head -1)"
 (
   cd "$CCX_SRC"
   sed -E \
-    -e "s|@SPOOLES@|$WORK/src/SPOOLES.2.2|g" -e "s|@ARCH@|Windows|g" -e "s|@CC@|$CC|g" -e "s|@FC@|$FC|g" \
+    -e "s|@SPOOLES@|$WORK/src/SPOOLES.2.2|g" -e "s|@ARCH@|Linux|g" -e "s|@CC@|$CC|g" -e "s|@FC@|$FC|g" \
     "$HERE/patches/ccx-makefile.sed" > "$WORK/ccx-makefile.sed"
   sed -i -E -f "$WORK/ccx-makefile.sed" Makefile
-  sed -i -E "s|^LIBS *=.*|LIBS = $WORK/src/SPOOLES.2.2/spooles.a -larpack -lopenblas -lpthread -lm|" Makefile
+  # ccx_2.23.c の冒頭の _set_output_format(_TWO_DIGIT_EXPONENT);（指数を 2 桁にする設定）は、mingw の stdio.h の宣言と衝突する。結果の値には影響しないので消す
+  sed -i -E '/^[[:space:]]*_set_output_format\(_TWO_DIGIT_EXPONENT\);/d' ccx_*.c
+  # 公式の Makefile の LIBS は「LIBS = \」から続く複数行で、さらに make の依存ファイルとしても使われる。
+  # 1 行だけ置き換えると残りの行が壊れて「missing separator」になるので、続きの行ごと置き換え、依存ファイルからは外す
+  LIBS_LINE="LIBS = $WORK/src/SPOOLES.2.2/spooles.a -larpack -lopenblas -lpthread -lm" perl -0pi -e 's/^LIBS[ \t]*=(?:[^\n]*\\\n)*[^\n]*\n/$ENV{LIBS_LINE}\n/m' Makefile
+  perl -0pi -e 's/(\$\(OCCXMAIN\)\s+ccx_[0-9.]+\.a)\s+\$\(LIBS\)/$1/' Makefile
   make -j"$(nproc)" ccx_${CCX_VERSION}
   cp "ccx_${CCX_VERSION}.exe" "$WORK/ccx_${CCX_VERSION}.exe" 2>/dev/null || cp "ccx_${CCX_VERSION}" "$WORK/ccx_${CCX_VERSION}.exe"
 )

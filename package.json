@@ -16,6 +16,7 @@
     "build:engine": "vite build --ssr engine/main.ts --outDir dist-engine -c engine/vite.config.ts",
     "desktop:build": "npm run build && vite build -c desktop/vite.config.ts --logLevel warn && vite build -c desktop/vite.config.ts --mode preload --logLevel warn",
     "desktop:start": "npm --prefix desktop run start",
+    "desktop:pack": "npm run desktop:build && npm --prefix desktop exec -- electron-builder --dir --publish never",
     "desktop:typecheck": "tsc --noEmit -p desktop/tsconfig.electron.json",
     "test:engines": "STUDIO_M_ENGINE_TESTS=1 vitest run engine"
   },

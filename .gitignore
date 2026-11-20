@@ -3,3 +3,5 @@ dist/
 *.log
 dist-engine/
 desktop/dist/
+desktop/release/
+desktop/build/

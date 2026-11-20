@@ -240,16 +240,27 @@
     {
       "name": "Electron",
       "version": "45.2.2",
-      "role": "Studio M Pro（Mac・Windows のアプリ）の土台。今は雛形（desktop/）",
+      "role": "Studio M Pro（Mac・Windows のアプリ）の土台。インストーラーに同梱される",
+      "license": "MIT",
+      "usage": "bundled",
+      "commercial": "ok",
+      "source": "https://github.com/electron/electron",
+      "checked": "2026-11-20",
+      "notes": "desktop/package.json だけに入れる（ルートの npm ci でバイナリをダウンロードしないため）。実証実験 4 のキット（experiments/exp4-packaging/desktop-probe）と同じ 45.2.2 に固定。npm の electron パッケージの LICENSE（MIT）で確認。Chromium は BSD-3-Clause など複数のライセンスの部品を含む。配布物（dmg・exe）に Electron の LICENSE と LICENSES.chromium.html が入る（Electron の配布物に標準で含まれる）。インストーラーは desktop/electron-builder.yml と .github/workflows/build-desktop.yml",
+      "obligations": [
+        "配布物に Electron の LICENSE と、Chromium とその部品のライセンス一覧（LICENSES.chromium.html）を同梱する（Electron の配布物に標準で入っている。インストール後のフォルダーに残ること。実機で未確認）"
+      ]
+    },
+    {
+      "name": "electron-builder",
+      "version": "26.18.0",
+      "role": "Studio M Pro のインストーラー（dmg・exe）を作る",
       "license": "MIT",
       "usage": "dev",
       "commercial": "ok",
-      "source": "https://github.com/electron/electron",
-      "checked": "2026-11-19",
-      "notes": "desktop/package.json だけに入れる（ルートの npm ci でバイナリをダウンロードしないため）。実証実験 4 のキット（experiments/exp4-packaging/desktop-probe）と同じ 45.2.2 に固定。npm の electron パッケージの LICENSE（MIT）で確認。Chromium は BSD-3-Clause など複数のライセンスの部品を含む",
-      "obligations": [
-        "同梱するときは Electron の LICENSE と、Chromium とその部品のライセンス一覧（LICENSES.chromium.html）を配布物に同梱する（6 番のインストーラーの作業で bundled に変える）"
-      ]
+      "source": "https://github.com/electron-userland/electron-builder",
+      "checked": "2026-11-20",
+      "notes": "desktop/package.json だけに入れる（ルートには入れない）。公開（2026-10-20）から 2 週間以上たった版に固定。ライセンスは npm レジストリの値。自動更新（electron-updater）は署名を取るまで使わない（更新は desktop/src/update-check.ts の通知だけ）"
     },
     {
       "name": "OpenFOAM",

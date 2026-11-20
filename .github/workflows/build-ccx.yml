@@ -1,9 +1,11 @@
 # CalculiX（ccx）を OS ごとにビルドして、同梱用の zip を作る。手順は docs/CCX-BUILD.md。
-# Windows のジョブは未検証（最初の実行で直す）。
+# 2026-11-20 に macOS・Windows とも Actions で最後まで通った（docs/CCX-BUILD.md）。
 name: build-ccx
 
 on:
   workflow_dispatch:
+  # build-desktop.yml から呼ぶ（同じ実行の中で成果物を使うため）
+  workflow_call:
   push:
     tags:
       - 'ccx-v*'
@@ -13,7 +15,7 @@ permissions:
 
 jobs:
   macos-arm64:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,28 +48,36 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
+      # Node は MSYS2 のパッケージにないので setup-node で入れ、MSYS2 のシェルからも見えるようにする（path-type: inherit）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
+          path-type: inherit
           update: true
           install: >-
             make tar bzip2 curl zip python
-            mingw-w64-x86_64-nodejs
       - name: ccx をビルドする
         run: bash desktop/tools/ccx/build-windows.sh "$RUNNER_TEMP/ccx-build"
+      # RUNNER_TEMP は D:\a\_temp の形（Windows 形式）。MSYS2 の python / zip には /d/a/_temp の形（cygpath -u）、
+      # Windows 版の node には D:/a/_temp の形（cygpath -m）で渡す。形が違うと相対パスと解釈されて見つからない
       - name: DLL とライセンス文をまとめる
         run: |
           . desktop/tools/ccx/versions.env
+          T="$(cygpath -u "$RUNNER_TEMP")"
           python3 desktop/tools/ccx/bundle.py \
-            --ccx "$RUNNER_TEMP/ccx-build/ccx_${CCX_VERSION}.exe" \
-            --out "$RUNNER_TEMP/ccx-pack" --version "$CCX_VERSION" \
+            --ccx "$T/ccx-build/ccx_${CCX_VERSION}.exe" \
+            --out "$T/ccx-pack" --version "$CCX_VERSION" \
             --licenses THIRD-PARTY-LICENSES/ccx
       - name: 片持ち梁で動作確認する
         run: |
           . desktop/tools/ccx/versions.env
-          node desktop/tools/ccx/smoke.mjs "$RUNNER_TEMP/ccx-pack/ccx/ccx_${CCX_VERSION}.exe"
+          M="$(cygpath -m "$RUNNER_TEMP")"
+          node desktop/tools/ccx/smoke.mjs "$M/ccx-pack/ccx/ccx_${CCX_VERSION}.exe"
       - name: zip にする
-        run: cd "$RUNNER_TEMP/ccx-pack" && zip -r "$GITHUB_WORKSPACE/ccx-windows-x64.zip" .
+        run: cd "$(cygpath -u "$RUNNER_TEMP")/ccx-pack" && zip -r "$(cygpath -u "$GITHUB_WORKSPACE")/ccx-windows-x64.zip" .
       - uses: actions/upload-artifact@v4
         with:
           name: ccx-windows-x64

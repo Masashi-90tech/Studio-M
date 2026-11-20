@@ -29,7 +29,10 @@ CCX_SRC="$(ls -d "$WORK"/src/*/ccx_*/src | head -1)"
 # 2. SPOOLES（静的ライブラリ。MT 版も作る）
 (
   cd "$WORK/src/SPOOLES.2.2"
-  sed -i '' -E "s|^ *CC *=.*|  CC = $CC|; s|^ *OPTLEVEL *=.*|  OPTLEVEL = -O2|" Make.inc
+  sed -i '' -E "s|^ *CC *=.*|  CC = $CC|; s|^ *OPTLEVEL *=.*|  OPTLEVEL = -O2 -Wno-error=int-conversion -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=implicit-int|" Make.inc
+  # SPOOLES 2.2 は古い C で、新しい gcc（14 以降）は IVinit(n, NULL) などの暗黙変換をエラーにする。
+  # NULL は整数としては 0 なので、意味を変えずに 0 に書き換え、残りの同種のエラーも出さないようにする
+  sed -i '' -E "s|IVinit\(([A-Za-z_]+), NULL\)|IVinit(\1, 0)|g" ETree/src/transform.c
   make lib
   (cd MT/src && make -f makeGlobalLib)
 )
@@ -38,10 +41,13 @@ CCX_SRC="$(ls -d "$WORK"/src/*/ccx_*/src | head -1)"
 (
   cd "$CCX_SRC"
   sed -E \
-    -e "s|@SPOOLES@|$WORK/src/SPOOLES.2.2|g" -e "s|@ARCH@|Darwin|g" -e "s|@CC@|$CC|g" -e "s|@FC@|$FC|g" \
+    -e "s|@SPOOLES@|$WORK/src/SPOOLES.2.2|g" -e "s|@ARCH@|Linux|g" -e "s|@CC@|$CC|g" -e "s|@FC@|$FC|g" \
     "$HERE/patches/ccx-makefile.sed" > "$WORK/ccx-makefile.sed"
   sed -i '' -E -f "$WORK/ccx-makefile.sed" Makefile
-  sed -i '' -E "s|^LIBS *=.*|LIBS = $WORK/src/SPOOLES.2.2/spooles.a -L$BREW/lib -L$BREW/opt/openblas/lib -larpack -lopenblas -lpthread -lm|" Makefile
+  # 公式の Makefile の LIBS は「LIBS = \」から続く複数行で、さらに make の依存ファイルとしても使われる。
+  # 1 行だけ置き換えると残りの行が壊れて「missing separator」になるので、続きの行ごと置き換え、依存ファイルからは外す
+  LIBS_LINE="LIBS = $WORK/src/SPOOLES.2.2/spooles.a -L$BREW/lib -L$BREW/opt/openblas/lib -larpack -lopenblas -lpthread -lm" perl -0pi -e 's/^LIBS[ \t]*=(?:[^\n]*\\\n)*[^\n]*\n/$ENV{LIBS_LINE}\n/m' Makefile
+  perl -0pi -e 's/(\$\(OCCXMAIN\)\s+ccx_[0-9.]+\.a)\s+\$\(LIBS\)/$1/' Makefile
   make -j"$(sysctl -n hw.ncpu)" ccx_${CCX_VERSION}
   cp "ccx_${CCX_VERSION}" "$WORK/ccx_${CCX_VERSION}"
 )

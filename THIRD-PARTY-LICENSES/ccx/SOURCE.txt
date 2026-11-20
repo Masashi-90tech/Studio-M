@@ -8,7 +8,7 @@ Studio M Pro に同梱している CalculiX（ccx）について
 
 ソースの入手先
   公式  : http://www.calculix.de/ccx_2.23.src.tar.bz2（予備: http://www.dhondt.de/ccx_2.23.src.tar.bz2）
-  SHA-256 : TODO（未確認。desktop/tools/ccx/versions.env の CCX_SHA256 と同じ値に書き換えること）
+  SHA-256 : 9c88385c10fb04f5dc6c4e98027a51bebdd8aee3920e05190d6c1dd08357d6e7（2026-11-20 に作者のサイト www.dhondt.de から取得した値。公式は SHA-256 を公開していないため、初回に取得した値を記録した。desktop/tools/ccx/versions.env の CCX_SHA256 と同じ）
 
 ビルド手順
   Studio M のリポジトリの desktop/tools/ccx/（build-macos.sh、build-windows.sh、patches/）と docs/CCX-BUILD.md。

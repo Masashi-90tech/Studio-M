@@ -54,11 +54,14 @@
 4. CalculiX の同梱: Mac と Windows のビルド手順、GitHub Actions での自動ビルド、ライセンス文の同梱
    - 2026-11-20 Mac（M1）の実機で、`STUDIO_M_CCX=/opt/homebrew/bin/ccx_2.23` を渡したエンジン経由の本計算が通った（片持ち梁のたわみが梁理論の 10% 以内、約 0.3 秒。日本語・空白のパスでも同じ。Homebrew の ccx であり、自前ビルドの同梱版ではない）。
    - 2026-11-19 Engine 側の受け口は作成済み（`commandPaths`・`STUDIO_M_CCX`、`desktop/src/bundled-tools.ts` が `resources/ccx`（開発中は `STUDIO_M_BUNDLED_DIR/ccx`）から ccx を探して渡す）。ビルドと同梱は未
-   - 2026-11-19 ビルドの仕組みを作成（`desktop/tools/ccx/`、`.github/workflows/build-ccx.yml`、`THIRD-PARTY-LICENSES/ccx/`、手順は `docs/CCX-BUILD.md`）。**未実行**: ソースの SHA-256 が `TODO` のままで、最初の Actions の実行で Makefile の書き換えなどを直す必要がある。Windows は特に未検証。`GPL-2.0.txt` は Debian のものを仮に置いたので、公式の LICENSE と照らす。アプリの「このアプリについて」へのソース入手先の表示も未
+   - 2026-11-20 ccx の自前ビルドが GitHub Actions（`build-ccx`、手順は `docs/CCX-BUILD.md`）で macOS arm64・Windows x64 とも最後まで通り、成果物（`ccx-macos-arm64.zip` 13.4 MB・`ccx-windows-x64.zip` 19.6 MB）で片持ち梁の確認も通った。残り: 自前ビルドの ccx を Mac の実機で試すこと、Windows の実機での確認、`GPL-2.0.txt` を公式の LICENSE と照らすこと、アプリの「このアプリについて」へのソース入手先の表示
 5. OpenFOAM 追加パックの判定と案内（Mac は OpenFOAM.app、Windows は WSL2 / Docker）
    - 2026-11-19 Engine 側は作成済み（`engine/server/openfoam-app.ts` が `/Applications/OpenFOAM-v*.app` を探し、`commandLaunchers` で `-c "…"` のラッパー経由で起動。見つからないときの案内は `engine/adapters/openfoam/guide.ts` が OS・CPU ごとに出し分ける）。**2026-11-20 Mac（M1）の実機で確認済み**（`STUDIO_M_ENGINE_TESTS=1 npx vitest run engine/server/engine-e2e.test.ts`。OpenFOAM v2606 を検出し、ラッパー経由で円柱まわりの短い流れが約 6 秒で解けた。zsh のラッパーは作業フォルダーを保つ）。この確認で、OpenFOAM は作業フォルダーのパスに日本語・空白があると止まる（`fileName::stripInvalid()`）ことが分かり、Engine が英数字だけの場所に自動で逃がす（`engine/server/work-root.ts`、`STUDIO_M_WORK_ROOT`）ようにした。Windows の WSL2 の自動判定と、画面での案内の表示は未
 6. インストーラー（Mac: dmg、Windows: exe）と自動更新を GitHub Actions で作る
+   - 2026-11-20 作成済み（未実行）: `desktop/electron-builder.yml`（electron-builder 26.18.0。Mac は arm64 の dmg＋ad-hoc 署名、Windows は x64 の nsis）、`.github/workflows/build-desktop.yml`（`build-ccx` を呼んで ccx を同梱 → ビルド → `--selftest` → 成果物。`pro-v*` のタグで Release に添付）、更新の通知（`desktop/src/update-check.ts`。署名なしで Mac の自動更新ができないため、新しい版を知らせてダウンロードページを開く方式。署名を取ったら electron-updater へ）。パッケージ後の画面は `resources/web/index.html`
+   - 未確認: Actions での実行（開発用に、ブランチへの push でも動くトリガーを付けてある。main に入れる前に消す）、Mac・Windows の実機でのインストールと起動、更新の通知の実動作（Release がまだない）
 7. Mac と Windows で、インストール直後に片持ち梁を CalculiX で本計算できることを確かめる
+   - 2026-11-20 `--selftest`（`desktop/src/selftest.ts`・`selftest-logic.ts`）を作成。ウィンドウなしで Engine を起動し、同梱の ccx で片持ち梁を本計算して JSON と終了コード（0 / 1）を返す。ccx がないときは「同梱の ccx が見つかりません」で終了コード 1（Linux の xvfb で確認）。Actions で作ったアプリに対して実行する手順を `build-desktop.yml` に入れた（未実行）。Mac・Windows の実機での確認は未
 
 続けて 3D の土台（詳しくは `docs/ROADMAP.md` の v0.6 と、`docs/PLATFORM-DESIGN.md` の 3・5・6・12 章）:
 
