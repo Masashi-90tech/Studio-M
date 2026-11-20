@@ -1,5 +1,5 @@
 # CalculiX（ccx）を OS ごとにビルドして、同梱用の zip を作る。手順は docs/CCX-BUILD.md。
-# Windows のジョブは未検証（最初の実行で直す）。
+# 2026-11-20 に macOS・Windows とも Actions で最後まで通った（docs/CCX-BUILD.md）。
 name: build-ccx
 
 on:

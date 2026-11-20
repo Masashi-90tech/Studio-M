@@ -12,7 +12,7 @@ Homebrew の ccx には頼らない（実験 4 の手順を製品版にしたも
 
 ## 版の上げ方
 
-1. `desktop/tools/ccx/versions.env` の `CCX_VERSION`・URL・`CCX_SHA256` を直す。SHA-256 は公式の値と照らして書く（`TODO` のままだと、ビルドは実際の値を表示してわざと失敗する）
+1. `desktop/tools/ccx/versions.env` の `CCX_VERSION`・URL・`CCX_SHA256` を直す。SHA-256 は取得して書く（公式は公開していない。`TODO` のままだと、ビルドは実際の値を表示してわざと失敗する）
 2. `THIRD-PARTY-LICENSES/ccx/SOURCE.txt` の版と SHA-256、`docs/oss-ledger.json` を揃える
 3. Actions を実行し、`smoke.mjs` が合格することを確かめる
 
@@ -27,14 +27,16 @@ Homebrew の ccx には頼らない（実験 4 の手順を製品版にしたも
 - ソースの入手先と SHA-256 を `SOURCE.txt` に書く。アプリの「このアプリについて」にも同じ入手先を書く（アプリ側の作業は未）
 - ビルドに使ったパッチ（`desktop/tools/ccx/patches/`）はリポジトリに残す
 
-## 検証済みと未検証（2026-11-19 時点）
+## 検証済みと未検証（2026-11-20 時点）
+
+GitHub Actions の `build-ccx` を、ブランチを指定して 10 回実行して直した（1 回目〜9 回目は、環境づくり・古い C/Fortran のコードを新しい gcc でビルドするための修正・Windows のパス形式の修正）。10 回目で macOS・Windows の両方が最後まで通った。
 
 | 項目 | 状態 |
 |---|---|
-| `bundle.py` の macOS の手順（dylib の集め方・書き換え・署名） | 実験 4 の `bundle_ccx.py` で Mac 上で動作確認済み。製品用に整えた版は未実行 |
-| `smoke.mjs` の純粋な部分 | Linux でテスト済み。偽の ccx での一連の流れも確認 |
-| `build-macos.sh`（ソースからのビルド） | 未実行。SPOOLES の `Make.inc`、ccx の Makefile の差し替え（sed）は、最初の Actions で直す前提 |
-| `build-windows.sh`・Windows のジョブ | 未検証（実機でも Actions でも未実行） |
-| ソースの SHA-256 | 未確認（`TODO`）。ネットワークのある環境で取得して書く |
+| macOS arm64 のビルド → `bundle.py`（dylib の集め・書き換え・署名）→ `smoke.mjs`（片持ち梁、日本語・空白のパス、5 回の再現性）→ zip | **Actions で成功**（`ccx-macos-arm64.zip` 13.4 MB） |
+| Windows x64（MSYS2 mingw-w64）のビルド → DLL の集め → `smoke.mjs` → zip | **Actions で成功**（`ccx-windows-x64.zip` 19.6 MB） |
+| 自前ビルドの ccx を、Mac の実機で Studio M Engine から使う | 未確認（Actions の成果物をダウンロードして `STUDIO_M_CCX` に渡して試す） |
+| Windows の実機での動作 | 未確認 |
+| ソースの SHA-256（ccx・SPOOLES） | 記入済み。公式は SHA-256 を公開していないため、2026-11-20 に Actions の 2 つのランナーで取得して一致した値を記録した（以後の改ざん検出用） |
 | `GPL-2.0.txt` | Debian の `common-licenses/GPL-2` から取った。公式の LICENSE と照らして確かめる |
 | 依存のライセンス表記（`DEPENDENCIES.md`） | 要確認の印がついたものがある |

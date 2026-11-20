@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 未検証。最初の Actions の実行で直す（MSYS2 の mingw-w64 で書いただけで、実機でも Actions でも動かしていない）。
+# 2026-11-20 に GitHub Actions（windows-latest の MSYS2）で動作を確認した。Windows の実機での確認は未了。
 # Windows x64 で CalculiX（ccx）を公式ソースからビルドする（GitHub の windows-latest ＋ MSYS2 MINGW64 向け）。
 #   使い方（MSYS2 MINGW64 の bash で）: build-windows.sh <作業フォルダー>   → <作業フォルダー>/ccx_<版>.exe ができる
 # 直すときの目安: Makefile の差し替え（patches/ccx-makefile.sed）、SPOOLES の Make.inc、-fallow-argument-mismatch、
