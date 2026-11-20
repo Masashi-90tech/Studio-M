@@ -55,7 +55,7 @@
    - 2026-11-19 Engine 側の受け口は作成済み（`commandPaths`・`STUDIO_M_CCX`、`desktop/src/bundled-tools.ts` が `resources/ccx`（開発中は `STUDIO_M_BUNDLED_DIR/ccx`）から ccx を探して渡す）。ビルドと同梱は未
    - 2026-11-19 ビルドの仕組みを作成（`desktop/tools/ccx/`、`.github/workflows/build-ccx.yml`、`THIRD-PARTY-LICENSES/ccx/`、手順は `docs/CCX-BUILD.md`）。**未実行**: ソースの SHA-256 が `TODO` のままで、最初の Actions の実行で Makefile の書き換えなどを直す必要がある。Windows は特に未検証。`GPL-2.0.txt` は Debian のものを仮に置いたので、公式の LICENSE と照らす。アプリの「このアプリについて」へのソース入手先の表示も未
 5. OpenFOAM 追加パックの判定と案内（Mac は OpenFOAM.app、Windows は WSL2 / Docker）
-   - 2026-11-19 Engine 側は作成済み（`engine/server/openfoam-app.ts` が `/Applications/OpenFOAM-v*.app` を探し、`commandLaunchers` で `-c "…"` のラッパー経由で起動。見つからないときの案内は `engine/adapters/openfoam/guide.ts` が OS・CPU ごとに出し分ける）。**Mac の実機では未確認**（偽のラッパーでの試験のみ。zsh のラッパーが作業フォルダーを保つかも未確認）。Windows の WSL2 の自動判定と、画面での案内の表示は未
+   - 2026-11-19 Engine 側は作成済み（`engine/server/openfoam-app.ts` が `/Applications/OpenFOAM-v*.app` を探し、`commandLaunchers` で `-c "…"` のラッパー経由で起動。見つからないときの案内は `engine/adapters/openfoam/guide.ts` が OS・CPU ごとに出し分ける）。**2026-11-20 Mac（M1）の実機で確認済み**（`STUDIO_M_ENGINE_TESTS=1 npx vitest run engine/server/engine-e2e.test.ts`。OpenFOAM v2606 を検出し、ラッパー経由で円柱まわりの短い流れが約 6 秒で解けた。zsh のラッパーは作業フォルダーを保つ）。この確認で、OpenFOAM は作業フォルダーのパスに日本語・空白があると止まる（`fileName::stripInvalid()`）ことが分かり、Engine が英数字だけの場所に自動で逃がす（`engine/server/work-root.ts`、`STUDIO_M_WORK_ROOT`）ようにした。Windows の WSL2 の自動判定と、画面での案内の表示は未
 6. インストーラー（Mac: dmg、Windows: exe）と自動更新を GitHub Actions で作る
 7. Mac と Windows で、インストール直後に片持ち梁を CalculiX で本計算できることを確かめる
 
