@@ -52,6 +52,7 @@
    - 2026-11-19 雛形は作成済み（`desktop/`、起動は `npm run desktop:build` → `npm run desktop:start`）。Mac・Windows の実機での確認と、ファイルのダイアログ・IPC の実操作は未確認（Linux の xvfb で、画面の読み込みと Engine の起動までは確認）。画面側が開発用に `window.studioM` を作っているため、Pro の公開名は `window.studioMPro` にした
 3. 画面側: 「PCのエンジン」設定を、Pro では自動接続にする（Lite との分岐は接続方法の層だけに閉じ込め、解析の種類では分岐しない）
 4. CalculiX の同梱: Mac と Windows のビルド手順、GitHub Actions での自動ビルド、ライセンス文の同梱
+   - 2026-11-20 Mac（M1）の実機で、`STUDIO_M_CCX=/opt/homebrew/bin/ccx_2.23` を渡したエンジン経由の本計算が通った（片持ち梁のたわみが梁理論の 10% 以内、約 0.3 秒。日本語・空白のパスでも同じ。Homebrew の ccx であり、自前ビルドの同梱版ではない）。
    - 2026-11-19 Engine 側の受け口は作成済み（`commandPaths`・`STUDIO_M_CCX`、`desktop/src/bundled-tools.ts` が `resources/ccx`（開発中は `STUDIO_M_BUNDLED_DIR/ccx`）から ccx を探して渡す）。ビルドと同梱は未
    - 2026-11-19 ビルドの仕組みを作成（`desktop/tools/ccx/`、`.github/workflows/build-ccx.yml`、`THIRD-PARTY-LICENSES/ccx/`、手順は `docs/CCX-BUILD.md`）。**未実行**: ソースの SHA-256 が `TODO` のままで、最初の Actions の実行で Makefile の書き換えなどを直す必要がある。Windows は特に未検証。`GPL-2.0.txt` は Debian のものを仮に置いたので、公式の LICENSE と照らす。アプリの「このアプリについて」へのソース入手先の表示も未
 5. OpenFOAM 追加パックの判定と案内（Mac は OpenFOAM.app、Windows は WSL2 / Docker）
