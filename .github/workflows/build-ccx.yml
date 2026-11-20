@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   macos-arm64:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,13 +46,17 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
+      # Node は MSYS2 のパッケージにないので setup-node で入れ、MSYS2 のシェルからも見えるようにする（path-type: inherit）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
+          path-type: inherit
           update: true
           install: >-
             make tar bzip2 curl zip python
-            mingw-w64-x86_64-nodejs
       - name: ccx をビルドする
         run: bash desktop/tools/ccx/build-windows.sh "$RUNNER_TEMP/ccx-build"
       - name: DLL とライセンス文をまとめる
