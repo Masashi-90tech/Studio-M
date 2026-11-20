@@ -1,11 +1,11 @@
-import { mkdtemp, rm, mkdir } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { EngineInfo } from '../../src/core/engine-protocol';
 import type { EngineAdapter } from '../types';
 import { createAdapterContext, decideBackend } from './context';
-import { detectEngines, probeCommand } from './detect';
+import { createProbe, detectEngines, probeCommand } from './detect';
 import { buildDockerArgs, buildEnv, createLineSplitter, ExecError, isValidCommand, resolveInside, runCommand } from './exec';
 
 let dir: string;
@@ -178,5 +178,50 @@ describe('検出', () => {
   it('detect が例外を投げても、そのエンジンが使えないだけ', async () => {
     const d = await detectEngines({ adapters: [adapter({ detect: async () => { throw new Error('boom'); } })], run: async () => ({ code: 1, stdout: '', stderr: '' }) });
     expect(d.engines.find((e) => e.id === 'openfoam')).toMatchObject({ available: false });
+  });
+});
+
+describe.skipIf(process.platform === 'win32')('commandPaths（同梱コマンドの場所を外から渡す）', () => {
+  // パスに空白と日本語を含む、版つきの名前の偽コマンド
+  let fake: string;
+  beforeAll(async () => {
+    const d = join(dir, '日本語 の フォルダ');
+    await mkdir(d, { recursive: true });
+    fake = join(d, 'ccx_9.99');
+    await writeFile(fake, '#!/bin/sh\necho "fake-ccx $*"\n');
+    await chmod(fake, 0o755);
+  });
+
+  it('名前 ccx が、指定の絶対パスで起動される（空白・日本語を含んでもよい）', async () => {
+    const r = await runCommand({ command: 'ccx', args: ['-i', 'job'], workDir: dir, backend: native, commandPaths: { ccx: fake } });
+    expect(r.code).toBe(0);
+    expect(r.stdout.trim()).toBe('fake-ccx -i job');
+  });
+
+  it('commandPaths にない名前は今までどおり PATH から探す。未指定でも同じ', async () => {
+    const r = await runCommand({ command: 'node', args: ['-e', 'console.log(1)'], workDir: dir, backend: native, commandPaths: { ccx: fake } });
+    expect(r.stdout.trim()).toBe('1');
+    await expect(runCommand({ command: 'ccx_9.99', args: [], workDir: dir, backend: native })).rejects.toMatchObject({ reason: 'not-found' });
+  });
+
+  it('コマンド名の検査は名前に対して行う（パスを名前にはできない）', async () => {
+    await expect(runCommand({ command: fake, args: [], workDir: dir, backend: native, commandPaths: { ccx: fake } })).rejects.toMatchObject({ reason: 'bad-request' });
+  });
+
+  it('Docker では無視される（docker run の中の名前は ccx のまま）', () => {
+    const args = buildDockerArgs({ image: 'img', workDir: '/w', command: 'ccx', args: ['job'] });
+    expect(args.slice(-2)).toEqual(['ccx', 'job']);
+  });
+
+  it('ctx.run と検出（probe）の両方が commandPaths を使う', async () => {
+    const adapter = { id: 'calculix', capabilities: [], detect: async () => ({}) as EngineInfo, solve: async () => ({}) as never } as EngineAdapter;
+    const ctx = createAdapterContext({
+      jobId: 'j2', workDir: dir, signal: new AbortController().signal, adapter, info: undefined, dockerAvailable: false, commandTimeoutMs: 5000,
+      commandPaths: { ccx: fake }, log: () => undefined, progress: () => undefined,
+    });
+    expect((await ctx.run('ccx', ['a'])).stdout.trim()).toBe('fake-ccx a');
+    const probed = await createProbe({ commandPaths: { ccx: fake } })('ccx', ['-v']);
+    expect(probed).toEqual({ ok: true, output: 'fake-ccx -v' });
+    expect((await probeCommand('ccx_9.99', [])).ok).toBe(false);
   });
 });

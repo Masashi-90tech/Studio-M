@@ -2,6 +2,9 @@
 import { HELP_TEXT, parseArgs } from './server/args';
 import { loadAdapters } from './server/adapters';
 import { generateToken, writeTokenFile } from './server/auth';
+import { existsSync, statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
+import { findOpenFoamLauncher } from './server/openfoam-app';
 import { createEngineService } from './server/service';
 import { ENGINE_VERSION } from './server/version';
 
@@ -21,6 +24,15 @@ async function main(): Promise<void> {
   const fixed = process.env.STUDIO_M_ENGINE_TOKEN;
   const token = fixed && fixed.length >= 16 ? fixed : generateToken();
   const adapters = loadAdapters();
+  // STUDIO_M_CCX: PATH にない ccx（`ccx_2.23` など）の場所を絶対パスで指定する
+  const commandPaths: Record<string, string> = {};
+  const ccxPath = process.env.STUDIO_M_CCX;
+  if (ccxPath) {
+    if (isAbsolute(ccxPath) && existsSync(ccxPath) && statSync(ccxPath).isFile()) commandPaths.ccx = ccxPath;
+    else console.warn(`STUDIO_M_CCX（${ccxPath}）は、実在するファイルへの絶対パスではないので無視します。ccx の実行ファイルのフルパスを指定してください`);
+  }
+  // Mac: OpenFOAM.app が入っていれば、そのラッパー経由で OpenFOAM のコマンドを動かす（darwin 以外では何も見つからない）
+  const commandLaunchers = findOpenFoamLauncher();
   const service = createEngineService({
     adapters,
     token,
@@ -29,6 +41,8 @@ async function main(): Promise<void> {
     keep: args.keep,
     ttlHours: args.ttlHours,
     commandTimeoutMs: args.timeoutMin * 60_000,
+    commandPaths: Object.keys(commandPaths).length > 0 ? commandPaths : undefined,
+    commandLaunchers,
   });
 
   console.log('エンジンの検出中…');
@@ -63,6 +77,7 @@ async function main(): Promise<void> {
   console.log(' 「接続を確認」を押してください。合言葉は他の人に教えないでください。');
   if (tokenFile) console.log(` （合言葉は ${tokenFile} にも保存しました）`);
   console.log(' ');
+  if (service.workRootNotice) console.log(` ${service.workRootNotice}`);
   console.log(' 見つかったエンジン:');
   for (const e of status.engines) {
     const mark = e.available ? '✓' : '✗';

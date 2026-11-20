@@ -88,7 +88,11 @@ export async function runOnce(o) {
   if (r.code !== 0) throw stageError('計算の入力づくり', r);
 
   log('CalculiX で解きます');
-  const ccxEnv = { ...baseEnv, OMP_NUM_THREADS: '4', CCX_NPROC_RESULTS: '1' };
+  // 2026-11-19: Mac（M1）で ccx を 4 スレッドで動かすと、約 7% の確率で間違った答えが出た
+  // （30 回中 2 回、反力が 52061 N・69821 N。正しくは 51434 N）。連立方程式を解く部分（SPOOLES）を
+  // 1 スレッドにすると 60 回とも正しく、全体を 1 スレッドにするより速かった。
+  // そのため解く部分は常に 1 スレッド、残りは OMP_NUM_THREADS（既定 4。環境変数 STUDIO_M_CCX_THREADS で変える）
+  const ccxEnv = { ...baseEnv, OMP_NUM_THREADS: process.env.STUDIO_M_CCX_THREADS ?? '4', CCX_NPROC_EQUATION_SOLVER: '1', CCX_NPROC_RESULTS: '1' };
   if (process.platform === 'linux') ccxEnv.LD_LIBRARY_PATH = P.ccxLib + (process.env.LD_LIBRARY_PATH ? `:${process.env.LD_LIBRARY_PATH}` : '');
   if (process.platform === 'darwin') ccxEnv.DYLD_FALLBACK_LIBRARY_PATH = P.ccxLib;
   r = await exec(P.ccx, ['-i', 'job'], { cwd: o.workDir, env: ccxEnv });
@@ -130,10 +134,10 @@ function parseArgs(argv) {
     const a = argv[i];
     const next = () => argv[++i];
     if (a === '--payload') o.payloadDir = next();
-    else if (a === '--work') o.workDir = next();
+    else if (a === '--work') o.workDir = resolve(next());
     else if (a === '--mesh-size') o.meshSize = Number(next());
     else if (a === '--runs') o.runs = Number(next());
-    else if (a === '--json') o.json = next();
+    else if (a === '--json') o.json = resolve(next());
     else if (a === '--shape-site-packages') o.shapeSitePackages = next();
     else throw new Error(`知らない引数です: ${a}`);
   }

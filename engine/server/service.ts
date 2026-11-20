@@ -4,7 +4,9 @@ import { ENGINE_PROTOCOL_VERSION, type EngineStatus } from '../../src/core/engin
 import type { EngineAdapter } from '../types';
 import { detectEngines, type Detection, type ProbeFn } from './detect';
 import { createEngineServer } from './http';
+import type { CommandLauncher } from './launcher';
 import { cleanStaleWorkDirs, JobManager, WORK_ROOT } from './jobs';
+import { relocationNotice, resolveSafeWorkRoot } from './work-root';
 import { ENGINE_SERVER_ID, ENGINE_VERSION } from './version';
 
 export interface EngineServiceOptions {
@@ -18,6 +20,10 @@ export interface EngineServiceOptions {
   workRoot?: string;
   probe?: ProbeFn;
   maxBodyBytes?: number;
+  /** コマンド名 → 絶対パス。ここにある名前は PATH ではなくそのパスで起動する（同梱の ccx など。native のときだけ有効）。省略時は PATH から探す */
+  commandPaths?: Record<string, string>;
+  /** ラッパー経由で起動するコマンドの設定（Mac の OpenFOAM.app など。native のときだけ有効）。省略時は直接起動 */
+  commandLaunchers?: CommandLauncher;
 }
 
 export interface EngineService {
@@ -28,6 +34,8 @@ export interface EngineService {
   /** 待ち受けを始める。使われたポートを返す（port が 0 なら空いているポート） */
   listen(): Promise<number>;
   close(): Promise<void>;
+  /** 作業フォルダーを安全な場所に移したときの説明（listen のあとに入る。移さなければ undefined） */
+  workRootNotice?: string;
 }
 
 export function createEngineService(o: EngineServiceOptions): EngineService {
@@ -36,7 +44,7 @@ export function createEngineService(o: EngineServiceOptions): EngineService {
   const ttlMs = (o.ttlHours ?? 24) * 3600_000;
 
   const detect = (): Promise<Detection> => {
-    detecting ??= detectEngines({ adapters: o.adapters, probe: o.probe })
+    detecting ??= detectEngines({ adapters: o.adapters, probe: o.probe, commandPaths: o.commandPaths, commandLaunchers: o.commandLaunchers })
       .then((d) => (detection = d))
       .finally(() => (detecting = null));
     return detecting;
@@ -51,6 +59,8 @@ export function createEngineService(o: EngineServiceOptions): EngineService {
     ttlMs,
     commandTimeoutMs: o.commandTimeoutMs,
     workRoot: o.workRoot,
+    commandPaths: o.commandPaths,
+    commandLaunchers: o.commandLaunchers,
   });
 
   const status = async (refresh: boolean): Promise<EngineStatus> => {
@@ -68,13 +78,17 @@ export function createEngineService(o: EngineServiceOptions): EngineService {
   const server = createEngineServer({ token: o.token, jobs, getStatus: status, maxBodyBytes: o.maxBodyBytes });
   let sweeper: NodeJS.Timeout | undefined;
 
-  return {
+  const service: EngineService = {
     server,
     jobs,
     detect,
     status,
     async listen() {
-      await cleanStaleWorkDirs({ root: o.workRoot ?? WORK_ROOT, olderThanMs: ttlMs });
+      // 作業フォルダーのパスに日本語・空白があると OpenFOAM が動かないので、英数字だけの場所に逃がす
+      const resolved = await resolveSafeWorkRoot({ requested: o.workRoot ?? process.env.STUDIO_M_WORK_ROOT ?? WORK_ROOT });
+      jobs.setWorkRoot(resolved.root);
+      service.workRootNotice = relocationNotice(resolved);
+      await cleanStaleWorkDirs({ root: resolved.root, olderThanMs: ttlMs });
       await detect();
       await new Promise<void>((resolve, reject) => {
         server.once('error', reject);
@@ -94,4 +108,5 @@ export function createEngineService(o: EngineServiceOptions): EngineService {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
   };
+  return service;
 }

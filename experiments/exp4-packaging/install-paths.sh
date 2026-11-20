@@ -13,14 +13,14 @@ for a in "$@"; do
   case "$a" in
     --install) INSTALL=1 ;;
     -h|--help) sed -n '2,7p' "$0"; exit 0 ;;
-    *) fail "知らない引数です: $a（使えるのは --install だけです）" ;;
+    *) fail "知らない引数です: ${a}（使えるのは --install だけです）" ;;
   esac
 done
 
 OUT="$PARTS_DIR/install-paths.json"
 rm -f "$OUT"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/exp4-install.XXXXXX")"
-cleanup() { rm -rf "$WORK"; }
+cleanup() { if [ "${KEEP_WORK:-0}" = 1 ]; then echo "作業フォルダーを残しました: ${WORK}（cavity のログは $WORK/cavity-*/run.log）" >&2; else rm -rf "$WORK"; fi; }
 trap cleanup EXIT
 
 rec_str "$OUT" platform "$OS_NAME"
@@ -68,14 +68,22 @@ smoke_foam_app() {
     return 0
   fi
   t0=$(now_ms)
-  # 方式 A: 付属の openfoam スクリプトに -c でコマンドを渡す
-  if (cd "$d" && bash "$etc" -c "$FOAM_SCRIPT" >run.log 2>&1) && grep -q '^End' "$d/icoFoam.log" 2>/dev/null; then
-    style="openfoam -c"
+  # 2026-11-19: etc/openfoam は bash ではなく zsh のスクリプト（${0:h:h:h} という zsh の書き方を使う）。
+  # bash で呼ぶと、アプリの場所を読めずに失敗する。なので、直接実行する（shebang の zsh が使われる）か zsh で呼ぶ
+  # 方式 A: 付属の openfoam スクリプトを直接実行して、-c でコマンドを渡す
+  if (cd "$d" && "$etc" -c "$FOAM_SCRIPT" >run.log 2>&1) && grep -q '^End' "$d/icoFoam.log" 2>/dev/null; then
+    style="openfoam -c（直接実行）"
   else
-    # 方式 B: 環境ファイルを読み込んでから実行する
+    # 方式 B: zsh で openfoam スクリプトを呼び、-c でコマンドを渡す
     rm -rf "$d/case"
-    if (cd "$d" && bash -c "source \"$etc\"; $FOAM_SCRIPT" >run2.log 2>&1) && grep -q '^End' "$d/icoFoam.log" 2>/dev/null; then
-      style="source etc/openfoam"
+    if (cd "$d" && zsh "$etc" -c "$FOAM_SCRIPT" >run2.log 2>&1) && grep -q '^End' "$d/icoFoam.log" 2>/dev/null; then
+      style="zsh openfoam -c"
+    else
+      # 方式 C: zsh で環境ファイルを読み込んでから実行する
+      rm -rf "$d/case"
+      if (cd "$d" && zsh -c "source \"$etc\"; $FOAM_SCRIPT" >run3.log 2>&1) && grep -q '^End' "$d/icoFoam.log" 2>/dev/null; then
+        style="zsh で source etc/openfoam"
+      fi
     fi
   fi
   t1=$(now_ms)
@@ -84,7 +92,9 @@ smoke_foam_app() {
     rec_str "$OUT" "$key.smoke.style" "$style"
   else
     rec "$OUT" "$key.smoke.ok" false
-    rec_str "$OUT" "$key.smoke.note" "cavity が通りませんでした。$d の run.log を確認してください（測定後は消えるので、必要なら WORK を残して再実行）"
+    rec_str "$OUT" "$key.smoke.note" "cavity が通りませんでした。ログの末尾: $( { tail -n 3 "$d/run.log"; tail -n 3 "$d/run2.log"; tail -n 3 "$d/run3.log"; } 2>/dev/null | tr '\n' ' ' | cut -c1-400 )（全文を見るには KEEP_WORK=1 を付けて実行し直す）"
+    say "  [OpenFOAM.app] cavity が通りませんでした。run.log の末尾:"
+    { tail -n 6 "$d/run.log"; echo "--- run2.log（方式 B）"; tail -n 6 "$d/run2.log"; echo "--- run3.log（方式 C）"; tail -n 6 "$d/run3.log"; } 2>/dev/null | sed 's/^/    /' >&2 || true
   fi
   rec "$OUT" "$key.smoke.seconds" "$(node -e "console.log(($t1-$t0)/1000)")"
 }
@@ -125,8 +135,10 @@ if [ "$HAVE_BREW" = 1 ]; then
       deps_kb=$(( deps_kb + $(du_kb "$(brew --cellar "$dep" 2>/dev/null || echo /nonexistent)") ))
     done
     rec "$OUT" "$K.deps_kb" "$deps_kb"
-    ccx_bin="$(brew --prefix)/bin/ccx"
-    if [ -x "$ccx_bin" ]; then smoke_ccx "$ccx_bin" "$K"; fi
+    if ccx_bin="$(find_brew_ccx)"; then
+      rec_str "$OUT" "$K.path" "$ccx_bin"
+      smoke_ccx "$ccx_bin" "$K"
+    fi
   else
     rec "$OUT" "$K.detected" false
   fi

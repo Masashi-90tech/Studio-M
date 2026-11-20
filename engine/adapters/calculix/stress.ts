@@ -10,8 +10,9 @@ import type { JobRequest } from '../../../src/core/engine-protocol';
 import { rasterize } from '../../../src/core/raster';
 import type { ResultSet } from '../../../src/core/types';
 import type { AdapterContext, SolveOutput } from '../../types';
+import { checkBalance } from './balance';
 import { explainFailure, listJobFiles, readDatIfAny, runCcx, SAFETY_CAP, throwIfAborted } from './ccx-run';
-import { parseDat } from './dat';
+import { lastBlock, parseDat, type DatBlock } from './dat';
 import { writeInp } from './inp';
 import { buildMesh, MeshError, type Mesh } from './mesh';
 import { chooseGrid, parseStressOptions, type PlaneStressElement, type StressOptions } from './options';
@@ -71,13 +72,33 @@ export async function solveStress(req: JobRequest, ctx: AdapterContext): Promise
     message: opts.plasticity ? 'CalculiX で荷重を増やしながら解いています' : 'CalculiX で解いています',
   });
   throwIfAborted(ctx);
-  const datText = await readDatIfAny(path.join(ctx.workDir, `${job}.dat`));
+  let datText = await readDatIfAny(path.join(ctx.workDir, `${job}.dat`));
   if (run.code !== 0 || !datText) {
     throw new Error(explainFailure(run.output, { plasticity: opts.plasticity, largeDeformation: opts.largeDeformation, yieldLoadFactor }));
   }
 
   ctx.progress(0.92, '結果を読み取っています', 'reading');
-  const blocks = parseDat(datText);
+  let blocks = parseDat(datText);
+  // 力の釣り合いの検算: 合わないときは、すべて 1 スレッドで 1 回だけやり直す（実験 4。docs/EXPERIMENT-4.md）
+  let balance = checkSupportBalance(mesh, blocks, loadScale);
+  if (balance && !balance.ok) {
+    ctx.log(`反力が荷重と釣り合っていません（差 ${balance.residual.toPrecision(4)} N、荷重 ${balance.load.toPrecision(4)} N）。すべて 1 スレッドで、もう一度計算します`);
+    const retry = await runCcx(ctx, job, { progressFrom: 0.9, progressTo: 0.92, message: 'CalculiX で解き直しています', allSingleThread: true });
+    throwIfAborted(ctx);
+    datText = await readDatIfAny(path.join(ctx.workDir, `${job}.dat`));
+    if (retry.code !== 0 || !datText) {
+      throw new Error(explainFailure(retry.output, { plasticity: opts.plasticity, largeDeformation: opts.largeDeformation, yieldLoadFactor }));
+    }
+    blocks = parseDat(datText);
+    balance = checkSupportBalance(mesh, blocks, loadScale);
+    if (balance && !balance.ok) {
+      throw new Error(
+        '計算結果が荷重と釣り合っていません（支持の反力と荷重が合いません）。計算ソフトが間違った答えを出した可能性があります。' +
+          '1 スレッドでやり直しても同じだったので、格子の細かさ（品質）を変える、形や支持・荷重の置き方を少し変えるなどして、もう一度計算してください。',
+      );
+    }
+    ctx.log('やり直した結果は荷重と釣り合っていました');
+  }
   const mapped = mapResults(mesh, blocks, { plasticity: opts.plasticity, loadScale });
   if (opts.plasticity && yieldLoadFactor !== undefined) {
     mapped.scalars.push({ key: 'yieldLoadFactor', label: '降伏し始める荷重（今の荷重の倍率）', unit: '倍', value: yieldLoadFactor });
@@ -121,3 +142,21 @@ export async function solveStress(req: JobRequest, ctx: AdapterContext): Promise
   return { result, files };
 }
 
+
+/**
+ * 支持の反力と荷重の釣り合いを確かめる。.dat に反力（NSUP の total force）がなければ null（確かめられない）。
+ * 支持の節点に直接かけた荷重は拘束に吸われて RF に出ないので、数えない。
+ */
+function checkSupportBalance(mesh: Mesh, blocks: DatBlock[], loadScale: number): ReturnType<typeof checkBalance> | null {
+  const rf = lastBlock(blocks, 'totalForce', 'NSUP');
+  if (!rf || rf.values.length < 2) return null;
+  const support = new Set(mesh.supportNodes);
+  let ax = 0;
+  let ay = 0;
+  for (const [n, f] of mesh.nodalLoads) {
+    if (support.has(n)) continue;
+    ax += f.fx * loadScale;
+    ay += f.fy * loadScale;
+  }
+  return checkBalance({ reaction: { x: rf.values[0], y: rf.values[1] }, applied: { x: ax, y: ay } });
+}

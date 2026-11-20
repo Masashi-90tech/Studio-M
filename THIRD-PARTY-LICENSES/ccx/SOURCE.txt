@@ -1,0 +1,22 @@
+Studio M Pro に同梱している CalculiX（ccx）について
+=====================================================
+
+同梱しているもの : CalculiX CrunchiX（ccx）  版 2.23
+ライセンス       : GNU General Public License 第 2 版（GPL-2.0。全文は同じフォルダーの GPL-2.0.txt）
+使い方           : Studio M（MIT）とは別の実行ファイルとして同梱しています。Studio M はコマンドとファイルでだけ
+                   やり取りし、CalculiX のコードをリンクしていません。
+
+ソースの入手先
+  公式  : http://www.calculix.de/ccx_2.23.src.tar.bz2（予備: http://www.dhondt.de/ccx_2.23.src.tar.bz2）
+  SHA-256 : TODO（未確認。desktop/tools/ccx/versions.env の CCX_SHA256 と同じ値に書き換えること）
+
+ビルド手順
+  Studio M のリポジトリの desktop/tools/ccx/（build-macos.sh、build-windows.sh、patches/）と docs/CCX-BUILD.md。
+  同梱の版は GitHub Actions（.github/workflows/build-ccx.yml）でビルドしたものです。
+
+依存ライブラリのソースとライセンス: DEPENDENCIES.md を見てください。
+
+ソースの請求
+  同梱しているバイナリに対応するソース（ビルドに使ったパッチを含む）は、上の入手先から取得できます。
+  取得できないときは、Studio M のリポジトリの Issues か配布元の連絡先に請求してください。
+  GPL に従い、ソースを請求できます。

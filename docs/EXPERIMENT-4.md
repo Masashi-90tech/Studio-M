@@ -67,11 +67,90 @@ Python 本体は python-build-standalone（Astral が配る、移動できる CP
 
 ## 結果
 
-（Mac で測ったあとに記入する）
+2026-11-19、MacBook Air（Apple M1、8 コア、16 GB、macOS 27.0.0、Node.js 24.14.0）で `experiments/exp4-packaging/run-all.sh` を実行した。キットの手順は `experiments/exp4-packaging/README.md`。
+
+### 導入経路
+
+| 経路 | 結果 |
+|---|---|
+| CalculiX: Homebrew の tap（`costerwi/calculix/calculix-ccx`） | 入った。版は 2.23（予備確認は 2.21）。実行ファイルの名前は `ccx_2.23`（`ccx` ではない）。本体 0.12 GB、依存を含めて 0.81 GB。梁の理論値との差 0.20%、0.1 秒 |
+| OpenFOAM: OpenFOAM.app（brew で `gerlero/openfoam/openfoam@2606` を入れると `/Applications/OpenFOAM-v2606.app` に入る） | 入った。1.11 GB。**cavity（blockMesh と icoFoam）が通った**。`Contents/Resources/etc/openfoam` を直接実行し、`-c` でコマンドを渡す形で 16.6 秒（初回の起動を含む）。最初に通らなかったのは、このファイルが bash ではなく **zsh** のスクリプトで（`${0:h:h:h}` は zsh の書き方）、キットが bash で呼んでいたため |
+| OpenFOAM: Docker | 測っていない（この Mac に Docker がない） |
+| 既存の Studio M Engine の検出 | calculix・openfoam とも「使えない」。`ccx` や OpenFOAM のコマンドが PATH にないため。Pro ではアプリが同梱の ccx の場所を教える必要がある |
+
+### 同梱物のサイズ（不要物を消したあと）
+
+| 部品 | サイズ |
+|---|---|
+| Python 本体（python-build-standalone 3.12.11） | 44 MB |
+| 形状ワーカー（cadquery-ocp 8.0.1.1.0 と numpy） | 0.85 GB。うち vtk が 0.57 GB、OCP が 0.22 GB |
+| メッシュワーカー（gmsh 4.15.2 と numpy） | 13 MB + Gmsh の共有ライブラリ 79 MB |
+| CalculiX（ccx 5 MB + 共有ライブラリ 26 MB） | 31 MB |
+| 同梱物の合計 | 1.02 GB |
+| Electron 45.2.2 を含めた `.app` | 1.35 GB（Electron 本体 0.25 GB、同梱物 1.11 GB） |
+| zip（ditto）／dmg | 0.35 GB／0.42 GB |
+
+vtk を外すだけで 0.57 GB 減る。`cadquery-ocp` から vtk だけを外す（`--no-deps`）やり方は、Mac でも動かなかった（`libvtkWrappingPythonCore` を読めない）。同じ版の別パッケージ `cadquery-ocp-novtk`（Mac arm64 の wheel あり、63 MB）は、**Mac でも import と STEP の読み書きが通った**。形状ワーカーは 0.85 GB から 0.23 GB に減った（Linux では 1.18 GB から 0.42 GB）。初めて OCP を読み込む時間も、vtk ありの 19.6 秒から 6.0 秒に短くなった。vtk なしの形状ワーカー（`--shape-novtk`）で `.app` を作り直して測った。
+
+| 項目 | vtk 込み | vtk なし |
+|---|---|---|
+| 同梱物の合計 | 1.02 GB | 0.39 GB |
+| `.app` の合計 | 1.35 GB | **0.68 GB** |
+| zip（ditto） | 0.35 GB | 0.23 GB |
+| dmg | 0.43 GB | 0.28 GB |
+
+応力集中係数は 3.138（差 0.33%）のまま。アプリの起動時間も同じ（画面表示 0.22〜0.41 s、ウォームの全体 6.1 s、コールド 9.2 s）。初めて OCP を読み込む時間は 5.9 s。
+
+### 起動時間と一連の処理
+
+| 項目 | コールド | ウォーム |
+|---|---|---|
+| アプリの起動（app ready／画面表示／エンジン応答） | 0.16 s／0.41 s／0.28 s | 0.05 s／0.25 s／0.14 s |
+| 一連の処理（形状／メッシュ／ccx） | 0.7〜0.9 s／0.5〜1.5 s／1.3〜4.5 s | 0.7 s／0.45 s／1.25 s |
+| アプリの起動から結果まで（全体） | 10.2 s | 6.1 s |
+| 初めて OCP を読み込んだとき（vtk 込み） | 19.6〜21.1 s（形状ワーカーの確認の 1 回目。2 回測って同程度） | 0.5〜0.6 s |
+| 初めて OCP を読み込んだとき（cadquery-ocp-novtk） | 6.0 s | 未測定 |
+
+- 平板の応力集中係数は 3.138（近似式 3.149 との差 0.33%）。通常のパス、日本語と空白を含むパス（`~/Studio M テスト/`）、アプリの中のどれでも同じ値になり、**合格の目安に入った**
+- 「全体 6.1 s」のうち、形状・メッシュ・ccx の合計は約 2.4 s で、残り約 3.7 s の内訳は測っていない
+- 初めて OCP を読み込むのに 20 秒ほどかかった理由は確かめていない。インストール直後の大量のライブラリを macOS が初めて確かめる時間かもしれない（仮説）。vtk なしだと 6 秒に短くなったので、時間の多くは vtk のライブラリの読み込みだったと考えられる。2 回目以降は 0.5〜0.6 s
+
+### CalculiX が時々間違った答えを出した
+
+通常の一連の処理で、反力が 60292 N（差 213%）と 74954 N（差 2026%）になることが 2 回あった（正しくは 51434 N）。同じ入力で ccx だけを繰り返し実行して調べた。
+
+| 設定 | 回数 | 正しい値 | 間違った値 |
+|---|---|---|---|
+| スレッド 1（全体） | 30 | 30 | 0 |
+| スレッド 4（全体） | 30 | 28 | 2（52061 N・69821 N） |
+| 連立方程式を解く部分（SPOOLES、`CCX_NPROC_EQUATION_SOLVER`）だけ 1、残り 4 | 60 | 60 | 0 |
+
+原因は、連立方程式を解く部分の並列実行。入力は毎回同じで、日本語のパスとは関係ない。予備確認の 10.7% のずれと、Linux の試走の 8% のずれも、同じ原因の可能性が高い（未確認）。解く部分だけ 1 スレッドにすると正しく、速さも落ちなかった（平均 1.42 秒。全体を 1 スレッドにすると約 2.3 秒）。キットは、この設定を既定にした。
+
+### 日本語と空白を含むパス
+
+通る。ただし CalculiX は、結果ファイルの見出しに入力のパスを書き、日本語の文字の途中で切る。結果ファイル（`.frd`）が不正な UTF-8 になり、そのまま読むと後処理が落ちる。読めない文字を置き換えて読む対策を入れた（`ccx_tool.py`）。アプリでも同じ対策か、作業フォルダーを英数字だけにする対策が要る。macOS のユーザー名が日本語の場合は、測っていない。
+
+### 署名なしのアプリ
+
+`spctl -a -vv` は「code has no resources but signature indicates they must be present」と返した。署名は ad-hoc（Electron 本体のリンカーによるもの）で、アプリの中身（Resources）が封印されていない。Gatekeeper が実際に何と表示するかは、手で開いて確かめていない（README の「署名なしのアプリを開く」の手順）。
 
 ## 判断
 
-（結果をもとに、CalculiX の同梱方法、OpenFOAM の入れ方、Python のワーカーの採否を書く）
+| 問い | 判断 |
+|---|---|
+| CalculiX の同梱 | **同梱する**。Homebrew で入れた ccx 2.23 と依存のライブラリを集め、`@executable_path` に書き換えて ad-hoc で署名し直す方法で、31 MB。アプリの中でも動いた。実行時は連立方程式を解く部分を 1 スレッドにする。力の釣り合いの検算を必須にする。製品版では、Homebrew に頼らず GitHub Actions で自前のビルドにする（依存のライセンス文の同梱もここで行う） |
+| Python のワーカー | **採用する**。vtk を使わない `cadquery-ocp-novtk` に切り替える（Mac でも動いた）。`.app` は 0.68 GB、dmg は 0.28 GB（実測）。初めて OCP を読み込む時間は 6 秒だったので、初回は進み具合を表示する |
+| OpenFOAM の入れ方 | **Mac は OpenFOAM.app（追加パック）を第一候補にする**。Docker を入れずに、ネイティブで動く（cavity が通った）。条件は macOS 15 以降の Apple Silicon（Intel は対象外）。アプリからは `/Applications/OpenFOAM-v*.app/Contents/Resources/etc/openfoam -c "コマンド"` の形で呼ぶ。Docker（opencfd のイメージ）は、macOS 14 以前や Intel の代案として残す（今回は未測定） |
+| アプリの署名 | 自分用の間は署名なしでよいが、配布を広げる前に Gatekeeper の実際の挙動を確かめる |
+
+## 残った問い（次にやること）
+
+1. 署名なしのアプリを手で開いたときの macOS の表示
+2. Studio M Engine から同梱の ccx と OpenFOAM.app を使えるようにする（アダプターに、検出と実行で別の場所のコマンドを渡す方法が要る）
+3. アプリの中でエンジンを動かしたときの起動時間（`dist-engine/` を作って `.app` に入れる）
+4. 日本語のユーザー名の Mac での動作、Intel の Mac、Windows
+5. Docker 経路の測定
 
 ## 出典
 

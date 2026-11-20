@@ -25,6 +25,7 @@ npm run licenses
 | dev | 開発・ビルド時だけ使う |
 | installed | node_modules には入るが配布物には含まれない（`shipped: false`） |
 | separate-process | 別プロセスとして呼び出す |
+| bundled-separate-program | 配布物に同梱するが、別の実行ファイルとして置き、コマンドとファイルでだけやり取りする（GPL のものはこの形。例: CalculiX。`docs/CCX-BUILD.md`） |
 | file-format | ファイル形式だけでつながる |
 | planned | 採用予定。組み込む前に再調査する |
 | reference | 参考にしただけ。コードは使っていない |

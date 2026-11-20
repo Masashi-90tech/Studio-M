@@ -2,6 +2,7 @@
 import type { EngineAdapter, AdapterContext, RunOptions, RunResult } from '../types';
 import type { EngineInfo } from '../../src/core/engine-protocol';
 import { ExecError, runCommand, type Backend } from './exec';
+import type { CommandLauncher } from './launcher';
 
 /** 検出の結果と Docker の有無から、実行の仕方を選ぶ */
 export function decideBackend(opts: { via: EngineInfo['via'] | undefined; dockerImage?: string; dockerAvailable: boolean }): Backend {
@@ -19,6 +20,10 @@ export interface ContextOptions {
   dockerAvailable: boolean;
   /** 1 回のコマンドの時間切れ [ms]（アダプターが timeoutMs を指定すればそちらが優先） */
   commandTimeoutMs: number;
+  /** コマンド名 → 絶対パス（native のときだけ使う）。省略時は PATH から探す */
+  commandPaths?: Record<string, string>;
+  /** ラッパー経由で起動するコマンドの設定（native のときだけ使う）。省略時は直接起動 */
+  commandLaunchers?: CommandLauncher;
   log(line: string): void;
   progress: AdapterContext['progress'];
 }
@@ -43,6 +48,8 @@ export function createAdapterContext(o: ContextOptions): AdapterContext {
           opts.onLine?.(line, stream);
         },
         backend,
+        commandPaths: o.commandPaths,
+        commandLaunchers: o.commandLaunchers,
         containerName: backend.kind === 'docker' ? `studio-m-${o.jobId}-${++seq}` : undefined,
       });
     try {

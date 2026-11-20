@@ -9,6 +9,7 @@
 
 import type { EngineCapability, EngineInfo, JobRequest } from '../../../src/core/engine-protocol';
 import type { AdapterContext, DetectContext, EngineAdapter, SolveOutput } from '../../types';
+import { openfoamInstallGuide } from './guide';
 import { solveFlow } from './run';
 
 const CAPABILITIES: EngineCapability[] = [
@@ -56,11 +57,6 @@ export function parseOpenFoamVersion(output: string): string | undefined {
   return m[1].startsWith('v') ? m[1] : `v${m[1]}`;
 }
 
-const INSTALL_NOTE =
-  'OpenFOAM（openfoam.com 版）が見つかりません。入れ方: Docker があれば opencfd/openfoam-default イメージを使えます（推奨。Windows は WSL2 上の Docker、macOS は Docker Desktop）。' +
-  'Ubuntu なら openfoam.com の apt リポジトリのパッケージ、または `apt install openfoam`（版が古く v1912）でも動きます。' +
-  'Debian/Ubuntu のパッケージでは環境変数 WM_PROJECT_DIR=/usr/share/openfoam が必要な場合があります。';
-
 export const openfoamAdapter: EngineAdapter = {
   id: 'openfoam',
   // 辞書の書き方は v1912（Debian/Ubuntu の apt）と v2406（このイメージ）の両方で読めるものに保つこと
@@ -71,7 +67,12 @@ export const openfoamAdapter: EngineAdapter = {
     const base = { id: 'openfoam' as const, name: 'OpenFOAM', license: 'GPL-3.0' };
     const probe = await ctx.probe('blockMesh', ['-help']).catch(() => ({ ok: false, output: '' }));
     const version = parseOpenFoamVersion(probe.output);
-    if (probe.ok && version) return { ...base, available: true, version, via: 'native' };
+    if (probe.ok && version) {
+      // Mac の OpenFOAM.app 経由（ラッパーが環境を読み込む）のときは、その旨を知らせる
+      const label = ctx.launcherLabel?.('blockMesh');
+      const viaApp = label ? { note: `${label}を使います` } : {};
+      return { ...base, available: true, version, via: 'native', ...viaApp };
+    }
     if (!probe.ok && /Could not find mandatory etc entry|did not locate installation path/.test(probe.output)) {
       // コマンドはあるが環境が読み込まれていない
       return {
@@ -89,7 +90,7 @@ export const openfoamAdapter: EngineAdapter = {
         note: 'Docker のイメージ opencfd/openfoam-default:2406 で動かします（初回はイメージの取得に時間がかかります）。',
       };
     }
-    return { ...base, available: false, via: 'none', note: INSTALL_NOTE };
+    return { ...base, available: false, via: 'none', note: openfoamInstallGuide({ platform: process.platform, arch: process.arch }) };
   },
 
   async solve(req: JobRequest, ctx: AdapterContext): Promise<SolveOutput> {

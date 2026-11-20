@@ -9,6 +9,7 @@ import type { ResultSet } from '../../src/core/types';
 import type { EngineAdapter } from '../types';
 import { createAdapterContext } from './context';
 import { ExecError } from './exec';
+import type { CommandLauncher } from './launcher';
 
 const LOG_LIMIT = 200;
 /** 中止の指示から、アダプターが返ってこなくても「中止済み」にするまでの時間 [ms] */
@@ -32,6 +33,10 @@ export interface JobManagerOptions {
   /** 終わったジョブを覚えておく時間 [ms] */
   ttlMs?: number;
   commandTimeoutMs?: number;
+  /** コマンド名 → 絶対パス（同梱の ccx など。native のときだけ有効） */
+  commandPaths?: Record<string, string>;
+  /** ラッパー経由で起動するコマンドの設定（Mac の OpenFOAM.app など。native のときだけ有効） */
+  commandLaunchers?: CommandLauncher;
 }
 
 interface Job {
@@ -67,13 +72,18 @@ export class JobManager {
   private jobs = new Map<string, Job>();
   private queue: string[] = [];
   private running = 0;
-  private readonly workRoot: string;
+  private workRoot: string;
   private readonly opts: JobManagerOptions;
 
   constructor(opts: JobManagerOptions) {
     this.opts = opts;
     this.maxConcurrentJobs = Math.max(1, Math.floor(opts.maxConcurrentJobs ?? 1));
     this.workRoot = opts.workRoot ?? WORK_ROOT;
+  }
+
+  /** 作業フォルダーの置き場所を差し替える（起動時に、安全なパスへ移したとき用）。これから作るジョブにだけ効く */
+  setWorkRoot(root: string): void {
+    this.workRoot = root;
   }
 
   /** ジョブを待ち行列に入れて id を返す */
@@ -221,6 +231,8 @@ export class JobManager {
         info: this.opts.getInfo(job.req.engine),
         dockerAvailable: this.opts.dockerAvailable(),
         commandTimeoutMs: this.opts.commandTimeoutMs ?? 3600_000,
+        commandPaths: this.opts.commandPaths,
+        commandLaunchers: this.opts.commandLaunchers,
         log: (line) => this.pushLog(job, line),
         progress: (fraction, message, status) => {
           if (job.cancelRequested || isFinal(s.status)) return;

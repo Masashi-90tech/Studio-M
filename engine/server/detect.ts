@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import type { EngineCapability, EngineId, EngineInfo } from '../../src/core/engine-protocol';
 import type { DetectContext, EngineAdapter } from '../types';
 import { runCommand } from './exec';
+import type { CommandLauncher } from './launcher';
 
 const PROBE_TIMEOUT_MS = 10_000;
 /** 画面に「まだ対応していません」と出すエンジン（アダプターがまだないもの） */
@@ -19,14 +20,18 @@ export type ProbeFn = (command: string, args: string[]) => Promise<{ ok: boolean
  * output は標準出力と標準エラーをつなげたもので、ok が false でも返す
  * （ccx -v のように、版を表示して 0 以外で終わるソフトは、アダプターが output の中身で判断する）。
  */
-export const probeCommand: ProbeFn = async (command, args) => {
-  try {
-    const r = await runCommand({ command, args, workDir: tmpdir(), timeoutMs: PROBE_TIMEOUT_MS, backend: { kind: 'native' } });
-    return { ok: r.code === 0, output: `${r.stdout}\n${r.stderr}`.trim() };
-  } catch {
-    return { ok: false, output: '' };
-  }
-};
+export function createProbe(opts: { commandPaths?: Record<string, string>; commandLaunchers?: CommandLauncher } = {}): ProbeFn {
+  return async (command, args) => {
+    try {
+      const r = await runCommand({ command, args, workDir: tmpdir(), timeoutMs: PROBE_TIMEOUT_MS, backend: { kind: 'native' }, commandPaths: opts.commandPaths, commandLaunchers: opts.commandLaunchers });
+      return { ok: r.code === 0, output: `${r.stdout}\n${r.stderr}`.trim() };
+    } catch {
+      return { ok: false, output: '' };
+    }
+  };
+}
+
+export const probeCommand: ProbeFn = createProbe();
 
 /** Docker のサーバーに届くか（docker version が成功するか） */
 export async function detectDocker(run: typeof runCommand = runCommand): Promise<boolean> {
@@ -55,11 +60,12 @@ export interface Detection {
   infoById: Map<EngineId, EngineInfo>;
 }
 
-export async function detectEngines(opts: { adapters: EngineAdapter[]; probe?: ProbeFn; run?: typeof runCommand }): Promise<Detection> {
-  const probe = opts.probe ?? probeCommand;
+export async function detectEngines(opts: { adapters: EngineAdapter[]; probe?: ProbeFn; run?: typeof runCommand; commandPaths?: Record<string, string>; commandLaunchers?: CommandLauncher }): Promise<Detection> {
+  const probe = opts.probe ?? (opts.commandPaths || opts.commandLaunchers ? createProbe({ commandPaths: opts.commandPaths, commandLaunchers: opts.commandLaunchers }) : probeCommand);
   const run = opts.run ?? runCommand;
   const dockerAvailable = await detectDocker(run);
-  const ctx: DetectContext = { probe, dockerAvailable };
+  const launchers = opts.commandLaunchers;
+  const ctx: DetectContext = { probe, dockerAvailable, launcherLabel: (command) => (launchers?.commands.includes(command) ? (launchers.label ?? launchers.file) : undefined) };
   const infoById = new Map<EngineId, EngineInfo>();
   const engines: EngineInfo[] = [];
   const capabilities: EngineCapability[] = [];

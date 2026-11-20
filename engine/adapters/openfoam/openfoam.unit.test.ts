@@ -6,6 +6,7 @@ import { type CaseSpec, blockMeshDict, controlDict, fvSchemes, fvSolution, num, 
 import { fieldCellId, fieldK, fieldNut, fieldOmega, fieldP, fieldU, makeObstacleWall } from './fields';
 import { parseInternalField, parseSolverLog, parseTimeLine, scalarListLiteral, vectorListLiteral } from './foamio';
 import { bodyForce, collectBodyFaces } from './forces';
+import { openfoamInstallGuide } from './guide';
 import { openfoamAdapter, parseOpenFoamVersion } from './index';
 import { initialVelocity, mapCellsFromIds, mapCellsSorted, prepareDomain } from './mesh';
 import { pickModel, planJob, readOptions, scaleNx, snapshotCount } from './plan';
@@ -489,8 +490,33 @@ describe('アダプターの宣言と detect', () => {
     expect(docker.note).toContain('opencfd/openfoam-default');
     const none = await openfoamAdapter.detect(ctxOf({ ok: false, output: 'not found' }));
     expect(none).toMatchObject({ available: false, via: 'none' });
-    expect(none.note).toContain('Docker');
-    expect(none.note).toContain('WSL');
+    expect(none.note).toBeTruthy();
+  });
+
+  it('detect: OpenFOAM.app 経由のときは note でそれを知らせる', async () => {
+    const c: DetectContext = { dockerAvailable: false, probe: async () => ({ ok: true, output: 'Using: OpenFOAM-v2606 (2606)' }), launcherLabel: (cmd) => (cmd === 'blockMesh' ? 'OpenFOAM.app（v2606）' : undefined) };
+    const r = await openfoamAdapter.detect(c);
+    expect(r).toMatchObject({ available: true, via: 'native', version: 'v2606' });
+    expect(r.note).toContain('OpenFOAM.app（v2606）を使います');
+  });
+
+  it('openfoamInstallGuide: プラットフォーム別の案内', () => {
+    expect(openfoamInstallGuide({ platform: 'darwin', arch: 'arm64' })).toContain('brew install gerlero/openfoam/openfoam@2606');
+    expect(openfoamInstallGuide({ platform: 'darwin', arch: 'arm64' })).toContain('再起動');
+    const intel = openfoamInstallGuide({ platform: 'darwin', arch: 'x64' });
+    expect(intel).toContain('Docker');
+    expect(intel).not.toContain('brew install');
+    const win = openfoamInstallGuide({ platform: 'win32', arch: 'x64' });
+    expect(win).toContain('WSL2');
+    expect(win).toContain('npm run engine');
+    expect(openfoamInstallGuide({ platform: 'linux', arch: 'x64' })).toContain('apt');
+  });
+
+  it('アダプターが ctx.run に渡す引数は、ラッパー経由で通る形（安全な文字だけ）', async () => {
+    const { joinShellCommand } = await import('../../server/launcher');
+    for (const [cmd, args] of [['subsetMesh', ['-overwrite', 'fluidCells', '-patch', 'obstacle']], ['foamToVTK', ['-latestTime']], ['blockMesh', []], ['topoSet', []]] as const) {
+      expect(() => joinShellCommand(cmd, [...args])).not.toThrow();
+    }
   });
 
   it('solve: flow 以外は日本語の例外', async () => {

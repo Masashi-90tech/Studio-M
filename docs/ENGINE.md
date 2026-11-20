@@ -30,6 +30,8 @@ npm run engine -- --port 47801 --max-jobs 2 --keep
 | `--ttl-hours <時間>` | 終わった計算を覚えておく時間（既定 24） |
 | `--timeout-min <分>` | 1 つのコマンドの時間切れ（既定 60） |
 
+`ccx` が PATH になく、`ccx_2.23` のような名前の実行ファイルしかないときは、環境変数 `STUDIO_M_CCX` に、その実行ファイルの絶対パス（空白や日本語を含んでもよい）を入れて起動します（例: `STUDIO_M_CCX=/opt/ccx/ccx_2.23 npm run engine`）。アダプターは今までどおり `ctx.run('ccx', …)` / `ctx.probe('ccx', …)` と書き、サーバーが名前を指定のパスに置き換えます（`createEngineService` の `commandPaths`。native のときだけ有効で、Docker では無視）。Studio M Pro は同梱の ccx の場所をこの仕組みで渡します。ccx は、連立方程式を解く部分を 1 スレッドに固定して走らせ、支持の反力と荷重の釣り合いを検算します（合わなければ全部 1 スレッドで 1 回だけやり直し、それでも合わなければ日本語のエラー。`docs/EXPERIMENT-4.md`）。
+
 ## Studio M につなぐ
 
 1. エンジンを起動する
@@ -74,6 +76,10 @@ CalculiX の Docker イメージは今のところ使っていません（Linux 
 - **Docker Desktop**（または colima）を入れ、OpenFOAM のイメージを使う
 - CalculiX は Homebrew にもあるが（`brew install calculix-ccx` など、版に注意）、まずは Docker 経由が確実
 
+### 作業フォルダーのパス
+
+計算の作業フォルダーは、既定では一時フォルダーの下の `studio-m-engine` です。OpenFOAM は、作業フォルダーのパスに日本語・空白・引用符などがあると動きません（Windows のユーザー名が日本語だと、一時フォルダーがそうなります）。そのため Engine は、起動時にパスが「英数字と `. _ - / \ :` だけ」かを確かめ、違えば自動で安全な場所（Mac・Linux は `/tmp`、Windows は `%ProgramData%`、`C:\Users\Public`、`C:\studio-m-work` の順）の `studio-m-engine` に移して、起動表示に知らせます。場所を自分で決めたいときは、環境変数 `STUDIO_M_WORK_ROOT` に英数字だけのフォルダー（例 `C:\studio-m-work`）を指定してください。
+
 ## 安全のしくみ
 
 - **127.0.0.1 だけで待ち受けます。** 同じネットワークの他の PC からは届きません
@@ -117,3 +123,5 @@ CalculiX の Docker イメージは今のところ使っていません（Linux 
 6. テスト: 入力ファイルの組み立てや結果の読み取りは単体テスト、ソフトが入っていれば理論値との照合テスト
 
 サーバー側のテストは、本物のソフトなしで動く偽のアダプター（`engine/server/testing.ts`）を使っています。
+
+Mac に OpenFOAM.app（`brew install gerlero/openfoam/openfoam@2606`）が入っていると、Engine は `/Applications`・`~/Applications` から見つけ、blockMesh・simpleFoam などを、そのラッパー（`Contents/Resources/etc/openfoam`）に `-c "コマンド"` を渡す形で起動します（`createEngineService` の `commandLaunchers`。native のときだけ有効）。別の場所に入れたときは `STUDIO_M_OPENFOAM_APP`（`.app` かラッパーのパス）で指定します。シェルを通る起動なので、引数は英数字と `. _ / : = , + @ % -` だけを許し、それ以外は断ります。

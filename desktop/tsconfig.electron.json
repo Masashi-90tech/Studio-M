@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src",
+    "layers.test.ts",
+    "../src/core",
+    "../engine/env.d.ts"
+  ]
+}

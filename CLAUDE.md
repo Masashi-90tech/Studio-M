@@ -11,6 +11,8 @@ npm test            # テストだけ
 npm run licenses    # OSS 台帳と依存パッケージの突き合わせ
 npm run test:engines  # PC に入っている CalculiX・OpenFOAM を実際に動かす結合テスト（STUDIO_M_ENGINE_TESTS=1。npm run check では飛ばす）
 npm run engine      # Studio M Engine（PC 上の計算サーバー）を起動（本計算。docs/ENGINE.md）
+npm run desktop:build  # Studio M Pro（Electron）をビルド（先に `cd desktop && npm install`。docs/DESKTOP.md）
+npm run desktop:start  # Studio M Pro を起動
 npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML を作る
 ```
 
@@ -33,6 +35,7 @@ npm run build:artifact  # 単一 HTML（dist/index.html）と Artifact 用 HTML 
 | 5. 基板 | `src/pcb/` | KiCad 基板の取り込み（v0.4）: ファイルの読み取り、部品の発熱ライブラリ、熱プロジェクトの組み立て、取り込みダイアログ。ワークベンチと同じ層の機能モジュール | `src/core` だけ import してよい（ソルバー・workbench は import しない。DOM を触るのはダイアログとプレビューだけで、そこは `src/ui/dom`・`src/ui/format` も可。テストは除く）。画面（シェル）は `src/pcb` を**遅延 import か `import type` だけ**で読む（`src/ui/pcb-open.ts` が入口。`src/workbench/shell.test.ts` と `src/pcb/layers.test.ts` が確かめる） |
 | 6. 画面 | `src/ui/`、`src/main.ts` | 表示と操作（ハーネス） | ソルバー・解析ごとのモジュール内部への直接アクセス（`src/workbench` の登録表経由のみ） |
 | 別プロセス. エンジン | `engine/` | Studio M Engine（PC 上の Node.js サーバー）。`server/`（HTTP・ジョブ・ctx.run）と `adapters/<名前>/`（CalculiX・OpenFOAM などの変換役）。ブラウザとは `src/core/engine-protocol.ts`・`engine-wire.ts` の型だけでやり取りする | `src/core` だけ import してよい（`src/ui`・`src/workbench`・`src/solvers` は import しない。テストは除く）。アダプターは自分で `spawn` せず、必ず `ctx.run` を使う。GPL の解析ソフトは別プロセスとして呼ぶだけで、同梱・リンクしない |
+| 別プロセス. デスクトップ | `desktop/` | Studio M Pro（Electron）の雛形。main でエンジンを同じプロセス内に起動し、画面とは IPC（`window.studioMPro`）でつなぐ。合言葉は main の中だけ | `src/core` と `engine/server`・`engine/types` だけ import してよい（`src/ui`・`src/workbench`・`src/solvers` は import しない。テストは除く）。`electron` を import してよいのは `src/main.ts` と `src/preload.ts` だけ（`desktop/layers.test.ts` が確かめる）。renderer から任意のパスは読めない |
 
 `src/learn` は画面（ハーネス）から**使うときに遅延 import** する（数学の窓を開く・「学ぶ」を開く）。式の提供者（`MathProvider`）だけは、解析ごとのワークベンチが `math.loadProvider`（`() => import('../../learn/providers/<kind>')`）で公開し、画面は `loadMathProvider(kind)`（`src/workbench/registry.ts`）で引く。ワークベンチが learn から使ってよいのは型（`import type`）だけ。
 

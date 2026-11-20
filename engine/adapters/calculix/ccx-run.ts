@@ -42,16 +42,18 @@ export function explainFailure(output: string, ctx: { plasticity: boolean; large
 export async function runCcx(
   ctx: AdapterContext,
   job: string,
-  opts: { progressFrom: number; progressTo: number; message: string },
+  opts: { progressFrom: number; progressTo: number; message: string; /** true なら、すべての並列実行を 1 スレッドにする（釣り合わないときのやり直し用） */ allSingleThread?: boolean },
 ): Promise<{ output: string; code: number }> {
-  const threads = String(Math.max(1, Math.min(8, cpus().length)));
+  const threads = opts.allSingleThread ? '1' : String(Math.max(1, Math.min(8, cpus().length)));
   const lines: string[] = [];
   ctx.progress(opts.progressFrom, opts.message, 'running');
   const res = await ctx.run('ccx', ['-i', job], {
     timeoutMs: CCX_TIMEOUT_MS,
-    // 応力の計算（RESULTS）だけは 1 スレッドにする: CalculiX 2.21 は応力の計算を複数スレッドで走らせると、
-    // CPU が混み合ったときに、まれに応力が壊れた値になる（変位は正しい）ことを確認したため
-    env: { OMP_NUM_THREADS: threads, CCX_NPROC_EQUATION_SOLVER: threads, CCX_NPROC_STIFFNESS: threads, CCX_NPROC_RESULTS: '1' },
+    // 連立方程式を解く部分（SPOOLES、CCX_NPROC_EQUATION_SOLVER）だけは必ず 1 スレッドにする:
+    // 並列に走らせると、まれに間違った答え（反力が荷重と合わない）を出すことを実験 4 で確かめた
+    // （docs/EXPERIMENT-4.md。全体 4 スレッド 30 回中 2 回が誤り、解く部分だけ 1 スレッドなら 60/60 で正しく、速さも落ちない）。
+    // 剛性行列の組み立て（STIFFNESS）と他の部分は、並列のままにする。RESULTS は従来どおり 1
+    env: { OMP_NUM_THREADS: threads, CCX_NPROC_EQUATION_SOLVER: '1', CCX_NPROC_STIFFNESS: threads, CCX_NPROC_RESULTS: '1' },
     onLine: (line) => {
       lines.push(line);
       const m = /actual total time=\s*(\S+)/i.exec(line);
