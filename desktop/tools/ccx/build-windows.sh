@@ -26,7 +26,10 @@ CCX_SRC="$(ls -d "$WORK"/src/*/ccx_*/src | head -1)"
 
 (
   cd "$WORK/src/SPOOLES.2.2"
-  sed -i -E "s|^ *CC *=.*|  CC = $CC|; s|^ *OPTLEVEL *=.*|  OPTLEVEL = -O2|" Make.inc
+  sed -i -E "s|^ *CC *=.*|  CC = $CC|; s|^ *OPTLEVEL *=.*|  OPTLEVEL = -O2 -Wno-error=int-conversion -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=implicit-int|" Make.inc
+  # SPOOLES 2.2 は古い C で、新しい gcc（14 以降）は IVinit(n, NULL) などの暗黙変換をエラーにする。
+  # NULL は整数としては 0 なので、意味を変えずに 0 に書き換え、残りの同種のエラーも出さないようにする
+  sed -i -E "s|IVinit\(([A-Za-z_]+), NULL\)|IVinit(\1, 0)|g" ETree/src/transform.c
   make lib
   (cd MT/src && make -f makeGlobalLib)
 )
