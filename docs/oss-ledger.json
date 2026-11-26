@@ -219,6 +219,21 @@
       "notes": "macOS（arm64）と Windows（x64）の配布物が PyPI にある。OCCT 8 では 7 系の書き方（TopoDS.Face_s）が使えず、版を固定して変換層越しに使う。Python のワーカーは配布サイズを測ってから最終判断（docs/PLATFORM-DESIGN.md 14 章）。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。"
     },
     {
+      "name": "cadquery-ocp-novtk",
+      "version": "8.0.1.1.0",
+      "role": "OCCT の Python バインディング（形状ワーカー。vtk に依存しない版。workers/requirements-shape.txt）",
+      "license": "Apache-2.0",
+      "usage": "planned",
+      "commercial": "conditions",
+      "obligations": [
+        "Apache-2.0: NOTICE の保持",
+        "中身の OCCT は LGPL-2.1（例外条項付き）に従う"
+      ],
+      "source": "https://pypi.org/project/cadquery-ocp-novtk/",
+      "checked": "2026-11-26",
+      "notes": "cadquery-ocp と同じ版の別パッケージ（vtk を使わないビルド。PyPI のメタデータは Apache-2.0）。実験 4 で Mac でも import と STEP の読み書きが通り、同梱物が 0.85 GB から 0.23 GB に減った。workers/shape/ が使う（同梱するまでは planned）"
+    },
+    {
       "name": "Manifold",
       "role": "メッシュのブーリアン",
       "license": "Apache-2.0",
@@ -323,9 +338,9 @@
       "usage": "separate-process",
       "commercial": "conditions",
       "source": "https://gmsh.info",
-      "checked": "2026-11-12",
+      "checked": "2026-11-26",
       "version": "4.15.2",
-      "notes": "メッシュワーカーは Gmsh の Python API を使うため、Studio M 本体とは別の GPL-2.0-or-later のプログラムとして公開し、本体とはファイルだけでやり取りする。商用配布は予定しない（2026-11-13 決定）。公式サイトは、閉じたソースのソフトに組み込む場合は商用ライセンスが必要としている。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。"
+      "notes": "workers/mesh/（requirements-mesh.txt。PyPI のメタデータは GPLv2+）だけが使う。メッシュワーカーは Gmsh の Python API を使うため、Studio M 本体とは別の GPL-2.0-or-later のプログラムとして公開し、本体とはファイルだけでやり取りする。商用配布は予定しない（2026-11-13 決定）。公式サイトは、閉じたソースのソフトに組み込む場合は商用ライセンスが必要としている。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。同梱するまでの記録上の使い方は separate-process のまま。"
     },
     {
       "name": "netgen-mesher",

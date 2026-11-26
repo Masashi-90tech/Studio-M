@@ -1,0 +1,5 @@
+# メッシュワーカー（workers/mesh）が使う部品。gmsh は GPL-2.0-or-later なので、形状ワーカーとは別のフォルダー・別のプロセスで動かす。
+# 形状ワーカー側の環境に入れない（docs/oss-ledger.json、docs/OSS.md）。Python 3.12 で入れる。
+# Linux では libGLU.so.1 が要る（apt-get install -y libglu1-mesa）。
+gmsh==4.15.2
+numpy==2.5.5

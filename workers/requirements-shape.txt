@@ -1,0 +1,5 @@
+# 形状ワーカー（workers/shape）が使う部品。版は固定する（実験 4 と同じ版。docs/EXPERIMENT-4.md）。
+# cadquery-ocp 本体は vtk（約 0.57 GB）に依存するため、vtk を使わないようにビルドされた同じ版の別パッケージを使う。
+# wheel は cp312 用。Python 3.12 で入れる（PyPI の配布物のみ。ソースからのビルドはしない）。
+cadquery-ocp-novtk==8.0.1.1.0
+numpy==2.5.5
