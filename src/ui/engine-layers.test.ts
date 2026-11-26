@@ -10,8 +10,8 @@ const read = (f: string): string => readFileSync(join(UI, f), 'utf8');
 const strip = (t: string): string => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 describe('PC のエンジンの画面', () => {
-  it('engine-client / engine-logic / remote-results は DOM に触れない', () => {
-    for (const f of ['engine-client.ts', 'engine-logic.ts', 'remote-results.ts']) {
+  it('engine-client / engine-ipc / pro-files / engine-logic / remote-results は DOM に触れない', () => {
+    for (const f of ['engine-client.ts', 'engine-ipc.ts', 'pro-files.ts', 'engine-logic.ts', 'remote-results.ts']) {
       const t = strip(read(f));
       expect(t, f).not.toMatch(/\bdocument\b|\bwindow\b|from '\.\/dom'/);
     }

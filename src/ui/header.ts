@@ -1,16 +1,24 @@
 // ヘッダー: プロジェクト名、新規・プリセット・ファイル（開く・KiCad基板を開く・保存）・Excel 出力。
 import { clear, downloadBlob, h, toast } from './dom';
+import { getProFiles } from './engine-ipc';
 import { attachMenu } from './menu';
 import { openPreset } from './open-preset';
 import { openKicadImport } from './pcb-open';
 import { PRESETS } from './presets';
-import { safeFileName, sanitizeProject } from './project-utils';
+import { createProFileSession } from './pro-files';
+import { parseProjectText, safeFileName } from './project-utils';
 import type { Runner } from './runner';
 import type { Store } from './state';
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export function initHeader(store: Store, runner: Runner): void {
+  // インストール版（Studio M Pro）では、バッジとタイトルを Lite から Pro に変える
+  if (getProFiles()) {
+    const badge = document.querySelector('.wordmark + .lite');
+    if (badge) badge.textContent = 'Pro';
+    document.title = 'Studio M Pro';
+  }
   const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
   const nameInput = $<HTMLInputElement>('projectName');
   const fileInput = $<HTMLInputElement>('fileInput');
@@ -59,19 +67,53 @@ export function initHeader(store: Store, runner: Runner): void {
   $('btnKicad').addEventListener('click', () => void openKicadImport({ store }));
 
   // ---------- 保存 / 開く ----------
+  // Studio M Pro では OS のダイアログで開く・保存する（2 回目からの保存は、同じファイルへ上書き）。
+  // Lite（ブラウザ版）は今までどおり、ダウンロードとファイル選択。
+  const proFiles = getProFiles();
+  const pro = proFiles ? createProFileSession(proFiles) : null;
+  const btnSaveAs = $<HTMLButtonElement>('btnSaveAs');
+  if (pro) btnSaveAs.hidden = false;
+
+  const proSave = async (saveAs: boolean): Promise<void> => {
+    if (!pro) return;
+    try {
+      const saved = await pro.save({ project: store.project, saveAs });
+      if (saved) toast('プロジェクトを保存しました');
+    } catch (e) {
+      toast(`保存できませんでした: ${e instanceof Error ? e.message : String(e)}`, 'error');
+    }
+  };
+
   $('btnSave').addEventListener('click', () => {
+    if (pro) {
+      void proSave(false);
+      return;
+    }
     const json = JSON.stringify(store.project, null, 2);
     downloadBlob(new Blob([json], { type: 'application/json' }), `${safeFileName(store.project.name)}.studiom.json`);
     toast('プロジェクトを保存しました');
   });
-  $('btnOpen').addEventListener('click', () => fileInput.click());
+  btnSaveAs.addEventListener('click', () => void proSave(true));
+  $('btnOpen').addEventListener('click', () => {
+    if (!pro) {
+      fileInput.click();
+      return;
+    }
+    void pro
+      .open()
+      .then((project) => {
+        if (!project) return;
+        store.loadProject(project);
+        toast(`「${project.name}」を開きました`);
+      })
+      .catch((e) => toast(`ファイルを開けませんでした: ${e instanceof Error ? e.message : String(e)}`, 'error'));
+  });
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];
     fileInput.value = '';
     if (!file) return;
     try {
-      const project = sanitizeProject(JSON.parse(await file.text()));
-      if (!project) throw new Error('Studio M のプロジェクトファイルではありません');
+      const project = parseProjectText(await file.text());
       store.loadProject(project);
       toast(`「${project.name}」を開きました`);
     } catch (e) {
