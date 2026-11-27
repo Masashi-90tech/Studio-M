@@ -125,3 +125,5 @@ CalculiX の Docker イメージは今のところ使っていません（Linux 
 サーバー側のテストは、本物のソフトなしで動く偽のアダプター（`engine/server/testing.ts`）を使っています。
 
 Mac に OpenFOAM.app（`brew install gerlero/openfoam/openfoam@2606`）が入っていると、Engine は `/Applications`・`~/Applications` から見つけ、blockMesh・simpleFoam などを、そのラッパー（`Contents/Resources/etc/openfoam`）に `-c "コマンド"` を渡す形で起動します（`createEngineService` の `commandLaunchers`。native のときだけ有効）。別の場所に入れたときは `STUDIO_M_OPENFOAM_APP`（`.app` かラッパーのパス）で指定します。シェルを通る起動なので、引数は英数字と `. _ / : = , + @ % -` だけを許し、それ以外は断ります。
+
+ccx のスレッド数は、既定では CPU の数（最大 8）です。環境変数 `STUDIO_M_CCX_THREADS`（1〜64 の整数）で指定できます。計算時間を測る道具は `npx vite-node engine/tools/bench-beam.ts` です（`STUDIO_M_CCX` と組み合わせて、同梱の ccx と PATH の ccx を比べられます）。

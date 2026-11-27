@@ -38,13 +38,24 @@ export function explainFailure(output: string, ctx: { plasticity: boolean; large
   return `CalculiX が計算に失敗しました${errorLine ? `（${errorLine.replace(/\*ERROR[^:]*:?\s*/i, '').trim()}）` : ''}。ログを確認してください。`;
 }
 
+/**
+ * ccx に渡すスレッド数。既定は CPU の数（最大 8）。環境変数 STUDIO_M_CCX_THREADS（1〜64 の整数）で指定できる。
+ * Apple Silicon のように速いコアと省電力コアが混在する PC では、全コアを使うと OpenMP の待ち合わせで
+ * かえって遅くなることがあるので、計算時間を測って決めるための口（docs/ENGINE.md）。
+ */
+export function ccxThreads(env: Record<string, string | undefined> = process.env, cpuCount: number = cpus().length): string {
+  const n = Number(env.STUDIO_M_CCX_THREADS);
+  if (Number.isInteger(n) && n >= 1 && n <= 64) return String(n);
+  return String(Math.max(1, Math.min(8, cpuCount)));
+}
+
 /** ccx を 1 回走らせる（実行は ctx.run。終了コードと出力を返す） */
 export async function runCcx(
   ctx: AdapterContext,
   job: string,
   opts: { progressFrom: number; progressTo: number; message: string; /** true なら、すべての並列実行を 1 スレッドにする（釣り合わないときのやり直し用） */ allSingleThread?: boolean },
 ): Promise<{ output: string; code: number }> {
-  const threads = opts.allSingleThread ? '1' : String(Math.max(1, Math.min(8, cpus().length)));
+  const threads = opts.allSingleThread ? '1' : ccxThreads();
   const lines: string[] = [];
   ctx.progress(opts.progressFrom, opts.message, 'running');
   const res = await ctx.run('ccx', ['-i', job], {
