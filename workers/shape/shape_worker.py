@@ -199,6 +199,7 @@ def make_test_plate(out: str, length: float, width: float, thickness: float, hol
     if not os.path.isabs(out):
         return fail(f'出力先は絶対パスで指定してください（{out}）')
     try:
+        t0 = time.perf_counter()
         _import_ocp()
         from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder
         from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
@@ -206,6 +207,7 @@ def make_test_plate(out: str, length: float, width: float, thickness: float, hol
         from OCP.STEPControl import STEPControl_Writer, STEPControl_AsIs
         from OCP.Interface import Interface_Static
         from OCP.IFSelect import IFSelect_RetDone
+        t_import = time.perf_counter() - t0
     except RuntimeError as e:
         return fail(str(e))
     except ImportError as e:
@@ -224,7 +226,8 @@ def make_test_plate(out: str, length: float, width: float, thickness: float, hol
         ok = w.Write(out) == IFSelect_RetDone
     if not ok:
         return fail(f'STEP を書き出せません（{out}）。書き込める場所か確認してください')
-    emit({'ok': True, 'step': out, 'unit': 'mm'})
+    emit({'ok': True, 'step': out, 'unit': 'mm',
+          'timings': {'importSec': t_import, 'totalSec': time.perf_counter() - t_start}})
     return 0
 
 
