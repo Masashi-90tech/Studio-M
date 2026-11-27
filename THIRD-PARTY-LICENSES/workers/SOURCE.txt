@@ -1,0 +1,34 @@
+Studio M Pro に同梱している 3D ワーカーの部品（workers-pack）
+==============================================================
+
+同梱の中身と、それぞれの版・ライセンス・入手先です。実際に同梱した wheel の SHA-256 は、同梱物の
+THIRD-PARTY-LICENSES/workers/WHEELS.txt と manifest.json に、ビルドのたびに書き出されます。
+
+部品                     版                     ライセンス                       ファイル
+-----------------------------------------------------------------------------------------------------
+Python（実行環境）       3.12.11 (20250902)     PSF-2.0                          Python-LICENSE.txt
+numpy                    2.5.5                  BSD-3-Clause ほか                numpy-LICENSE.txt
+cadquery-ocp-novtk       8.0.1.1.0              Apache-2.0（中身の OCCT は LGPL-2.1 + 例外条項）  OCCT-NOTICE.txt、LGPL-2.1.txt
+cadquery-ocp-proxy       8.0.1.1.0              Apache-2.0                       （wheel の METADATA）
+Gmsh（gmsh の wheel）    4.15.2                 GPL-2.0-or-later                 GMSH-NOTICE.txt、GPL-2.0.txt
+
+フォルダーの分け方（GPL の約束）
+  python/      Python 本体
+  shape-site/  形状ワーカーが使う部品（cadquery-ocp-novtk、cadquery-ocp-proxy、numpy）。Gmsh は入れない
+  mesh-site/   メッシュワーカーが使う部品（gmsh、numpy）。GPL の Gmsh はここだけ
+  scripts/     ワーカー（shape_worker.py・shape_lib.py・mesh_worker.py・mesh_lib.py）。Studio M のリポジトリの workers/
+
+入手先
+  Python : https://github.com/astral-sh/python-build-standalone/releases/tag/20250902
+           cpython-3.12.11+20250902-<OS>-install_only.tar.gz の SHA-256（配布元の SHA256SUMS の値）
+             aarch64-apple-darwin      9eb6cd7e9ad083cb6eec77bb6e3e9d3426042ed9bcf880c3e1704b1797c1c315
+             x86_64-pc-windows-msvc    9ff8fddfd39b518d3902f204ceb9b6cef4213c6d78cf4bc4507c28079afece7c
+  wheel  : PyPI（https://pypi.org/project/cadquery-ocp-novtk/8.0.1.1.0/ ほか）。--only-binary=:all: で入れる
+
+ビルド手順
+  Studio M のリポジトリの workers/build/（build-pack.sh、versions.env）と docs/WORKERS-BUILD.md。
+  GitHub Actions（.github/workflows/build-workers.yml）でビルドしたものです。
+
+ソースの請求
+  GPL・LGPL の部品（Gmsh、OCCT）に対応するソースは、各ライセンス文書（GMSH-NOTICE.txt、OCCT-NOTICE.txt）の入手先から取得できます。
+  取得できないときは、Studio M のリポジトリの Issues か配布元の連絡先に請求してください。

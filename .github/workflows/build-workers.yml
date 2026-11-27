@@ -1,0 +1,114 @@
+# 3D ワーカー（形状・メッシュの Python）の同梱物を OS ごとに作り、STEP → 形状 → メッシュ → CalculiX を実際に解いて確かめる。
+# 手順は docs/WORKERS-BUILD.md。ccx は build-ccx の成果物を使う（同じ実行の中で）。
+name: build-workers
+
+on:
+  workflow_dispatch:
+  # build-desktop.yml などから呼ぶ（同じ実行の中で成果物を使うため）
+  workflow_call:
+  # 開発用。main に入れる前に消す（新しいワークフローは main に入るまで手動で呼べないため）
+  push:
+    branches: ['claude/elegant-ptolemy-fpskh7']
+    paths: ['workers/**', '.github/workflows/build-workers.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  ccx:
+    uses: ./.github/workflows/build-ccx.yml
+
+  macos-arm64:
+    needs: ccx
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: ワーカーの同梱物を作る
+        run: bash workers/build/build-pack.sh "$RUNNER_TEMP/workers-build"
+      - uses: actions/download-artifact@v4
+        with:
+          name: ccx-macos-arm64
+          path: ${{ runner.temp }}/ccx-dl
+      - name: ccx を展開する
+        run: unzip -q "$RUNNER_TEMP/ccx-dl/ccx-macos-arm64.zip" -d "$RUNNER_TEMP/ccx"
+      - name: 平板を解いて確かめる（同梱物の Python で実行する）
+        run: |
+          . desktop/tools/ccx/versions.env
+          PACK="$RUNNER_TEMP/workers-build/workers-pack"
+          "$PACK/python/bin/python3" workers/tools/plate_check.py --pack "$PACK" \
+            --ccx "$RUNNER_TEMP/ccx/ccx/ccx_${CCX_VERSION}" --out "$RUNNER_TEMP/plate_check-macos-arm64.json"
+      - name: 大きさと時間を要約に出す
+        if: always()
+        run: |
+          B="$RUNNER_TEMP/workers-build"
+          [ -x "$B/workers-pack/python/bin/python3" ] || exit 0
+          cp "$B/workers-pack/manifest.json" "$RUNNER_TEMP/workers-manifest-macos-arm64.json" || true
+          "$B/workers-pack/python/bin/python3" workers/tools/step_summary.py --title "macOS (arm64)" \
+            --manifest "$B/workers-pack/manifest.json" --zip "$B/workers-macos-arm64.zip" \
+            --check "$RUNNER_TEMP/plate_check-macos-arm64.json" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workers-macos-arm64
+          path: ${{ runner.temp }}/workers-build/workers-macos-arm64.zip
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plate_check-macos-arm64
+          path: |
+            ${{ runner.temp }}/plate_check-macos-arm64.json
+            ${{ runner.temp }}/workers-manifest-macos-arm64.json
+          if-no-files-found: ignore
+
+  windows-x64:
+    needs: ccx
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      # RUNNER_TEMP は D:\a\_temp の形（Windows 形式）。build-pack.sh の中で cygpath を使って、bash 用（/d/a/_temp）と
+      # Windows のプログラム用（D:/a/_temp）に直す。ここでも python.exe に渡すパスは cygpath -m にする
+      - name: ワーカーの同梱物を作る
+        run: bash workers/build/build-pack.sh "$RUNNER_TEMP/workers-build"
+      - uses: actions/download-artifact@v4
+        with:
+          name: ccx-windows-x64
+          path: ${{ runner.temp }}/ccx-dl
+      - name: ccx を展開する（Git Bash に unzip がないので、同梱物の Python で）
+        run: |
+          T="$(cygpath -u "$RUNNER_TEMP")"
+          "$T/workers-build/workers-pack/python/python.exe" -m zipfile -e "$(cygpath -m "$T/ccx-dl/ccx-windows-x64.zip")" "$(cygpath -m "$T/ccx")"
+      - name: 平板を解いて確かめる（同梱物の Python で実行する）
+        run: |
+          . desktop/tools/ccx/versions.env
+          T="$(cygpath -u "$RUNNER_TEMP")"
+          PACK="$T/workers-build/workers-pack"
+          "$PACK/python/python.exe" workers/tools/plate_check.py --pack "$(cygpath -m "$PACK")" \
+            --ccx "$(cygpath -m "$T/ccx/ccx/ccx_${CCX_VERSION}.exe")" --out "$(cygpath -m "$T/plate_check-windows-x64.json")"
+      - name: 大きさと時間を要約に出す
+        if: always()
+        run: |
+          T="$(cygpath -u "$RUNNER_TEMP")"
+          B="$T/workers-build"
+          [ -e "$B/workers-pack/python/python.exe" ] || exit 0
+          cp "$B/workers-pack/manifest.json" "$T/workers-manifest-windows-x64.json" || true
+          "$B/workers-pack/python/python.exe" workers/tools/step_summary.py --title "Windows (x64)" \
+            --manifest "$(cygpath -m "$B/workers-pack/manifest.json")" --zip "$(cygpath -m "$B/workers-windows-x64.zip")" \
+            --check "$(cygpath -m "$T/plate_check-windows-x64.json")" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workers-windows-x64
+          path: ${{ runner.temp }}/workers-build/workers-windows-x64.zip
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plate_check-windows-x64
+          path: |
+            ${{ runner.temp }}/plate_check-windows-x64.json
+            ${{ runner.temp }}/workers-manifest-windows-x64.json
+          if-no-files-found: ignore

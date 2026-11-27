@@ -2,7 +2,7 @@
 
 STEP を読んで面の一覧を返す**形状ワーカー**と、名前つきの選択から 2 次の四面体メッシュ（CalculiX の `.inp`、メッシュだけ）を作る**メッシュワーカー**。
 どちらも別プロセスとして呼ばれ、結果は**標準出力の最後の行に JSON 1 つ**で返す（失敗は `{"ok":false,"error":"日本語の理由"}` で終了コード 1）。長さはすべて**メートル**。
-設計は `docs/PLATFORM-DESIGN.md`（3・5・6 章）、試作と測定は `docs/EXPERIMENT-4.md`。Engine への組み込みと同梱は次の作業。
+設計は `docs/PLATFORM-DESIGN.md`（3・5・6 章）、試作と測定は `docs/EXPERIMENT-4.md`。同梱物の組み立てと検証は `docs/WORKERS-BUILD.md`。Engine への組み込みと、アプリへの同梱は次の作業。
 
 ## GPL の分け方
 
@@ -44,6 +44,19 @@ python mesh/mesh_worker.py mesh --step /abs/plate.step --selections /abs/selecti
 レポート: `nodes, elements, meshUnit("m"), bbox, quality(minSICN の最小・平均・悪い要素の数), selections[](nodeCount と面積の照合), warnings, timings`。
 Gmsh には STEP をメートルで読ませる（`Geometry.OCCTargetUnit = "M"`。T は 1 つ）。
 
+## 同梱物からの呼び方（Engine が使う形）
+
+`workers/build/build-pack.sh` が作る `workers-pack/`（Python・`shape-site/`・`mesh-site/`・`scripts/`）を使うときは、同梱の Python に `PYTHONPATH` を 1 つだけ渡す。
+Python は `python/bin/python3`（Windows は `python/python.exe`）。形状は `shape-site`、メッシュは `mesh-site` を、**別々のプロセスで**指す。
+
+```bash
+PYTHONPATH=<pack>/shape-site <pack>/python/bin/python3 <pack>/scripts/shape_worker.py inspect --step /abs/plate.step
+PYTHONPATH=<pack>/mesh-site  <pack>/python/bin/python3 <pack>/scripts/mesh_worker.py mesh --step ... --selections ... --out ... --report ...
+```
+
+環境変数は `PYTHONNOUSERSITE=1`・`PYTHONDONTWRITEBYTECODE=1`（署名した `.app` の中に `.pyc` を書かない）・`PYTHONUTF8=1` を付け、`PYTHONHOME` は外す。
+検証の例は `workers/tools/plate_check.py`（同じ呼び方で、STEP から応力集中係数まで通す）。
+
 ## テスト
 
 ```bash
@@ -51,3 +64,4 @@ cd workers && python -m pytest tests     # OCP・gmsh が入っていなけれ�
 ```
 
 ルートの `npm test`（vitest）には混ぜない。pytest は `workers/` で別に動かす（CI への追加は後で）。
+`tests/test_plate_lib.py`・`test_build_tools.py`・`test_step_summary.py` は標準ライブラリだけで走る（検証・組み立て用スクリプトの純粋な部分）。

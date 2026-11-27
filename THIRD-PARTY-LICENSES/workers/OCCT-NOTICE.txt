@@ -1,0 +1,18 @@
+Open CASCADE Technology（OCCT）について
+======================================
+
+同梱しているもの : OCCT 8.0.1 の共有ライブラリ（cadquery-ocp-novtk 8.0.1.1.0 の wheel の中。shape-site/ に入っています）
+ライセンス       : GNU Lesser General Public License 第 2.1 版（LGPL-2.1。全文は同じフォルダーの LGPL-2.1.txt）と、
+                   Open CASCADE の LGPL 例外条項（OCCT Exception, version 1.0）
+使い方           : 形状ワーカー（Python の別プロセス）が、共有ライブラリとして読み込みます。Studio M 本体（MIT）には
+                   リンクしていません。共有ライブラリは差し替えられる形（shape-site/ のファイル）のままです。
+
+ソースの入手先
+  OCCT 本体       : https://github.com/Open-Cascade-SAS/OCCT
+  ライセンスの説明: https://dev.opencascade.org/resources/licensing（例外条項の全文はここにあります）
+  Python の包み   : cadquery-ocp-novtk（Apache-2.0）。PyPI https://pypi.org/project/cadquery-ocp-novtk/8.0.1.1.0/
+                   元は CadQuery の OCP https://github.com/CadQuery/OCP
+
+注意: cadquery-ocp-novtk の wheel には、ライセンス文のファイルが含まれていません（2026-11-27 に確認）。
+そのため LGPL-2.1 の全文はこのリポジトリで用意したものを入れ、OCCT の例外条項は上の入手先を示しています。
+配布を広げる前に、例外条項の全文をこのフォルダーに追加してください（docs/WORKERS-BUILD.md の「未検証」）。

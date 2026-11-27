@@ -3,3 +3,5 @@
 # wheel は cp312 用。Python 3.12 で入れる（PyPI の配布物のみ。ソースからのビルドはしない）。
 cadquery-ocp-novtk==8.0.1.1.0
 numpy==2.5.5
+# 上の cadquery-ocp-novtk が依存する小さな部品（型の定義など）。同梱物は --no-deps で入れるので、ここに固定して書く。
+cadquery-ocp-proxy==8.0.1.1.0

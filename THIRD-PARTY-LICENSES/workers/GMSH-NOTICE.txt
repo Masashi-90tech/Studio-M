@@ -1,0 +1,19 @@
+Gmsh について
+=============
+
+同梱しているもの : Gmsh 4.15.2（gmsh の Python wheel。mesh-site/ に入っています）
+ライセンス       : GNU General Public License 第 2 版以降（GPL-2.0-or-later。全文は同じフォルダーの GPL-2.0.txt）
+使い方           : メッシュワーカー（Python の別プロセス）が使います。Studio M 本体（MIT）とも、形状ワーカー（shape-site/）とも
+                   別のフォルダー・別のプロセスで動き、やり取りはファイル（JSON・STEP・.inp）だけです。リンクしていません。
+                   メッシュワーカーの Python のコード（scripts/mesh_worker.py・mesh_lib.py）は Gmsh の Python API を
+                   使うため、GPL-2.0-or-later のプログラムとして扱い、ソースを公開します（Studio M のリポジトリの workers/mesh/）。
+
+ソースの入手先
+  Gmsh 本体 : https://gitlab.onelab.info/gmsh/gmsh（版 4.15.2 のタグ gmsh_4_15_2）
+  公式サイト: https://gmsh.info
+  wheel     : https://pypi.org/project/gmsh/4.15.2/
+  wheel の中の libgmsh は、OpenCASCADE など他のライブラリを含みます。その一覧とライセンスは Gmsh のソースの LICENSE.txt にあります。
+
+ソースの請求
+  GPL に従い、同梱しているバイナリに対応するソースを請求できます。上の入手先から取得できないときは、
+  Studio M のリポジトリの Issues か配布元の連絡先に請求してください。

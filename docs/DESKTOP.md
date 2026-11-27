@@ -71,6 +71,7 @@
 続けて 3D の土台（詳しくは `docs/ROADMAP.md` の v0.6 と、`docs/PLATFORM-DESIGN.md` の 3・5・6・12 章）:
 
 8. 実証実験 4: 形状ワーカー（Python と OCCT）・Gmsh・CalculiX をアプリに同梱し、配布サイズと起動時間を測る。Python を使うかの最終判断はここで行う。日本語のユーザー名で動くかも確かめる
+   - 2026-11-27 作成済み（Actions では未実行）: ワーカーの同梱物の組み立て（`workers/build/build-pack.sh`。python-build-standalone 3.12.11 に `shape-site/`（cadquery-ocp-novtk・numpy）と `mesh-site/`（gmsh・numpy。GPL の別フォルダー）を別々に入れる）と、`.github/workflows/build-workers.yml`（`build-ccx` の ccx を使い、同梱の Python だけで STEP → 形状 → メッシュ → CalculiX の平板を解いて、応力集中係数が 3.149 の 3% 以内であること・日本語と空白のパスでも動くか・大きさと時間をジョブの要約に出す）。手元の Linux では最後まで通った（係数 3.153）。macOS・Windows の Actions での実行と、Engine・アプリへの組み込みは未。詳しくは `docs/WORKERS-BUILD.md`
 9. 形状ワーカー（STEP・STL、面の番号と署名、単位の確定）と 3D ビューア、名前付き選択
 10. メッシュワーカー（Gmsh。GPL の別プログラムとしてフォルダーを分ける）と、CalculiX アダプターの 3D 対応
 11. 実証実験 1: STEP の円孔のある平板と片持ち梁を、取り込みから 3D の結果表示まで一続きで動かす。SolidCraft で作った STEP で、面の数・面積・体積が一致するかも確かめる

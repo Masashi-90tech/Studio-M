@@ -1,6 +1,6 @@
 {
   "$comment": "Studio M の OSS 台帳。使っている・使う予定の OSS とライセンスの調査結果をここに集める。npm run licenses がこの台帳と node_modules を突き合わせる。説明は docs/OSS.md",
-  "updated": "2026-11-19",
+  "updated": "2026-11-27",
   "policy": {
     "project_license": "MIT",
     "bundle_allowed": [
@@ -41,7 +41,8 @@
     "file-format": "ファイル形式だけでつながる（相手のソフトは利用者が別に入れる）",
     "planned": "採用予定。組み込む前に再調査する",
     "installed": "node_modules には入るが、配布物には含まれない（Node.js 実行時だけ使う依存など）。shipped: false で示す",
-    "reference": "参考にしただけ。コードは使っていない"
+    "reference": "参考にしただけ。コードは使っていない",
+    "bundled-separate-program": "別の実行ファイル・別プロセスの部品として配布物に含める（Studio M 本体にはリンクしない。GPL・LGPL のものはこの形でだけ同梱する）"
   },
   "entries": [
     {
@@ -192,16 +193,16 @@
       "name": "OpenCASCADE (OCCT)",
       "role": "3D 形状カーネル（解析側で STEP を読み、面に番号と名前を付ける）",
       "license": "LGPL-2.1（例外条項付き）",
-      "usage": "planned",
+      "usage": "bundled-separate-program",
       "commercial": "conditions",
       "obligations": [
         "LGPL: 利用者が差し替えられる形で組み込む",
         "改変した場合はソース公開"
       ],
       "source": "https://github.com/Open-Cascade-SAS/OCCT",
-      "checked": "2026-11-12",
+      "checked": "2026-11-27",
       "version": "8.0.1",
-      "notes": "Python バインディング cadquery-ocp 経由で、形状ワーカー（別プロセス）から使う（docs/PLATFORM-DESIGN.md）。例外条項は、ヘッダーの内容を取り込んだオブジェクトコードの配布を告知を条件に認めている"
+      "notes": "Python バインディング cadquery-ocp-novtk の共有ライブラリとして、同梱物の shape-site/ に入る。別プロセスの形状ワーカーだけが読み込み、Studio M 本体にはリンクしない（差し替えられる形のまま）。例外条項は、ヘッダーの内容を取り込んだオブジェクトコードの配布を告知を条件に認めている。ライセンス文は THIRD-PARTY-LICENSES/workers/（LGPL-2.1.txt、OCCT-NOTICE.txt）"
     },
     {
       "name": "cadquery-ocp",
@@ -223,15 +224,29 @@
       "version": "8.0.1.1.0",
       "role": "OCCT の Python バインディング（形状ワーカー。vtk に依存しない版。workers/requirements-shape.txt）",
       "license": "Apache-2.0",
-      "usage": "planned",
+      "usage": "bundled-separate-program",
       "commercial": "conditions",
       "obligations": [
         "Apache-2.0: NOTICE の保持",
-        "中身の OCCT は LGPL-2.1（例外条項付き）に従う"
+        "中身の OCCT は LGPL-2.1（例外条項付き）に従う: ライセンス文（THIRD-PARTY-LICENSES/workers/）の同梱と、shape-site/ を差し替えられる形のままにする"
       ],
       "source": "https://pypi.org/project/cadquery-ocp-novtk/",
-      "checked": "2026-11-26",
-      "notes": "cadquery-ocp と同じ版の別パッケージ（vtk を使わないビルド。PyPI のメタデータは Apache-2.0）。実験 4 で Mac でも import と STEP の読み書きが通り、同梱物が 0.85 GB から 0.23 GB に減った。workers/shape/ が使う（同梱するまでは planned）"
+      "checked": "2026-11-27",
+      "notes": "cadquery-ocp と同じ版の別パッケージ（vtk を使わないビルド。PyPI のメタデータは Apache-2.0）。実験 4 で Mac でも import と STEP の読み書きが通り、同梱物が 0.85 GB から 0.23 GB に減った。同梱物（workers-pack/shape-site/）に入れて、別プロセスの形状ワーカーだけが使う（docs/WORKERS-BUILD.md、.github/workflows/build-workers.yml）。wheel にはライセンス文のファイルが入っていないため、OCCT の例外条項の全文は未同梱（THIRD-PARTY-LICENSES/workers/OCCT-NOTICE.txt に入手先）。"
+    },
+    {
+      "name": "cadquery-ocp-proxy",
+      "version": "8.0.1.1.0",
+      "role": "cadquery-ocp-novtk が依存する小さな部品（型の定義など。形状ワーカー）",
+      "license": "Apache-2.0",
+      "usage": "bundled",
+      "commercial": "ok",
+      "obligations": [
+        "Apache-2.0: NOTICE の保持"
+      ],
+      "source": "https://pypi.org/project/cadquery-ocp-proxy/",
+      "checked": "2026-11-27",
+      "notes": "同梱物の shape-site/ に入る（PyPI のメタデータは Apache-2.0）。--no-deps で入れるため、workers/requirements-shape.txt に版を固定した。"
     },
     {
       "name": "Manifold",
@@ -335,12 +350,16 @@
       "name": "gmsh",
       "role": "メッシング",
       "license": "GPL-2.0-or-later",
-      "usage": "separate-process",
+      "usage": "bundled-separate-program",
       "commercial": "conditions",
       "source": "https://gmsh.info",
-      "checked": "2026-11-26",
+      "checked": "2026-11-27",
       "version": "4.15.2",
-      "notes": "workers/mesh/（requirements-mesh.txt。PyPI のメタデータは GPLv2+）だけが使う。メッシュワーカーは Gmsh の Python API を使うため、Studio M 本体とは別の GPL-2.0-or-later のプログラムとして公開し、本体とはファイルだけでやり取りする。商用配布は予定しない（2026-11-13 決定）。公式サイトは、閉じたソースのソフトに組み込む場合は商用ライセンスが必要としている。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。同梱するまでの記録上の使い方は separate-process のまま。"
+      "notes": "workers/mesh/（requirements-mesh.txt。PyPI のメタデータは GPLv2+）だけが使う。メッシュワーカーは Gmsh の Python API を使うため、Studio M 本体とは別の GPL-2.0-or-later のプログラムとして公開し、本体とはファイルだけでやり取りする。商用配布は予定しない（2026-11-13 決定）。公式サイトは、閉じたソースのソフトに組み込む場合は商用ライセンスが必要としている。同梱物の mesh-site/ に入れる（docs/WORKERS-BUILD.md）。pip の --target は wheel の data/lib（libgmsh）を捨てるため、build-pack.sh が wheel_data.py で取り出す。",
+      "obligations": [
+        "GPL-2.0-or-later: ライセンス全文（GPL-2.0.txt）の同梱、ソースの入手先の明記（GMSH-NOTICE.txt・SOURCE.txt・「このアプリについて」）",
+        "Gmsh は mesh-site/ の別フォルダー・別プロセスだけ。形状側（shape-site/）に入れない（build-pack.sh が検査する）"
+      ]
     },
     {
       "name": "netgen-mesher",
@@ -476,28 +495,28 @@
       "version": "3.12.11 (20250902)",
       "role": "移動できる CPython（形状・メッシュワーカーの実行環境）",
       "license": "MPL-2.0",
-      "usage": "planned",
+      "usage": "bundled",
       "commercial": "ok",
       "obligations": [
         "同梱する CPython と各ライブラリのライセンス文の同梱（PSF-2.0 ほか。配布物の中の licenses を確認）"
       ],
       "source": "https://github.com/astral-sh/python-build-standalone",
-      "checked": "2026-11-18",
-      "notes": "ビルドのスクリプト自体は MPL-2.0。配られる CPython は PSF-2.0。実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。GitHub Releases に届かない環境で書いたため、版の実在は Mac で要確認"
+      "checked": "2026-11-27",
+      "notes": "ビルドのスクリプト自体は MPL-2.0。配られる CPython は PSF-2.0（ライセンス文は THIRD-PARTY-LICENSES/workers/Python-LICENSE.txt）。同梱物の python/ に入る。取得元と SHA-256（配布元の SHA256SUMS の値）は workers/build/versions.env。"
     },
     {
       "name": "numpy",
       "version": "2.5.5",
       "role": "ワーカー（形状・メッシュ）の数値計算ライブラリ",
       "license": "BSD-3-Clause",
-      "usage": "planned",
+      "usage": "bundled",
       "commercial": "ok",
       "obligations": [
-        "BSD-3-Clause ほか（wheel のメタデータは BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0）: ライセンス文の同梱"
+        "BSD-3-Clause ほか（wheel のメタデータは BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0）: ライセンス文（THIRD-PARTY-LICENSES/workers/numpy-LICENSE.txt）の同梱"
       ],
       "source": "https://pypi.org/project/numpy/",
-      "checked": "2026-11-18",
-      "notes": "実証実験 4 で同梱を試験中（docs/EXPERIMENT-4.md）。版は 2026-11-18 に Linux で入った版。Mac で入る版は要確認"
+      "checked": "2026-11-27",
+      "notes": "同梱物の shape-site/ と mesh-site/ の両方に入る（別々に入れる）。版は 2.5.5 に固定（workers/requirements-*.txt）。"
     },
     {
       "name": "@electron/packager",
@@ -532,20 +551,6 @@
       "source": "https://github.com/costerwi/homebrew-calculix",
       "checked": "2026-11-18",
       "notes": "入れる経路としては測るが、Studio M には取り込まない。tap のリポジトリのライセンスは未確認（formula の中身のコピーはしない）。CalculiX 本体は別項目（GPL-2.0、別プロセス）"
-    },
-    {
-      "name": "cadquery-ocp-novtk",
-      "version": "8.0.1.1.0",
-      "role": "形状ワーカーの OCCT バインディング（vtk に依存しない版）",
-      "license": "Apache-2.0",
-      "usage": "planned",
-      "commercial": "ok",
-      "obligations": [
-        "同梱する OCCT（LGPL-2.1 と例外条項）のライセンス文を配布物に入れる"
-      ],
-      "source": "https://pypi.org/project/cadquery-ocp-novtk/",
-      "checked": "2026-11-19",
-      "notes": "cadquery-ocp と同じ版・同じ OCP で、vtk を使わないようにビルドされた別パッケージ。Mac（arm64）の wheel は 63 MB。Linux で import と STEP の読み書きを確かめた（vtk 込みより約 0.7 GB 小さい）。Mac での確認は実証実験 4 の次の実行で行う（docs/EXPERIMENT-4.md）。ライセンスは PyPI の表示による。採用時に LICENSE で確かめ直す"
     },
     {
       "name": "SPOOLES",
