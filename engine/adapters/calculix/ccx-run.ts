@@ -58,6 +58,7 @@ export async function runCcx(
   const threads = opts.allSingleThread ? '1' : ccxThreads();
   const lines: string[] = [];
   ctx.progress(opts.progressFrom, opts.message, 'running');
+  const tStart = performance.now();
   const res = await ctx.run('ccx', ['-i', job], {
     timeoutMs: CCX_TIMEOUT_MS,
     // 連立方程式を解く部分（SPOOLES、CCX_NPROC_EQUATION_SOLVER）だけは必ず 1 スレッドにする:
@@ -74,6 +75,8 @@ export async function runCcx(
       }
     },
   });
+  // 計算時間の切り分け用（PC によって ccx だけが遅いことがあるため。スレッド数は STUDIO_M_CCX_THREADS で変えられる）
+  ctx.log(`ccx の実行 ${((performance.now() - tStart) / 1000).toFixed(2)} 秒（スレッド数 ${threads}）`);
   const output = `${res.stdout}\n${res.stderr}\n${lines.join('\n')}`;
   return { output, code: res.code };
 }
