@@ -20,6 +20,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # python -I で�
 
 import mesh_lib  # noqa: E402
 
+# Windows の Python は標準出力が cp1252 などになり、日本語のメッセージを出すと UnicodeEncodeError で落ちる
+# （本当のエラーが文字コードのエラーに隠れる）。UTF-8 に切り替える
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:  # noqa: BLE001  切り替えられない環境ではそのまま
+        pass
+
 AREA_WARN = 0.01  # 選択の面積が 1% を超えて違ったら警告
 
 

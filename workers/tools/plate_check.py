@@ -23,6 +23,14 @@ sys.path.insert(0, HERE)
 
 import plate_lib as P  # noqa: E402
 
+# Windows の Python は標準出力が cp1252 などになり、日本語のメッセージを出すと UnicodeEncodeError で落ちる
+# （本当のエラーが文字コードのエラーに隠れる）。UTF-8 に切り替える
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:  # noqa: BLE001  切り替えられない環境ではそのまま
+        pass
+
 
 class StageError(Exception):
     """ある段が失敗した。メッセージはそのまま利用者に見せる日本語。"""

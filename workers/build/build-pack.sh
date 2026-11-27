@@ -51,7 +51,7 @@ PACK="$WORK/workers-pack"
 PY="$PACK/$PY_REL"
 SITE_STD="$PACK/$LIB_REL/site-packages"
 
-echo "== プラットフォーム: $PLATFORM（Python $PBS_PYTHON_VERSION）"
+echo "== プラットフォーム: ${PLATFORM}（Python ${PBS_PYTHON_VERSION}）"
 
 # ---- 0. wheel の版が requirements と揃っているか ----
 check_pin() { # <ファイル> <名前> <版>
@@ -69,12 +69,12 @@ rm -rf "$PACK" "$WORK/wheels"; mkdir -p "$PACK" "$WORK/dl"
 PBS_URL="${PBS_BASE_URL}/${PBS_FILE//+/%2B}"
 fetch_verified "$WORK/dl/$PBS_FILE.tmp" "$PBS_SHA" "$PBS_URL"
 tar -xzf "$WORK/dl/$PBS_FILE.tmp" -C "$PACK"
-[ -x "$PY" ] || { echo "エラー: 展開した Python が見つかりません（$PY）。tar の中身の形が変わっていないか確認してください" >&2; exit 1; }
+[ -x "$PY" ] || { echo "エラー: 展開した Python が見つかりません（${PY}）。tar の中身の形が変わっていないか確認してください" >&2; exit 1; }
 
 export PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 PYTHONUTF8=1
 unset PYTHONHOME PYTHONPATH || true
 PYV="$("$PY" -c 'import platform;print(platform.python_version())')"
-[ "$PYV" = "$PBS_PYTHON_VERSION" ] || { echo "エラー: 展開した Python の版が $PYV で、期待（$PBS_PYTHON_VERSION）と違います" >&2; exit 1; }
+[ "$PYV" = "$PBS_PYTHON_VERSION" ] || { echo "エラー: 展開した Python の版が $PYV で、期待（${PBS_PYTHON_VERSION}）と違います" >&2; exit 1; }
 
 # ---- 2. wheel を取得して固定し、--no-deps で別々のフォルダーに入れる ----
 install_group() { # <名前> <requirements> <入れる先>
@@ -137,7 +137,7 @@ for d in "$PACK"/shape-site/numpy-*.dist-info; do
   [ -f "$d/licenses/LICENSE.txt" ] && cp "$d/licenses/LICENSE.txt" "$PACK/THIRD-PARTY-LICENSES/workers/numpy-LICENSE.txt"
 done
 {
-  echo "実際に同梱した wheel の SHA-256（$PLATFORM。PyPI の配布物。この実行で取得したもの）"
+  echo "実際に同梱した wheel の SHA-256（${PLATFORM}。PyPI の配布物。この実行で取得したもの）"
   echo "グループ  ファイル  SHA-256"
   tr '\t' ' ' < "$WORK/wheels.tsv"
   echo "Python: $PBS_FILE  $PBS_SHA"

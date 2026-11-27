@@ -6,6 +6,14 @@ import json
 import os
 import sys
 
+# Windows の Python は標準出力が cp1252 などになり、日本語のメッセージを出すと UnicodeEncodeError で落ちる
+# （本当のエラーが文字コードのエラーに隠れる）。UTF-8 に切り替える
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:  # noqa: BLE001  切り替えられない環境ではそのまま
+        pass
+
 STAGES = [('shapeMakeSec', '形状: 平板を作る（コールドは OCP の初回 import を含む）'), ('ocpImportSec', '  うち OCP の import'),
           ('shapeInspectSec', '形状: STEP を読む（inspect）'), ('meshSec', 'メッシュ（Gmsh）'),
           ('gmshImportSec', '  うち gmsh の import'), ('ccxSec', 'CalculiX'), ('postSec', '結果の読み取り'),
