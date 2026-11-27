@@ -70,10 +70,10 @@ workers-pack/
 | 項目 | 状態 |
 |---|---|
 | Linux（x86_64、Python 3.12.11、apt の ccx 2.21）で `build-pack.sh` → 同梱物の Python で `plate_check.py` | 手元で確認済み。係数 3.153（近似式との差 0.13%）、反力 50000 N、日本語と空白のパスでも同じ値。同梱物は 900 MB（Python 323 MB・shape-site 439 MB・mesh-site 138 MB）、zip 228 MB。この確認で、`pip install --target` が libgmsh を捨てることを見つけて `wheel_data.py` を足した |
-| macOS arm64 の `build-workers`（組み立て・動作確認・平板の検証・大きさと時間） | **未実行**（Actions の結果が出たら、ここに数値を足す） |
-| Windows x64 の `build-workers` | **未実行** |
-| 大きさ（部品ごと・zip）と起動時間（初回の OCP の import、各段、コールドとウォーム） | **未実行**（実験 4 の Mac の値: 同梱物 0.39 GB、初回の OCP の import 6.0 s） |
-| 日本語と空白を含む作業フォルダー（macOS・Windows） | **未実行** |
+| macOS arm64 の `build-workers`（組み立て・動作確認・平板の検証） | **Actions で成功**（2026-11-27、6 回目の修正のあと 2 回目）。組み立て 24 秒、zip 112.5 MB。平板の応力集中係数 **3.1306**（目安 3.149 との差 0.58%）、反力 50,000 N、1 回の計算（形状 → メッシュ → ccx）はコールド 4.2 秒・ウォーム 3.3 秒 |
+| Windows x64 の `build-workers` | **Actions で成功**（同上）。組み立て 65 秒、zip 139.1 MB。平板の応力集中係数 **3.1494**（差 0.01%）、反力 50,000 N、コールド・ウォームとも 5.2 秒 |
+| 大きさ（部品ごと・zip）と起動時間（初回の OCP の import、各段） | zip は上のとおり。部品ごとの大きさと各段の時間は、成果物 `plate_check-<os>` の `plate_check.json`・`manifest.json` と、ジョブの要約にある（Linux の参考値: 展開後 900 MB、zip 228 MB） |
+| 日本語と空白を含む作業フォルダー（macOS・Windows） | Linux では同じ値で通った。macOS・Windows の結果は `plate_check.json` に入っている（警告扱い。未集計） |
 | 署名なしの `.app` の中で、同梱の Python・dylib が起動できること | 未確認（実験 4 では `.app` の中でも動いた。Actions の成果物は `.app` に入れる前の形） |
 | OCCT の例外条項の全文の同梱 | 未（wheel にライセンス文が入っていないため、入手先だけ記載。配布を広げる前に追加する） |
 | Python 3.13 以降・Intel の Mac・Linux 向けの配布 | 対象外 |
